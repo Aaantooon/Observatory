@@ -1,0 +1,89 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Регистрация — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="text-center mb-4">
+                        <i class="fas fa-user-plus text-warning me-2"></i>
+                        Регистрация
+                    </h2>
+                    
+                    <p class="text-muted text-center mb-4">
+                        Присоединяйся к сообществу наблюдателей
+                    </p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if form.errors %}
+                            <div class="alert alert-danger">
+                                <strong>Ошибка!</strong> Пожалуйста, исправьте следующие ошибки:
+                                <ul class="mb-0 mt-2">
+                                    {% for field in form %}
+                                        {% for error in field.errors %}
+                                            <li>{{ error }}</li>
+                                        {% endfor %}
+                                    {% endfor %}
+                                    {% for error in form.non_field_errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label for="id_username" class="form-label">Имя пользователя</label>
+                            <input type="text" name="username" id="id_username" class="form-control" 
+                                   placeholder="Придумайте имя" value="{{ form.username.value|default:'' }}" required>
+                            <div class="form-text text-muted small">
+                                Обязательное поле. Не более 150 символов. Только буквы, цифры и @/./+/-/_.
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="id_password1" class="form-label">Пароль</label>
+                            <input type="password" name="password1" id="id_password1" class="form-control" 
+                                   placeholder="Придумайте пароль" required>
+                            <div class="form-text text-muted small">
+                                Пароль должен содержать не менее 8 символов и не быть слишком простым.
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="id_password2" class="form-label">Подтверждение пароля</label>
+                            <input type="password" name="password2" id="id_password2" class="form-control" 
+                                   placeholder="Повторите пароль" required>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-warning w-100 py-2">
+                            <i class="fas fa-user-plus me-2"></i> Зарегистрироваться
+                        </button>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <p class="text-center mb-0">
+                        Уже есть аккаунт? 
+                        <a href="{% url 'login' %}" class="text-warning text-decoration-none fw-bold">
+                            Войти
+                        </a>
+                    </p>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <p class="text-muted small">
+                    <i class="fas fa-lightbulb text-warning me-1"></i>
+                    Присоединяйся к сообществу «Путь наблюдателя»
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Путь наблюдателя — Свети фонариком в тумане{% endblock %}
+
+{% block content %}
+<!-- Герой-секция -->
+<section class="hero-section py-5" style="background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);">
+    <div class="container py-5">
+        <div class="row align-items-center">
+            <div class="col-lg-6 text-white">
+                <h1 class="display-3 fw-bold mb-4">
+                    <i class="fas fa-lightbulb text-warning"></i>
+                    Свети фонариком<br>в тумане
+                </h1>
+                <p class="lead mb-4">
+                    Исследуй мир безоценочно. Замечай факты и интерпретации.
+                    Строй ментальные карты. Путь наблюдателя начинается здесь.
+                </p>
+                <div class="d-flex gap-3 flex-wrap">
+                    <a href="{% url 'main:course_list' %}" class="btn btn-warning btn-lg">
+                        <i class="fas fa-rocket me-2"></i> Начать путь
+                    </a>
+                    <a href="{% url 'main:community' %}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-users me-2"></i> В сообщество
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6 text-center">
+                <i class="fas fa-lightbulb text-warning" style="font-size: 15rem; opacity: 0.5;"></i>
+                <p class="text-muted mt-3">Фонарик в тумане</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Три уровня -->
+<section class="py-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Выбери свой уровень</h2>
+        <div class="row g-4">
+            {% for level_key, level_name in level_names.items %}
+            <div class="col-md-4">
+                <div class="card h-100 text-center shadow-sm hover-card">
+                    <div class="card-body">
+                        <div class="display-1 mb-3">
+                            {% if level_key == 'beginner' %}
+                                <i class="fas fa-seedling text-success"></i>
+                            {% elif level_key == 'experienced' %}
+                                <i class="fas fa-tree text-primary"></i>
+                            {% else %}
+                                <i class="fas fa-mountain text-warning"></i>
+                            {% endif %}
+                        </div>
+                        <h3 class="card-title">{{ level_name }}</h3>
+                        <p class="card-text text-muted">
+                            {% if level_key == 'beginner' %}
+                                Только начинаешь замечать мир вокруг. Учишься отличать факты от интерпретаций.
+                            {% elif level_key == 'experienced' %}
+                                Уже видишь паттерны. Шлифуешь инструменты наблюдения.
+                            {% else %}
+                                Строишь свой путь. Светишь фонариком туда, куда сам решишь.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'main:course_list' %}?level={{ level_key }}" class="btn btn-outline-dark">
+                            Выбрать путь
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Последние карты -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Свежие ментальные карты</h2>
+            <a href="{% url 'main:map_view' %}" class="btn btn-outline-dark">Все карты →</a>
+        </div>
+        <div class="row g-4">
+            {% for map in recent_maps %}
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ map.title }}</h5>
+                        <p class="card-text text-muted small">
+                            <i class="fas fa-user me-1"></i> {{ map.author.username }}
+                            <span class="badge bg-secondary ms-2">{{ map.get_level_display }}</span>
+                        </p>
+                        <p class="card-text">
+                            <i class="fas fa-circle me-1 text-primary"></i>
+                            {{ map.central_node }}
+                        </p>
+                        <a href="{% url 'main:map_detail' pk=map.pk %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye me-1"></i> Смотреть
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-4">
+                <p class="text-muted">Пока нет карт. Будь первым!</p>
+                <a href="{% url 'main:map_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i> Создать карту
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Последние темы форума -->
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Обсуждения на форуме</h2>
+            <a href="{% url 'main:forum_index' %}" class="btn btn-outline-dark">Все темы →</a>
+        </div>
+        <div class="list-group">
+            {% for thread in recent_threads %}
+            <a href="{% url 'main:forum_thread' pk=thread.pk %}" class="list-group-item list-group-item-action">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">{{ thread.title }}</h6>
+                        <small class="text-muted">
+                            <i class="fas fa-user me-1"></i> {{ thread.author.username }}
+                            <span class="mx-2">•</span>
+                            <i class="fas fa-clock me-1"></i> {{ thread.created_at|date:"d.m.Y" }}
+                        </small>
+                    </div>
+                    <span class="badge bg-secondary">{{ thread.post_count }} ответов</span>
+                </div>
+            </a>
+            {% empty %}
+            <div class="text-center py-4">
+                <p class="text-muted">Пока нет тем на форуме.</p>
+                <a href="{% url 'main:forum_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i> Создать тему
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}

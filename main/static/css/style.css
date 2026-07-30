@@ -1,0 +1,39 @@
+/* style.css — основные стили сайта "Путь наблюдателя" */
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8f9fa;
+}
+
+.hero-section {
+    min-height: 500px;
+    display: flex;
+    align-items: center;
+}
+
+.hover-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.badge-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.btn-outline-dark:hover {
+    background-color: #212529;
+    color: #fff;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .hero-section {
+        min-height: 300px;
+        padding: 2rem 0;
+    }
+}

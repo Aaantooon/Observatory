@@ -1,0 +1,11 @@
+Django>=4.2,<5.0
+pillow>=10.0
+python-dotenv>=1.0
+django-crispy-forms>=2.0
+crispy-bootstrap5>=0.7
+psycopg2-binary>=2.9
+gunicorn>=21.0
+whitenoise>=6.0
+django-allauth>=0.54
+django-ckeditor>=6.7
+django-taggit>=4.0
