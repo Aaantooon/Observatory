@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Путь наблюдателя{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Тёмный фон для всего сайта — как туман или ночное небо */
+        body {
+            background-color: #1a1a2e;
+            color: #e0d5c1;
+        }
+        /* Навигационная панель */
+        .navbar {
+            background-color: #16213e !important;
+            border-bottom: 1px solid #e2c044;
+        }
+        .navbar-brand, .nav-link {
+            color: #e2c044 !important;
+        }
+        .nav-link:hover {
+            color: #ffffff !important;
+            text-shadow: 0 0 10px #e2c044;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Привал</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Карта</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Тропы</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Истории</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Глубина</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Перекрёсток</a></li>
+                    {% if user.is_authenticated %}
+                        <li class="nav-item"><a class="nav-link" href="#">Мой фонарик</a></li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link" href="#">Войти</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

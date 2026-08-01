@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block title %}Путь наблюдателя{% endblock %}
+
+{% block content %}
+<style>
+    /* ===== БАЗОВЫЕ СТИЛИ ===== */
+    .path-journey {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        position: relative;
+    }
+
+    /* ===== АНИМАЦИЯ ТУМАНА НА ФОНЕ ===== */
+    .fog-layer {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+            radial-gradient(ellipse at 30% 20%, rgba(226,192,68,0.03) 0%, transparent 50%),
+            radial-gradient(ellipse at 70% 60%, rgba(226,192,68,0.04) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(226,192,68,0.02) 0%, transparent 50%);
+        animation: fogDrift 20s ease-in-out infinite;
+    }
+    @keyframes fogDrift {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(-20px, 10px); }
+        50% { transform: translate(10px, -15px); }
+        75% { transform: translate(15px, 5px); }
+    }
+
+    /* ===== КОНТЕЙНЕРЫ ШАГОВ ===== */
+    .step-container {
+        position: relative;
+        z-index: 1;
+        display: none;
+        animation: stepAppear 1s ease-out;
+    }
+    .step-container.active {
+        display: block;
+    }
+    @keyframes stepAppear {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== ШАГ 1: ВЫБОР ===== */
+    .welcome-card {
+        text-align: center;
+        padding: 40px 30px;
+        border: 1px solid rgba(226,192,68,0.2);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(0,0,0,0.3), inset 0 0 30px rgba(226,192,68,0.03);
+    }
+    .welcome-card .lantern-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        animation: lanternGlow 3s ease-in-out infinite;
+        display: inline-block;
+    }
+    @keyframes lanternGlow {
+        0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.3); }
+        50% { text-shadow: 0 0 40px rgba(226,192,68,0.7), 0 0 80px rgba(226,192,68,0.3); }
+    }
+    .welcome-card h1 {
+        color: #e2c044;
+        font-size: 1.8rem;
+        margin-bottom: 25px;
+        font-weight: 300;
+        letter-spacing: 2px;
+    }
+    .welcome-card .philosophy {
+        color: #b0a898;
+        font-size: 1rem;
+        line-height: 2;
+        margin-bottom: 35px;
+    }
+    .welcome-card .philosophy em {
+        color: #e2c044;
+        font-style: normal;
+    }
+
+    /* ===== КНОПКИ ВЫБОРА ===== */
+    .choice-buttons {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+    .btn-choice {
+        width: 100%;
+        max-width: 380px;
+        padding: 16px 28px;
+        border-radius: 50px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.4s ease;
+        text-decoration: none;
+        display: block;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .btn-light {
+        background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
+        border: 2px solid #e2c044;
+        color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.15);
+    }
+    .btn-light:hover {
+        background: linear-gradient(135deg, rgba(226,192,68,0.25), rgba(226,192,68,0.1));
+        box-shadow: 0 0 40px rgba(226,192,68,0.4), 0 0 80px rgba(226,192,68,0.15);
+        transform: translateY(-2px);
+        color: #fff;
+    }
+    .btn-quiet {
+        background: transparent;
+        border: 2px solid rgba(176,168,152,0.4);
+        color: #b0a898;
+    }
+    .btn-quiet:hover {
+        border-color: #b0a898;
+        color: #fff;
+        box-shadow: 0 0 20px rgba(176,168,152,0.2);
+        transform: translateY(-2px);
+    }
+    .btn-custom-row {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        max-width: 380px;
+    }
+    .btn-custom-row input {
+        flex: 1;
+        padding: 14px 20px;
+        background: rgba(22,33,62,0.6);
+        border: 2px solid rgba(226,192,68,0.3);
+        border-radius: 50px;
+        color: #e0d5c1;
+        font-size: 0.95rem;
+        outline: none;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row input:focus {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.2);
+    }
+    .btn-custom-row input::placeholder {
+        color: #5a5550;
+    }
+    .btn-custom-row button {
+        padding: 14px 22px;
+        background: transparent;
+        border: 2px solid rgba(226,192,68,0.4);
+        border-radius: 50px;
+        color: #e2c044;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row button:hover {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.3);
+    }
+
+    /* ===== КАРТОЧКА РЕЗУЛЬТАТА ===== */
+    .result-card {
+        text-align: center;
+        padding: 35px 25px;
+        border: 1px solid rgba(226,192,68,0.25);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 40px rgba(0,0,0,0.3);
+    }
+    .result-card p {
+        color: #c0b8a8;
+        font-size: 1.05rem;
+        line-height: 2;
+        margin-bottom: 10px;
+    }
+    .result-card em {
+        color: #e2c044;
+        font-style: normal;
+    }
+    .result-card .next-btn {
+        margin-top: 20px;
+    }
+</style>
+
+<!-- Слой тумана на фоне -->
+<div class="fog-layer"></div>
+
+<div class="path-journey">
+
+    <!-- ===== ШАГ 1: НАЧАЛО ПУТИ ===== -->
+    <div id="stepStart" class="step-container active">
+        <div class="welcome-card">
+            <div class="lantern-icon">🔦</div>
+            <h1>Ты в мире, заполненном туманом</h1>
+            <div class="philosophy">
+                Вокруг темно. В руках у тебя <em>фонарик</em>.<br><br>
+                Фонарик — это твой <em>выбор</em>. А выбор — это <em>направление</em>, а не правильность.<br><br>
+                Часто нас шантажируют выбором, где меньше трёх вариантов — это шантаж.<br>
+                Здесь ты можешь выбрать сам. Без давления. Без «правильно» и «неправильно».<br><br>
+                Я не буду мешать тебе делать твой выбор.<br>
+                Хочу, чтобы ты узнал <em>ответственность</em> и <em>цену выбора</em>.
+            </div>
+            <div class="choice-buttons">
+                <a href="#" class="btn-choice btn-light" onclick="goTo('stepFlashlight')">
+                    🔦 Включить фонарик
+                </a>
+                <a href="#" class="btn-choice btn-quiet" onclick="goTo('stepQuiet')">
+                    🌫️ Не включать. Побыть в тишине
+                </a>
+                <div class="btn-custom-row">
+                    <input type="text" id="customInput" placeholder="Напиши свой вариант...">
+                    <button onclick="goToCustom()">▶</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2: ВКЛЮЧИЛ ФОНАРИК ===== -->
+    <div id="stepFlashlight" class="step-container">
+        <div class="result-card">
+            <p>Ты включил фонарик.</p>
+            <p>Туман отступает, и ты начинаешь идти.</p>
+            <p>Вокруг проявляются <em>предметы, фрукты, машины, животные,</em><br>
+            <em>явления, погода, звуки, запахи.</em></p>
+            <p>Сможешь это всё запомнить?</p>
+            <br>
+            <p>Тогда предлагаю <em>начать создавать карту</em>.</p>
+            <p>Твоя карта не будет пустой.<br>Я расставлю направления и покажу дороги.</p>
+            <a href="/map/" class="btn-choice btn-light next-btn">🗺️ Посмотреть карту</a>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2а: НЕ ВКЛЮЧИЛ ===== -->
+    <div id="stepQuiet" class="step-container">
+        <div class="result-card">
+            <p>Ты выбрал не включать фонарик.</p>
+            <p>Это тоже путь. Иногда тишина говорит громче слов.</p>
+            <p>Побудь здесь столько, сколько нужно.</p>
+            <p>Когда будешь готов — фонарик всё ещё у тебя в руках.</p>
+            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+                🔦 Включить фонарик
+            </a>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2б: СВОЙ ВАРИАНТ ===== -->
+    <div id="stepCustom" class="step-container">
+        <div class="result-card">
+            <p>Ты написал свой вариант:</p>
+            <p><em id="customText"></em></p>
+            <p>Это твой выбор. Только твой.<br>И ты несёшь за него ответственность.</p>
+            <p>Готов узнать, куда приведёт тебя этот путь?</p>
+            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+                🔦 Включить фонарик
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function goTo(stepId) {
+        // Скрываем все шаги
+        document.querySelectorAll('.step-container').forEach(function(el) {
+            el.classList.remove('active');
+        });
+        // Показываем нужный
+        var target = document.getElementById(stepId);
+        if (target) {
+            target.classList.add('active');
+        }
+        // Плавный скролл наверх
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function goToCustom() {
+        var input = document.getElementById('customInput');
+        var text = input.value.trim();
+        if (text === '') {
+            text = '(тишина)';
+        }
+        document.getElementById('customText').textContent = text;
+        input.value = '';
+        goTo('stepCustom');
+    }
+</script>
+{% endblock %}

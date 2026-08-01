@@ -1,16 +1,24 @@
 """
-WSGI config for config project.
+wsgi.py — точка входа для СИНХРОННЫХ веб-серверов (например, Gunicorn, uWSGI).
 
-It exposes the WSGI callable as a module-level variable named ``application``.
+ПРОСТЫМИ СЛОВАМИ:
+    Это "официант", который принимает запросы от посетителей сайта
+    и передаёт их Django на обработку. Работает по принципу:
+    один запрос → одна обработка → ответ.
 
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/wsgi/
+Когда понадобится:
+    При размещении сайта на боевом сервере (хостинге).
+
+Сейчас не используется:
+    При разработке мы запускаем python manage.py runserver,
+    который имеет свой встроенный сервер.
 """
 
 import os
-
 from django.core.wsgi import get_wsgi_application
 
+# Указываем, где лежат настройки проекта
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
+# Создаём WSGI-приложение, которое будет использовать веб-сервер
 application = get_wsgi_application()

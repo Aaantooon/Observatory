@@ -1,15 +1,52 @@
+# Виртуальное окружение
+venv/
+.venv/
+
+# База данных SQLite
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+
+# Кэш Python
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-*.sqlite3
-db.sqlite3
-*.log
-media/
+
+# Локальные настройки
+.env
+.env.local
+secrets.json
+
+# Статика и медиа
 staticfiles/
-.DS_Store
+media/
+static_collected/
+
+# Логи
+*.log
+
+# IDE
+.vscode/
 .idea/
+*.iml
+*.iws
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Тесты и покрытие
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Временные файлы
+*.tmp
+*.temp
+
+# Сборка и дистрибутивы
+*.egg-info/
+dist/
+build/
+*.whl
