@@ -11,3 +11,9 @@ def about(request):
 
 def map_view(request):
     return render(request, 'map.html')
+
+def observer_view(request):
+    return render(request, 'observer_map.html')
+
+def put_view(request):
+    return render(request, 'put.html')

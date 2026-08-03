@@ -7,4 +7,6 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
     path('map/', views.map_view, name='map'),
+    path('put/', views.put_view, name='put'),
+    path('observer-map/', views.observer_view, name='observer_view'),
 ]

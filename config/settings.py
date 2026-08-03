@@ -1,14 +1,15 @@
 import os
+from decouple import config
 from pathlib import Path
 
 # Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Секретный ключ (НЕ ДЕЛАЙ ТАК В ПРОДАКШЕНЕ!)
-SECRET_KEY = 'django-insecure-abcdefghijklmnopqrstuvwxyz123456'
+SECRET_KEY = config('SECRET_KEY')
 
 # Режим отладки
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Разрешённые хосты
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
@@ -62,11 +63,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'put_nablyudatelya_db',
-        'USER': 'postgres',
-        'PASSWORD': '756159',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
     }
 }
 
