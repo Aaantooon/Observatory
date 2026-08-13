@@ -1,18 +1,21 @@
 import os
-from decouple import config
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env
+load_dotenv()
 
 # Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Секретный ключ (НЕ ДЕЛАЙ ТАК В ПРОДАКШЕНЕ!)
-SECRET_KEY = config('SECRET_KEY')
+# --- СЕКРЕТНЫЙ КЛЮЧ (ИЗ .ENV) ---
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-abcdefghijklmnopqrstuvwxyz123456')
 
-# Режим отладки
-DEBUG = config('DEBUG', default=False, cast=bool)
+# --- РЕЖИМ ОТЛАДКИ ---
+DEBUG = True  # Временно для разработки
 
-# Разрешённые хосты
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+# --- РАЗРЕШЁННЫЕ ХОСТЫ ---
+ALLOWED_HOSTS = ['*']  # Временно для разработки
 
 # --- ПРИЛОЖЕНИЯ ---
 INSTALLED_APPS = [
@@ -23,11 +26,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'myapp',
+    'bot_api',
+    'rest_framework',
+    'rest_framework.authtoken',
 ]
 
 # --- МИДЛВАРЫ ---
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -43,7 +51,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],   # ← ДОБАВЛЕНО!
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -63,11 +71,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT'),
+        'NAME': os.getenv('DB_NAME', 'put_nablyudatelya_db'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', '756159'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
@@ -99,6 +107,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # --- МЕДИА ФАЙЛЫ ---
 MEDIA_URL = '/media/'
@@ -112,3 +121,30 @@ AUTH_USER_MODEL = 'auth.User'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# --- REST FRAMEWORK ---
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# --- НАСТРОЙКИ АДМИНКИ ---
+ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
+ADMIN_SITE_TITLE = "Путь Наблюдателя"
+ADMIN_INDEX_TITLE = "Добро пожаловать в панель управления!"
+
+# --- КАСТОМНЫЕ СТИЛИ ДЛЯ АДМИНКИ ---
+ADMIN_MEDIA_PREFIX = '/static/admin/'
+
+# --- БЕЗОПАСНОСТЬ ДЛЯ ХОСТИНГА ---
+# Раскомментируй когда настроишь HTTPS
+# SECURE_SSL_REDIRECT = True
+# SESSION_COOKIE_SECURE = True
+# CSRF_COOKIE_SECURE = True
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = True

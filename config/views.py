@@ -1,16 +1,21 @@
-from django.http import HttpResponse
 from django.shortcuts import render
 
-
 def home(request):
-    return render(request, 'home.html')
-
+    # Здесь мы поменяли 'index.html' на 'home.html', чтобы работала ваша страница с фонариком!
+    return render(request, 'home.html', {
+        'title': 'Главная — Путь наблюдателя',
+        'subtitle': 'Фонарь рассеивает туман: шаг за шагом мы видим путь'
+    })
 
 def about(request):
-    return HttpResponse("Это сайт «Путь наблюдателя». Здесь будут курсы, форум и ментальные карты.")
+    return render(request, 'about.html', {
+        'title': 'О проекте — Путь наблюдателя'
+    })
 
 def map_view(request):
-    return render(request, 'map.html')
+    return render(request, 'map.html', {
+        'title': 'Карта пути наблюдателя'
+    })
 
 def observer_view(request):
     return render(request, 'observer_map.html')

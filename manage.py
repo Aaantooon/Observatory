@@ -1,49 +1,41 @@
 #!/usr/bin/env python
-"""
-manage.py — это командный центр Django.
-Через него мы управляем проектом: запускаем сервер, создаём базу данных и т.д.
-
-Все команды пишутся так:
-    python manage.py <название команды>
-
-Примеры команд, которые мы уже использовали:
-    python manage.py runserver       — запустить сервер разработки
-    python manage.py startapp имя    — создать новое приложение
-    python manage.py makemigrations  — создать миграции (изменения базы данных)
-    python manage.py migrate         — применить миграции к базе данных
-    python manage.py createsuperuser — создать администратора
-"""
-
-import os   # модуль для работы с операционной системой (пути, переменные окружения)
-import sys  # модуль для доступа к аргументам командной строки
-
+import os
+import sys
+import pathlib
 
 def main():
-    """
-    Главная функция, которая запускает Django.
-    Она вызывается, когда мы пишем python manage.py ...
-    """
-
-    # Указываем Django, где лежит файл с настройками проекта
-    # config.settings означает: в папке config файл settings.py
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    # Определяем текущую папку, где лежит manage.py
+    current_dir = pathlib.Path(__file__).resolve().parent
+    
+    # Пытаемся найти папку config
+    config_paths = [
+        current_dir / 'config',                 # Если config лежит рядом
+        current_dir / 'public_html' / 'config'  # Если config лежит внутри public_html
+    ]
+    
+    settings_found = False
+    for path in config_paths:
+        if path.exists() and (path / 'settings.py').exists():
+            # Добавляем путь в sys.path, чтобы Django мог импортировать
+            sys.path.insert(0, str(path.parent))
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'{path.name}.settings')
+            settings_found = True
+            break
+            
+    if not settings_found:
+        raise ImportError(
+            "Не могу найти папку 'config' с файлом settings.py. "
+            "Проверьте, что она лежит внутри public_html или рядом с manage.py."
+        )
 
     try:
-        # Пытаемся импортировать функцию, которая выполняет команды
         from django.core.management import execute_from_command_line
     except ImportError as exc:
-        # Если Django не установлен — показываем понятную ошибку
         raise ImportError(
-            "Не могу импортировать Django. Ты уверен, что он установлен? "
-            "Возможно, виртуальное окружение не активировано."
+            "Не могу импортировать Django. Проверьте, активировано ли виртуальное окружение."
         ) from exc
 
-    # Запускаем команду, которую передали в терминале
-    # sys.argv — это список: ['manage.py', 'runserver', ...]
     execute_from_command_line(sys.argv)
 
-
-# Если файл запущен напрямую (python manage.py ...), выполняем main()
-# Если файл импортирован из другого скрипта — не выполняем
 if __name__ == '__main__':
     main()

@@ -1,0 +1,27 @@
+{% extends "myapp/base.html" %}
+
+{% block content %}
+<h2>История постов</h2>
+<table border="1">
+    <tr>
+        <th>Дата</th>
+        <th>Текст</th>
+        <th>Платформы</th>
+        <th>Статус</th>
+    </tr>
+    {% for post in posts %}
+    <tr>
+        <td>{{ post.created_at|date:"d.m.Y H:i" }}</td>
+        <td>{{ post.text|truncatechars:50 }}</td>
+        <td>
+            {% for platform in post.platforms.all %}
+                {{ platform.name }} ({{ platform.get_platform_display }})<br>
+            {% endfor %}
+        </td>
+        <td>{{ post.get_status_display }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4">Нет постов.</td></tr>
+    {% endfor %}
+</table>
+{% endblock %}

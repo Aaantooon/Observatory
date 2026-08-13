@@ -1,0 +1,42 @@
+/* static/admin/css/custom.css */
+/* Украшаем админку */
+
+#header {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    color: white;
+}
+
+#header a:link, #header a:visited {
+    color: white !important;
+}
+
+.module h2, .module caption, .inline-group h2 {
+    background: #2c3e50;
+    color: white;
+}
+
+/* Карточки для результатов */
+.results .row1 {
+    transition: background 0.2s;
+}
+
+.results .row1:hover {
+    background: #f0f3f5;
+}
+
+/* Бейджи статусов */
+.field-status_badge span {
+    display: inline-block;
+    font-weight: 500;
+}
+
+/* Адаптив */
+@media (max-width: 767px) {
+    #content {
+        padding: 10px;
+    }
+    .field-status_badge span {
+        font-size: 10px;
+        padding: 2px 8px !important;
+    }
+}
