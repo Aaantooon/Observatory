@@ -6,13 +6,11 @@ def main_menu():
     keyboard.add_button("Упражнения", color=VkKeyboardColor.PRIMARY)
     keyboard.add_button("Мои результаты", color=VkKeyboardColor.SECONDARY)
     keyboard.add_line()
-    keyboard.add_button("Бесилки", color=VkKeyboardColor.POSITIVE)
     keyboard.add_button("Синхронизация", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
 def exercises_menu():
     keyboard = VkKeyboard(one_time=True)
-    # По 2 кнопки в строке (максимум 4)
     keyboard.add_button("Упражнение 1", color=VkKeyboardColor.PRIMARY)
     keyboard.add_button("Упражнение 2", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
@@ -20,7 +18,6 @@ def exercises_menu():
     keyboard.add_button("Упражнение 4", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Упражнение 5", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("Упражнение 6", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Назад", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
