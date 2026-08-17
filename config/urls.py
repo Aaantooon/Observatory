@@ -6,14 +6,19 @@ from . import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/', include('bot_api.urls')),
+    
+    # --- Страницы сайта ---
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
     path('map/', views.map_view, name='map'),
+    path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
-    path('observer-map/', views.observer_view, name='observer_view'),
-    path('social/', include('myapp.urls')),
-    path('api/', include('bot_api.urls')),   # ← ДОБАВИТЬ (API для бота)
+    
+    # --- Наблюдения (myapp) ---
+    path('observations/', include('myapp.urls')),  # 👈 Добавить эту строку
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

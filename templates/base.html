@@ -1,120 +1,58 @@
-{% load static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Путь наблюдателя{% endblock %}</title>
-
-    <!-- Подключаем шрифт для атмосферы -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+Pro:wght@300;400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <style>
-        /* Базовые настройки */
         body {
-            background-color: #1a1a2e;
-            color: #e0d5c1;
-            font-family: 'Source Sans Pro', sans-serif;
-            opacity: 0;
-            animation: fadeIn 1s ease-in forwards;
+            background: #0b0e14;
+            color: #d4d9e6;
+            font-family: 'Segoe UI', sans-serif;
         }
-
-        /* Анимация появления сайта */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        /* Стили навбара (меню) */
         .navbar {
-            background-color: #16213e !important;
-            border-bottom: 1px solid #e2c044;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: #141a24 !important;
+            border-bottom: 1px solid #2a3340;
         }
         .navbar-brand {
-            font-family: 'Playfair Display', serif;
-            font-size: 1.5rem;
             color: #e2c044 !important;
-            letter-spacing: 1px;
-        }
-        .navbar-brand:hover {
-            text-shadow: 0 0 15px #e2c044;
+            font-weight: bold;
+            font-size: 1.4rem;
         }
         .nav-link {
-            color: #b0a898 !important;
-            font-weight: 300;
-            transition: all 0.3s ease;
-            position: relative;
+            color: #aab3c9 !important;
+            transition: 0.3s;
         }
         .nav-link:hover, .nav-link.active {
             color: #e2c044 !important;
-            text-shadow: 0 0 10px #e2c044;
         }
-        /* Эффект подчеркивания при наведении */
-        .nav-link::after {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 2px;
-            bottom: 0;
-            left: 0;
-            background-color: #e2c044;
-            transition: width 0.3s;
-        }
-        .nav-link:hover::after {
-            width: 100%;
-        }
-
-        /* Стилизация полей ввода (Формы) */
-        input[type="text"], input[type="file"], textarea, select {
-            background-color: #252540 !important;
-            color: #e0d5c1 !important;
-            border: 1px solid rgba(226, 192, 68, 0.3) !important;
-            width: 100%;
-            padding: 0.6rem 1rem;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-        }
-        input[type="text"]:focus, textarea:focus, select:focus {
-            background-color: #2d2d4e !important;
-            color: #ffffff !important;
-            border-color: #e2c044 !important;
-            box-shadow: 0 0 15px rgba(226, 192, 68, 0.2);
-            outline: none;
-        }
-        label {
-            color: #e2c044 !important;
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-
-        /* Стили для подвала (Footer) */
-        footer {
-            margin-top: 60px;
-            padding: 30px 0;
-            border-top: 1px solid rgba(226, 192, 68, 0.1);
-            text-align: center;
-            color: #5a5550;
-            font-size: 0.9rem;
-        }
-
-        /* Дополнительные классы для кнопок */
         .btn-lantern {
-            background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
-            border: 1px solid #e2c044;
-            color: #e2c044;
-            transition: all 0.3s ease;
+            background: #e2c044;
+            color: #16213e !important;
+            font-weight: 600;
         }
         .btn-lantern:hover {
-            background: rgba(226,192,68,0.25);
-            color: #fff;
-            box-shadow: 0 0 20px rgba(226,192,68,0.3);
+            background: #f0d65a;
+            color: #0b0e14 !important;
+        }
+        .main-content {
+            padding: 40px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #5a6a7e;
+            border-top: 1px solid #1e2733;
+            margin-top: 40px;
         }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <!-- Навигация -->
+
     <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
@@ -126,15 +64,12 @@
                     <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
                     <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
                     <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
-                    <li class="nav-item"><a class="nav-link {% if '/social/' in request.path %}active{% endif %}" href="{% url 'myapp:observation_list' %}">Истории</a></li>
-                    <li class="nav-item"><a class="nav-link {% if '/observer-map/' in request.path %}active{% endif %}" href="{% url 'observer_view' %}">Глубина</a></li>
                     <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
 
                     {% if user.is_authenticated %}
-                        <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'myapp:observation_add' %}">✏️ Оставить след</a></li>
+                        <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="#">✏️ Оставить след</a></li>
                         <li class="nav-item"><a class="nav-link" href="#">Мой фонарик</a></li>
                     {% else %}
-                        <!-- Ссылка ведет прямо на страницу входа в админку Django -->
                         <li class="nav-item"><a class="nav-link" href="{% url 'admin:index' %}">Войти</a></li>
                     {% endif %}
                 </ul>
@@ -142,17 +77,16 @@
         </div>
     </nav>
 
-    <!-- Основной контент -->
-    <div class="container mt-5">
+    <div class="main-content">
         {% block content %}
         {% endblock %}
     </div>
 
-    <!-- Подвал -->
-    <footer class="container">
-        <p>© 2026 Путь наблюдателя. Фонарь освещает путь.</p>
-    </footer>
+    <div class="footer">
+        <small>🔆 Путь наблюдателя — каждый день немного света</small>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

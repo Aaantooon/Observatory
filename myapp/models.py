@@ -2,7 +2,11 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import requests
-from decouple import config
+import os
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env
+load_dotenv()
 
 
 class Observation(models.Model):
@@ -22,8 +26,13 @@ def send_to_telegram(sender, instance, created, **kwargs):
     if created:  # Срабатывает только при создании нового поста
         try:
             # Получаем токен и ID из .env
-            token = config('TG_BOT_TOKEN')
-            chat_id = config('TG_CHAT_ID')
+            token = os.getenv('TG_BOT_TOKEN')
+            chat_id = os.getenv('TG_CHAT_ID')
+
+            # Проверяем, что токен и chat_id не пустые
+            if not token or not chat_id:
+                print("⚠️ TG_BOT_TOKEN или TG_CHAT_ID не заданы в .env файле")
+                return
 
             # Формируем текст сообщения
             message = f"🪐 <b>Новое наблюдение!</b>\n\n"
@@ -41,6 +50,10 @@ def send_to_telegram(sender, instance, created, **kwargs):
             }
             response = requests.post(url, data=data)
 
+            # Проверяем ответ Telegram
+            if response.status_code != 200:
+                print(f"⚠️ Ошибка отправки текста в Telegram: {response.text}")
+
             # 2. Если есть картинка, отправляем её отдельно
             if instance.image:
                 # Для локальной разработки используем полный URL с 127.0.0.1:8000
@@ -51,7 +64,9 @@ def send_to_telegram(sender, instance, created, **kwargs):
                     'photo': image_url,
                     'caption': f"📸 Фото к посту: {instance.title}"
                 }
-                requests.post(photo_url, data=photo_data)
+                photo_response = requests.post(photo_url, data=photo_data)
+                if photo_response.status_code != 200:
+                    print(f"⚠️ Ошибка отправки фото в Telegram: {photo_response.text}")
 
         except Exception as e:
             # Если что-то пошло не так, ошибка выведется в консоль терминала

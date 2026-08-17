@@ -1,16 +1,23 @@
-VK_TOKEN = "vk1.a.6yb4BrBikrSOp8FQMufLoiC0pvK1el--vaToMZ0Kb7E4Y6qiB1rXzTYMgvSB9YgK9BpTe0cJzOAeFP-RPwTM4Lo0THn3VHLemsyMO7C2XWP42YfcIfMarAjD-qJs9tipZ9tvsuPj2kQ3p5IVE6mCX_TCLLmAy0yGFZEHh13qYn12HkhZQw7P2Ce6aiIJm1anqhoEyo1jcvKiYro60Hpnag"
-API_BASE_URL = "http://127.0.0.1:8000/api"
-API_TOKEN = "511a3601ec0cec4c7901d3feb994e355c7563787"
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# ID группы
-GROUP_ID = 232481197
+# Указываем путь к .env файлу в корне проекта
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
-# Упражнения
-EXERCISES = [
-    {"id": 1, "title": "Дыхательная гимнастика", "type": "number"},
-    {"id": 2, "title": "Дневник эмоций", "type": "text"},
-    {"id": 3, "title": "Медитация", "type": "time"},
-    {"id": 4, "title": "Физическая разминка", "type": "number"},
-    {"id": 5, "title": "Осознанность", "type": "text"},
-    {"id": 6, "title": "Благодарность", "type": "text"},
-]
+# Настройки VK
+VK_TOKEN = os.getenv("VK_GROUP_TOKEN")
+GROUP_ID = int(os.getenv("VK_GROUP_ID", "232481197"))
+
+# Настройки API Django
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
+API_TOKEN = os.getenv("API_TOKEN")
+
+# Проверка
+print("=" * 50)
+print("📁 .env файл:", env_path)
+print("🔑 VK_TOKEN:", "✅" if VK_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
+print("🆔 GROUP_ID:", GROUP_ID)
+print("🔑 API_TOKEN:", "✅" if API_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
+print("=" * 50)

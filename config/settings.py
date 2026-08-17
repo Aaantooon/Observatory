@@ -12,10 +12,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-abcdefghijklmnopqrstuvwxyz123456')
 
 # --- РЕЖИМ ОТЛАДКИ ---
-DEBUG = True  # Временно для разработки
+DEBUG = True
 
 # --- РАЗРЕШЁННЫЕ ХОСТЫ ---
-ALLOWED_HOSTS = ['*']  # Временно для разработки
+ALLOWED_HOSTS = ['*']
 
 # --- ПРИЛОЖЕНИЯ ---
 INSTALLED_APPS = [
@@ -25,16 +25,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core',
-    'myapp',
-    'bot_api',
     'rest_framework',
     'rest_framework.authtoken',
+    'corsheaders',
+    'myapp',
+    'bot_api',
 ]
 
 # --- МИДЛВАРЫ ---
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -44,7 +45,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# --- КОРНЕВОЙ URL ---
+# --- КОРНЕВОЙ URL (ИСПРАВЛЕНО!) ---
 ROOT_URLCONF = 'config.urls'
 
 # --- ШАБЛОНЫ ---
@@ -64,18 +65,14 @@ TEMPLATES = [
     },
 ]
 
-# --- WSGI ---
+# --- WSGI (ИСПРАВЛЕНО!) ---
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# --- БАЗА ДАННЫХ (POSTGRESQL) ---
+# --- БАЗА ДАННЫХ (SQLite - для разработки) ---
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'put_nablyudatelya_db'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', '756159'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -104,9 +101,7 @@ USE_TZ = True
 # --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # --- МЕДИА ФАЙЛЫ ---
@@ -128,23 +123,15 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',  # Для разработки
     ],
 }
+
+# --- CORS ---
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # --- НАСТРОЙКИ АДМИНКИ ---
 ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
 ADMIN_SITE_TITLE = "Путь Наблюдателя"
 ADMIN_INDEX_TITLE = "Добро пожаловать в панель управления!"
-
-# --- КАСТОМНЫЕ СТИЛИ ДЛЯ АДМИНКИ ---
-ADMIN_MEDIA_PREFIX = '/static/admin/'
-
-# --- БЕЗОПАСНОСТЬ ДЛЯ ХОСТИНГА ---
-# Раскомментируй когда настроишь HTTPS
-# SECURE_SSL_REDIRECT = True
-# SESSION_COOKIE_SECURE = True
-# CSRF_COOKIE_SECURE = True
-# SECURE_HSTS_SECONDS = 31536000
-# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-# SECURE_HSTS_PRELOAD = True

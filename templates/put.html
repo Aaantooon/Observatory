@@ -1,10 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'base.html' %}
 
-</body>
-</html>
+{% block title %}Тропы — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center" style="color: #e2c044;">🗺️ Тропы</h1>
+    <p class="text-center text-muted">Здесь будут твои маршруты и пути</p>
+    
+    <div class="row mt-4">
+        <div class="col-md-6 mx-auto">
+            <div class="card bg-dark text-light border-secondary">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">🚶 В разработке</h5>
+                    <p class="card-text">Страница "Тропы" пока в процессе создания.</p>
+                    <p class="text-muted small">Вернись позже — здесь будут твои маршруты!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

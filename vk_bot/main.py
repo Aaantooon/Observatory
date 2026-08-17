@@ -4,19 +4,25 @@ from config import VK_TOKEN, GROUP_ID
 from handlers import BotHandlers
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# Включаем подробное логирование
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
     print("🤖 Бот запущен!")
+    print("📨 Ожидаю сообщения...")
+    logger.info("Бот запущен")
 
     vk_session = VkApi(token=VK_TOKEN)
     longpoll = VkBotLongPoll(vk_session, GROUP_ID)
     handlers = BotHandlers(vk_session)
 
-    print("📨 Ожидаю сообщения...")
-
     for event in longpoll.listen():
+        logger.debug(f"Событие: {event.type}")
         print(f"📩 Событие: {event.type}")
 
         if event.type == VkBotEventType.MESSAGE_NEW:
@@ -25,6 +31,7 @@ def main():
             text = msg.text
 
             print(f"📩 Получено сообщение от {user_id}: {text}")
+            logger.info(f"Сообщение от {user_id}: {text}")
 
             user_info = vk_session.method('users.get', {'user_ids': user_id})[0]
             first_name = user_info.get('first_name', '')
