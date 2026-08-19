@@ -2,26 +2,20 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env
 load_dotenv()
 
-# Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- СЕКРЕТНЫЙ КЛЮЧ (ИЗ .ENV) ---
 SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY не найден в .env файле!")
 
-# --- РЕЖИМ ОТЛАДКИ ---
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-# --- РАЗРЕШЁННЫЕ ХОСТЫ ---
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
-# --- ПРИЛОЖЕНИЯ ---
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -36,7 +30,6 @@ INSTALLED_APPS = [
     'bot_api',
 ]
 
-# --- МИДЛВАРЫ ---
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -49,10 +42,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# --- КОРНЕВОЙ URL ---
 ROOT_URLCONF = 'config.urls'
 
-# --- ШАБЛОНЫ ---
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -69,10 +60,9 @@ TEMPLATES = [
     },
 ]
 
-# --- WSGI ---
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# --- БАЗА ДАННЫХ ---
+# --- PostgreSQL ---
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -84,7 +74,6 @@ DATABASES = {
     }
 }
 
-# --- ВАЛИДАЦИЯ ПАРОЛЕЙ ---
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -92,59 +81,49 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# --- ЛОКАЛИЗАЦИЯ ---
 LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True
 USE_TZ = True
 
-# --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# --- МЕДИА ФАЙЛЫ ---
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# --- ПОЛЕ ПО УМОЛЧАНИЮ ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# --- АУТЕНТИФИКАЦИЯ ---
 AUTH_USER_MODEL = 'auth.User'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
 
-# --- REST FRAMEWORK ---
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # Безопаснее
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
 }
 
-# --- CORS (для продакшена) ---
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
 if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == ['']:
-    CORS_ALLOWED_ORIGINS = ['http://localhost:8000', 'https://твой-домен.com']
+    CORS_ALLOWED_ORIGINS = ['http://localhost:8000']
 
 CORS_ALLOW_CREDENTIALS = True
 
-# --- БЕЗОПАСНОСТЬ (SSL/HTTPS) ---
 SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
 SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False') == 'True'
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
 
-# --- НАСТРОЙКИ АДМИНКИ ---
 ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
 ADMIN_SITE_TITLE = "Путь Наблюдателя"
 ADMIN_INDEX_TITLE = "Добро пожаловать в панель управления!"
 
-# --- VK БОТ (из .env) ---
 VK_TOKEN = os.getenv('VK_TOKEN')
 VK_GROUP_ID = os.getenv('VK_GROUP_ID')
