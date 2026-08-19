@@ -86,4 +86,4 @@ docker-compose.override.yml
 # Project specific
 project_code.txt
 structure.txt
-observatory.db
+observatory.db.env
