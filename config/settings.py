@@ -9,13 +9,17 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- СЕКРЕТНЫЙ КЛЮЧ (ИЗ .ENV) ---
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-abcdefghijklmnopqrstuvwxyz123456')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY не найден в .env файле!")
 
 # --- РЕЖИМ ОТЛАДКИ ---
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # --- РАЗРЕШЁННЫЕ ХОСТЫ ---
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # --- ПРИЛОЖЕНИЯ ---
 INSTALLED_APPS = [
@@ -35,8 +39,8 @@ INSTALLED_APPS = [
 # --- МИДЛВАРЫ ---
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -45,7 +49,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# --- КОРНЕВОЙ URL (ИСПРАВЛЕНО!) ---
+# --- КОРНЕВОЙ URL ---
 ROOT_URLCONF = 'config.urls'
 
 # --- ШАБЛОНЫ ---
@@ -65,31 +69,27 @@ TEMPLATES = [
     },
 ]
 
-# --- WSGI (ИСПРАВЛЕНО!) ---
+# --- WSGI ---
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# --- БАЗА ДАННЫХ (SQLite - для разработки) ---
+# --- БАЗА ДАННЫХ ---
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'observatory_db'),
+        'USER': os.getenv('DB_USER', 'observatory_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 
 # --- ВАЛИДАЦИЯ ПАРОЛЕЙ ---
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 # --- ЛОКАЛИЗАЦИЯ ---
@@ -100,15 +100,15 @@ USE_TZ = True
 
 # --- СТАТИЧЕСКИЕ ФАЙЛЫ ---
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # --- МЕДИА ФАЙЛЫ ---
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = BASE_DIR / 'media'
 
-# --- ПОЛЕ ПО УМОЛЧАНИЮ ДЛЯ ПЕРВИЧНЫХ КЛЮЧЕЙ ---
+# --- ПОЛЕ ПО УМОЛЧАНИЮ ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- АУТЕНТИФИКАЦИЯ ---
@@ -123,15 +123,28 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Для разработки
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # Безопаснее
     ],
 }
 
-# --- CORS ---
-CORS_ALLOW_ALL_ORIGINS = True
+# --- CORS (для продакшена) ---
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == ['']:
+    CORS_ALLOWED_ORIGINS = ['http://localhost:8000', 'https://твой-домен.com']
+
 CORS_ALLOW_CREDENTIALS = True
+
+# --- БЕЗОПАСНОСТЬ (SSL/HTTPS) ---
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False') == 'True'
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
 
 # --- НАСТРОЙКИ АДМИНКИ ---
 ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
 ADMIN_SITE_TITLE = "Путь Наблюдателя"
 ADMIN_INDEX_TITLE = "Добро пожаловать в панель управления!"
+
+# --- VK БОТ (из .env) ---
+VK_TOKEN = os.getenv('VK_TOKEN')
+VK_GROUP_ID = os.getenv('VK_GROUP_ID')

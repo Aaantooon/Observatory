@@ -65,6 +65,21 @@
         display: inline-block;
         margin-top: 15px;
     }
+    .btn-flashlight {
+        display: inline-block;
+        padding: 10px 25px;
+        border-radius: 50px;
+        text-decoration: none;
+        color: #e2c044;
+        border: 1px solid #e2c044;
+        background: transparent;
+        transition: all 0.3s ease;
+    }
+    .btn-flashlight:hover {
+        background: #e2c044;
+        color: #1a1a2e;
+        transform: scale(1.05);
+    }
     
     /* Блок с расписанием (как на вашем скриншоте) */
     .schedule-card {
@@ -107,7 +122,7 @@
             <h3>🌱 Новичок</h3>
             <p>Учимся строить карты. Первые шаги, образы, ассоциации. Ты узнаешь, как работает память и как создавать свои первые тропы.</p>
             <div class="d-flex align-items-center gap-3">
-                <a href="#" class="btn-choice btn-light" style="padding: 10px 25px; border-radius: 50px; text-decoration: none; color: #e2c044; border: 1px solid #e2c044;">🔦 Посветить фонариком</a>
+                <a href="{% url 'flashlight' %}" class="btn-flashlight">🔦 Посветить фонариком</a>
                 <span class="text-muted small">Чтобы попасть, просто посвети фонариком и начни создавать карту.</span>
             </div>
         </div>

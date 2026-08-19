@@ -14,9 +14,10 @@ urlpatterns = [
     path('map/', views.map_view, name='map'),
     path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
+    path('flashlight/', views.flashlight_view, name='flashlight'),
     
     # --- Наблюдения (myapp) ---
-    path('observations/', include('myapp.urls')),  # 👈 Добавить эту строку
+    path('observations/', include('myapp.urls')),
 ]
 
 if settings.DEBUG:

@@ -21,3 +21,8 @@ def observer_view(request):
 
 def put_view(request):
     return render(request, 'put.html')
+
+def flashlight_view(request):
+    return render(request, 'flashlight.html', {
+        'title': 'Фонарик — Путь наблюдателя'
+    })
