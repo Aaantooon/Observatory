@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Форум — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto; padding: 40px 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h1 style="color: #e2c044; font-weight: 300; font-size: 2rem;">💬 Форум</h1>
+        <a href="#" style="background: #e2c044; color: #0b0e14; border-radius: 30px; padding: 8px 25px; text-decoration: none;">
+            + Новая тема
+        </a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        {% for category in categories %}
+        <div style="background: rgba(22,33,62,0.5); border: 1px solid rgba(226,192,68,0.1); border-radius: 16px; padding: 20px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                <span style="font-size: 2rem;">{{ category.icon }}</span>
+                <div>
+                    <h5 style="color: #e2c044; margin: 0;">
+                        <a href="{% url 'forum:category_detail' category.slug %}" style="color: #e2c044; text-decoration: none;">
+                            {{ category.name }}
+                        </a>
+                    </h5>
+                    <small style="color: #5a5a5a;">{{ category.get_topic_count }} тем · {{ category.get_post_count }} сообщений</small>
+                </div>
+            </div>
+            <p style="color: #8a8a8a; margin-bottom: 0; font-size: 0.9rem;">{{ category.description }}</p>
+        </div>
+        {% empty %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #5a5a5a;">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🗣️</div>
+            <h3 style="color: #8a8a8a; font-weight: 300;">Категорий пока нет</h3>
+            <p style="font-size: 0.9rem;">Администратор скоро добавит разделы форума</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

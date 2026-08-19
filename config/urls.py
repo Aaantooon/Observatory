@@ -8,6 +8,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bot_api.urls')),
     
+    # --- Форум (Machina) ---
+    path('forum/', include('machina.urls')),
+    
     # --- Страницы сайта ---
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
@@ -18,6 +21,9 @@ urlpatterns = [
     
     # --- Наблюдения (myapp) ---
     path('observations/', include('myapp.urls')),
+    
+    # --- 3D Мир ---
+    path('3d/', include('observer3d.urls')),
 ]
 
 if settings.DEBUG:

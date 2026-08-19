@@ -1,21 +1,433 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Фонарик — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .flashlight-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        display: flex;
+        gap: 50px;
+        align-items: flex-start;
+        min-height: 70vh;
+    }
+
+    /* ===== ЛЕВАЯ ЧАСТЬ: КУРС ===== */
+    .flashlight-main {
+        flex: 1.5;
+        padding: 20px 10px;
+    }
+    .flashlight-main .course-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 30px;
+        border-bottom: 1px solid rgba(226,192,68,0.1);
+        padding-bottom: 15px;
+    }
+    .flashlight-main .course-header .icon {
+        font-size: 2rem;
+    }
+    .flashlight-main .course-header h2 {
+        color: #e2c044;
+        font-size: 1.3rem;
+        font-weight: 300;
+        letter-spacing: 1px;
+        margin: 0;
+    }
+    .flashlight-main .course-header .progress-text {
+        color: #5a5a5a;
+        font-size: 0.8rem;
+        margin-left: auto;
+        letter-spacing: 1px;
+    }
+
+    /* ===== СЛАЙДЫ КУРСА ===== */
+    .slide-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .slide-item {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        transition: all 0.4s ease;
+        cursor: default;
+        position: relative;
+    }
+    .slide-item:hover {
+        background: rgba(22,33,62,0.5);
+        border-color: rgba(226,192,68,0.1);
+    }
+    .slide-item .num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        flex-shrink: 0;
+        background: rgba(255,255,255,0.05);
+        color: #5a5a5a;
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: all 0.3s ease;
+    }
+    .slide-item.completed .num {
+        background: rgba(226,192,68,0.15);
+        color: #e2c044;
+        border-color: rgba(226,192,68,0.2);
+    }
+    .slide-item.active .num {
+        background: #e2c044;
+        color: #0b0e14;
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.2);
+    }
+    .slide-item .info {
+        flex: 1;
+    }
+    .slide-item .info .title {
+        color: #d4d9e6;
+        font-size: 0.95rem;
+        font-weight: 400;
+        transition: all 0.3s ease;
+    }
+    .slide-item.active .info .title {
+        color: #e2c044;
+    }
+    .slide-item.completed .info .title {
+        color: #8a8a8a;
+    }
+    .slide-item .info .desc {
+        color: #5a5a5a;
+        font-size: 0.75rem;
+        margin-top: 2px;
+    }
+    .slide-item .status {
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .slide-item .status .check {
+        color: #e2c044;
+    }
+    .slide-item .status .lock {
+        color: #3a3a3a;
+    }
+    .slide-item .status .arrow-right {
+        color: #e2c044;
+        animation: pulseArrow 2s ease-in-out infinite;
+    }
+    @keyframes pulseArrow {
+        0%, 100% { transform: translateX(0); opacity: 0.5; }
+        50% { transform: translateX(5px); opacity: 1; }
+    }
+
+    /* ===== ПРОГРЕСС-БАР ===== */
+    .progress-bar-wrap {
+        margin-top: 25px;
+        background: rgba(255,255,255,0.04);
+        border-radius: 10px;
+        height: 4px;
+        overflow: hidden;
+        position: relative;
+    }
+    .progress-bar-wrap .fill {
+        height: 100%;
+        background: linear-gradient(90deg, #e2c044, #f0d65a);
+        border-radius: 10px;
+        transition: width 0.8s ease;
+        width: 0%;
+        box-shadow: 0 0 20px rgba(226,192,68,0.2);
+    }
+    .progress-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        color: #4a4a4a;
+        font-size: 0.7rem;
+        letter-spacing: 1px;
+    }
+
+    /* ===== ПРАВАЯ ЧАСТЬ: ПРИЛОЖЕНИЕ ===== */
+    .flashlight-app {
+        flex: 1;
+        max-width: 380px;
+        padding-top: 20px;
+        position: sticky;
+        top: 20px;
+    }
+    .flashlight-app .app-label {
+        color: #aab3c9;
+        font-size: 0.7rem;
+        font-weight: 400;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        margin-bottom: 18px;
+        opacity: 0.4;
+        text-align: center;
+    }
+
+    /* ===== КАРТОЧКА ПРИЛОЖЕНИЯ ===== */
+    .app-card {
+        background: rgba(22,33,62,0.5);
+        border: 2px solid rgba(226,192,68,0.15);
+        border-radius: 20px;
+        padding: 35px 25px;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        transition: all 0.5s ease;
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        text-align: center;
+    }
+    .app-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle at 30% 30%, rgba(226,192,68,0.05), transparent 60%);
+        pointer-events: none;
+        transition: all 0.6s ease;
+    }
+    .app-card:hover::before {
+        transform: scale(1.2);
+    }
+    .app-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        border-color: rgba(226,192,68,0.5);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(226,192,68,0.05);
+        background: rgba(22,33,62,0.7);
+    }
+    .app-card .app-icon {
+        font-size: 3.5rem;
+        display: block;
+        margin-bottom: 12px;
+        animation: lanternGlow 3s ease-in-out infinite;
+    }
+    @keyframes lanternGlow {
+        0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.2); }
+        50% { text-shadow: 0 0 40px rgba(226,192,68,0.5), 0 0 80px rgba(226,192,68,0.15); }
+    }
+    .app-card h3 {
+        color: #e2c044;
+        font-size: 1.3rem;
+        font-weight: 400;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+    .app-card p {
+        color: #8a8a8a;
+        font-size: 0.85rem;
+        margin: 0;
+        line-height: 1.5;
+    }
+    .app-card .arrow {
+        display: inline-block;
+        margin-top: 18px;
+        padding: 8px 30px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        background: rgba(226,192,68,0.1);
+        color: #e2c044;
+        border: 1px solid rgba(226,192,68,0.15);
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+    }
+    .app-card:hover .arrow {
+        background: rgba(226,192,68,0.18);
+        border-color: rgba(226,192,68,0.3);
+        box-shadow: 0 0 30px rgba(226,192,68,0.08);
+    }
+
+    /* ===== АДАПТИВ ===== */
+    @media (max-width: 768px) {
+        .flashlight-container {
+            flex-direction: column;
+            padding: 20px 15px;
+            gap: 30px;
+        }
+        .flashlight-app {
+            max-width: 100%;
+            width: 100%;
+            position: static;
+        }
+        .flashlight-main .course-header h2 {
+            font-size: 1.1rem;
+        }
+        .slide-item {
+            padding: 12px 14px;
+        }
+        .slide-item .info .title {
+            font-size: 0.85rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="display: flex; height: calc(100vh - 100px); gap: 20px; padding: 20px;">
-    <!-- Левая колонка - Курс -->
-    <div style="flex: 1; background: #f5f5f5; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #2c3e50; text-align: center;">🗺️ Курс</h2>
-        <div style="display: flex; justify-content: center; align-items: center; height: 80%;">
-            <p style="color: #7f8c8d; font-size: 20px;">Карта в разработке</p>
+<div class="flashlight-container">
+
+    <!-- ===== ЛЕВАЯ ЧАСТЬ: КУРС ===== -->
+    <div class="flashlight-main">
+        <div class="course-header">
+            <span class="icon">📚</span>
+            <h2>Курс «Путь наблюдателя»</h2>
+            <span class="progress-text" id="progressText">0 / 5</span>
+        </div>
+
+        <div class="slide-list" id="slideList">
+            <!-- Слайд 1 -->
+            <div class="slide-item completed" data-slide="1">
+                <span class="num">1</span>
+                <div class="info">
+                    <div class="title">Введение в наблюдение</div>
+                    <div class="desc">Первый шаг к осознанности</div>
+                </div>
+                <span class="status"><span class="check">✓</span></span>
+            </div>
+
+            <!-- Слайд 2 -->
+            <div class="slide-item active" data-slide="2">
+                <span class="num">2</span>
+                <div class="info">
+                    <div class="title">Стресс и его проявления</div>
+                    <div class="desc">Учимся распознавать</div>
+                </div>
+                <span class="status"><span class="arrow-right">▶</span></span>
+            </div>
+
+            <!-- Слайд 3 -->
+            <div class="slide-item" data-slide="3">
+                <span class="num">3</span>
+                <div class="info">
+                    <div class="title">Практика внимательности</div>
+                    <div class="desc">Быть здесь и сейчас</div>
+                </div>
+                <span class="status"><span class="lock">🔒</span></span>
+            </div>
+
+            <!-- Слайд 4 -->
+            <div class="slide-item" data-slide="4">
+                <span class="num">4</span>
+                <div class="info">
+                    <div class="title">Эмоциональный интеллект</div>
+                    <div class="desc">Управление эмоциями</div>
+                </div>
+                <span class="status"><span class="lock">🔒</span></span>
+            </div>
+
+            <!-- Слайд 5 -->
+            <div class="slide-item" data-slide="5">
+                <span class="num">5</span>
+                <div class="info">
+                    <div class="title">Путь к себе</div>
+                    <div class="desc">Интеграция практик</div>
+                </div>
+                <span class="status"><span class="lock">🔒</span></span>
+            </div>
+        </div>
+
+        <!-- Прогресс-бар -->
+        <div class="progress-bar-wrap">
+            <div class="fill" id="progressFill" style="width: 20%;"></div>
+        </div>
+        <div class="progress-stats">
+            <span>Начало пути</span>
+            <span id="progressPercent">20%</span>
+            <span>Осознанность</span>
         </div>
     </div>
-    
-    <!-- Правая колонка - Приложение -->
-    <div style="flex: 1; background: #f5f5f5; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #2c3e50; text-align: center;">📱 Приложение наблюдателя</h2>
-        <div style="display: flex; justify-content: center; align-items: center; height: 80%;">
-            <p style="color: #7f8c8d; font-size: 20px;">В разработке</p>
-        </div>
+
+    <!-- ===== ПРАВАЯ ЧАСТЬ: ПРИЛОЖЕНИЕ ===== -->
+    <div class="flashlight-app">
+        <div class="app-label">📱 Приложение</div>
+
+        <a href="{% url 'observer3d:world' %}" class="app-card">
+            <span class="app-icon">🌍</span>
+            <h3>Наблюдатель</h3>
+            <p>Исследуй курс в трёхмерном пространстве</p>
+            <span class="arrow">🔦 Войти</span>
+        </a>
     </div>
+
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const items = document.querySelectorAll('.slide-item');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const progressPercent = document.getElementById('progressPercent');
+
+        function updateProgress() {
+            const total = items.length;
+            let completed = 0;
+            let active = false;
+
+            items.forEach(function(item) {
+                if (item.classList.contains('completed')) {
+                    completed++;
+                }
+                if (item.classList.contains('active')) {
+                    active = true;
+                }
+            });
+
+            // Если нет активного, но есть completed — ставим активным следующий
+            if (!active && completed < total) {
+                items[completed].classList.add('active');
+                // Обновляем статус
+                const status = items[completed].querySelector('.status');
+                status.innerHTML = '<span class="arrow-right">▶</span>';
+            }
+
+            // Пересчитываем
+            completed = 0;
+            items.forEach(function(item) {
+                if (item.classList.contains('completed')) {
+                    completed++;
+                }
+            });
+
+            const percent = Math.round((completed / total) * 100);
+            progressFill.style.width = percent + '%';
+            progressText.textContent = completed + ' / ' + total;
+            progressPercent.textContent = percent + '%';
+
+            // Если все пройдены
+            if (completed === total) {
+                progressFill.style.background = 'linear-gradient(90deg, #e2c044, #ffcc66, #e2c044)';
+                progressFill.style.backgroundSize = '200% 100%';
+                progressFill.style.animation = 'shimmer 2s ease-in-out infinite';
+            }
+        }
+
+        // Добавляем анимацию shimmer для завершённого курса
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shimmer {
+                0% { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        updateProgress();
+    });
+</script>
 {% endblock %}

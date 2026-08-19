@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Путь наблюдателя - 3D Мир (Babylon)</title>
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        
+        #blocker {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            cursor: pointer;
+            flex-direction: column;
+        }
+        #blocker h1 {
+            color: #ffcc66;
+            font-size: 4em;
+            text-shadow: 0 0 40px rgba(255, 200, 100, 0.3);
+            margin-bottom: 20px;
+        }
+        #blocker p {
+            color: #aaa;
+            font-size: 1.3em;
+        }
+        #blocker .hint {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 30px;
+        }
+        
+        #slide-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 30, 0.95);
+            padding: 50px;
+            border-radius: 20px;
+            color: #fff;
+            max-width: 600px;
+            width: 80%;
+            z-index: 500;
+            display: none;
+            border: 2px solid rgba(255, 200, 100, 0.5);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 60px rgba(100, 150, 255, 0.2);
+        }
+        #slide-overlay h2 {
+            color: #ffcc66;
+            text-align: center;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+        }
+        #slide-overlay .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 25px;
+            font-size: 35px;
+            cursor: pointer;
+            color: #fff;
+            transition: 0.3s;
+        }
+        #slide-overlay .close-btn:hover {
+            color: #ffcc66;
+            transform: rotate(90deg);
+        }
+        #slide-content {
+            line-height: 1.8;
+            font-size: 1.1em;
+            color: #ddd;
+            margin: 20px 0 30px;
+        }
+        #slide-overlay button {
+            background: linear-gradient(135deg, #ffcc66, #ffaa33);
+            color: #000;
+            border: none;
+            padding: 12px 40px;
+            border-radius: 30px;
+            font-size: 1.1em;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        #slide-overlay button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 200, 100, 0.3);
+        }
+        
+        #hud {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.2);
+            font-size: 14px;
+            z-index: 10;
+            text-align: center;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 25px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: none;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+        #hud span {
+            color: rgba(255, 200, 100, 0.4);
+        }
+        
+        #progress {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: rgba(255,255,255,0.3);
+            font-size: 14px;
+            z-index: 10;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: none;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        #progress .count {
+            color: #ffcc66;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="blocker" onclick="startGame()">
+        <h1>🔦 Путь наблюдателя</h1>
+        <p>Нажмите чтобы войти в мир</p>
+        <div class="hint">🖱️ Мышь - осмотреться &nbsp;|&nbsp; ⌨️ WASD - движение &nbsp;|&nbsp; <span style="color:#ffcc66;">E</span> - взаимодействие</div>
+    </div>
+
+    <div id="slide-overlay">
+        <span class="close-btn" onclick="closeSlide()">✕</span>
+        <h2 id="slide-title">📖 Тема</h2>
+        <div id="slide-content">Содержание...</div>
+        <button onclick="closeSlide()">Продолжить путь →</button>
+    </div>
+
+    <div id="hud">🔦 <span>Исследуйте мир</span> · Найдите все области обучения</div>
+    <div id="progress">📚 Прогресс: <span class="count" id="progress-count">0</span>/5</div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <!-- Babylon.js -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+
+    <script>
+        // Данные курса
+        const courseData = [
+            {
+                id: 1,
+                title: "Введение в наблюдение",
+                content: "Наблюдение — это первый шаг к осознанности. В этом модуле мы научимся замечать свои мысли и эмоции без осуждения. Практика: просто смотрите на свои чувства как на облака, проплывающие по небу.",
+                position: { x: 12, z: -5 },
+                color: "#4a6fa5"
+            },
+            {
+                id: 2,
+                title: "Стресс и его проявления",
+                content: "Стресс — это естественная реакция организма. Важно научиться распознавать его признаки: напряжение в теле, учащенное дыхание, тревожные мысли. Упражнение: глубокое дыхание на счет 4-7-8.",
+                position: { x: -10, z: -8 },
+                color: "#6a4fa5"
+            },
+            {
+                id: 3,
+                title: "Практика внимательности",
+                content: "Внимательность — это способность быть здесь и сейчас. Практикуйте наблюдение за дыханием и телесными ощущениями. Упражнение: сканирование тела — 5 минут спокойного внимания.",
+                position: { x: 7, z: -18 },
+                color: "#4fa56a"
+            },
+            {
+                id: 4,
+                title: "Эмоциональный интеллект",
+                content: "Умение понимать свои эмоции и управлять ими — ключ к гармоничным отношениям. Практика: назовите эмоцию, примите её, позвольте ей быть, и она трансформируется.",
+                position: { x: -14, z: -14 },
+                color: "#a56a4f"
+            },
+            {
+                id: 5,
+                title: "Путь к себе",
+                content: "Завершающий модуль. Интеграция всех практик и создание индивидуального пути самопознания. Помните: путь — это процесс, а не цель. Каждый шаг важен.",
+                position: { x: 0, z: -30 },
+                color: "#ffcc66"
+            }
+        ];
+
+        let canvas, engine, scene, camera;
+        let isLocked = false;
+        let foundObjects = new Set();
+        let playerPos = new BABYLON.Vector3(0, 0, 0);
+        let cameraTarget = new BABYLON.Vector3(0, 0, -1);
+        let keys = { w: false, a: false, s: false, d: false };
+        let isGameStarted = false;
+
+        // Инициализация Babylon.js
+        function initBabylon() {
+            canvas = document.getElementById('renderCanvas');
+            engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+            
+            scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.02, 0.02, 0.05, 1);
+            
+            // Туман
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+            scene.fogDensity = 0.03;
+            scene.fogColor = new BABYLON.Color3(0.02, 0.02, 0.05);
+            
+            // Камера от первого лица
+            camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1.7, 0), scene);
+            camera.attachControl(canvas, true);
+            camera.speed = 0.08;
+            camera.angularSensibility = 2000;
+            
+            // Ограничения камеры
+            camera.minZ = 0.1;
+            camera.maxZ = 100;
+            
+            // Освещение
+            createLighting();
+            
+            // Мир
+            createWorld();
+            
+            // GUI
+            createGUI();
+            
+            // События
+            setupControls();
+            
+            // Скрыть курсор
+            canvas.style.cursor = 'none';
+            
+            // Рендер
+            engine.runRenderLoop(() => {
+                updatePlayer();
+                scene.render();
+            });
+            
+            window.addEventListener('resize', () => {
+                engine.resize();
+            });
+        }
+
+        function createLighting() {
+            // Ambient
+            const ambient = new BABYLON.HemisphericLight("ambient", new BABYLON.Vector3(0, 1, 0), scene);
+            ambient.intensity = 0.2;
+            
+            // Фонарик (следует за камерой)
+            const flashlight = new BABYLON.SpotLight("flashlight", 
+                new BABYLON.Vector3(0, 0, 0),
+                new BABYLON.Vector3(0, 0, -1),
+                Math.PI / 5,
+                2,
+                30,
+                scene
+            );
+            flashlight.intensity = 2;
+            flashlight.diffuse = new BABYLON.Color3(1, 0.9, 0.6);
+            
+            // Привязываем фонарик к камере
+            const parent = new BABYLON.TransformNode("flashlightParent", scene);
+            parent.position = camera.position;
+            parent.rotation = camera.rotation;
+            flashlight.parent = parent;
+            flashlight.position = new BABYLON.Vector3(0, -0.2, 0);
+            
+            // Вспомогательный свет
+            const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, -1, 0), scene);
+            dirLight.intensity = 0.1;
+        }
+
+        function createWorld() {
+            // Пол
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 80, height: 80, subdivisions: 2 }, scene);
+            const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+            groundMat.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.1);
+            groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+            groundMat.emissiveColor = new BABYLON.Color3(0.01, 0.01, 0.02);
+            ground.material = groundMat;
+            ground.receiveShadows = true;
+
+            // Сетка
+            const grid = BABYLON.MeshBuilder.CreateGround("grid", { width: 80, height: 80, subdivisions: 40 }, scene);
+            const gridMat = new BABYLON.StandardMaterial("gridMat", scene);
+            gridMat.diffuseColor = new BABYLON.Color3(0.02, 0.02, 0.04);
+            gridMat.wireframe = true;
+            gridMat.alpha = 0.3;
+            grid.material = gridMat;
+            grid.position.y = 0.01;
+
+            // Создаем области обучения
+            courseData.forEach((data, index) => {
+                createLearningZone(data, index);
+            });
+
+            // Декорации
+            createDecorations();
+        }
+
+        function createLearningZone(data, index) {
+            const pos = data.position;
+            const radius = 3;
+            
+            // Светящаяся платформа
+            const platform = BABYLON.MeshBuilder.CreateDisc("platform_" + index, { radius: radius, tessellation: 32 }, scene);
+            const platMat = new BABYLON.StandardMaterial("platMat_" + index, scene);
+            platMat.diffuseColor = new BABYLON.Color3(0.1, 0.1, 0.3);
+            platMat.emissiveColor = new BABYLON.Color3(0.1, 0.05, 0.3);
+            platMat.alpha = 0.6;
+            platform.material = platMat;
+            platform.position = new BABYLON.Vector3(pos.x, 0, pos.z);
+            platform.rotation.x = Math.PI / 2;
+
+            // Светящийся столб
+            const pillar = BABYLON.MeshBuilder.CreateCylinder("pillar_" + index, { height: 4, diameterTop: 0.1, diameterBottom: 0.4 }, scene);
+            const pillMat = new BABYLON.StandardMaterial("pillMat_" + index, scene);
+            pillMat.diffuseColor = new BABYLON.Color3(0.3, 0.3, 0.8);
+            pillMat.emissiveColor = new BABYLON.Color3(0.2, 0.1, 0.6);
+            pillMat.emissiveIntensity = 0.5;
+            pillar.material = pillMat;
+            pillar.position = new BABYLON.Vector3(pos.x, 2, pos.z);
+
+            // Световой луч
+            const glow = BABYLON.MeshBuilder.CreateCylinder("glow_" + index, { height: 6, diameterTop: 0.01, diameterBottom: 1.5 }, scene);
+            const glowMat = new BABYLON.StandardMaterial("glowMat_" + index, scene);
+            glowMat.diffuseColor = new BABYLON.Color3(0.2, 0.1, 0.6);
+            glowMat.alpha = 0.15;
+            glowMat.emissiveColor = new BABYLON.Color3(0.3, 0.1, 0.8);
+            glowMat.emissiveIntensity = 0.3;
+            glow.material = glowMat;
+            glow.position = new BABYLON.Vector3(pos.x, 3, pos.z);
+            
+            // Частицы вокруг
+            const particleSystem = new BABYLON.ParticleSystem("particles_" + index, 100, scene);
+            particleSystem.particleTexture = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/flare.png", scene);
+            particleSystem.emitter = new BABYLON.Vector3(pos.x, 1, pos.z);
+            particleSystem.minEmitBox = new BABYLON.Vector3(-1, 0, -1);
+            particleSystem.maxEmitBox = new BABYLON.Vector3(1, 1, 1);
+            particleSystem.color1 = new BABYLON.Color4(0.5, 0.3, 0.8, 0.5);
+            particleSystem.color2 = new BABYLON.Color4(0.3, 0.5, 0.8, 0.3);
+            particleSystem.minSize = 0.05;
+            particleSystem.maxSize = 0.15;
+            particleSystem.minLifeTime = 0.5;
+            particleSystem.maxLifeTime = 2;
+            particleSystem.emitRate = 20;
+            particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
+            particleSystem.start();
+            
+            // Текст над областью (плоскость с текстурой)
+            const texture = createTextTexture(data.title, data.color);
+            const textMat = new BABYLON.StandardMaterial("textMat_" + index, scene);
+            textMat.diffuseTexture = texture;
+            textMat.emissiveTexture = texture;
+            textMat.emissiveIntensity = 0.3;
+            textMat.specularColor = new BABYLON.Color3(0, 0, 0);
+            
+            const textPlane = BABYLON.MeshBuilder.CreatePlane("text_" + index, { width: 8, height: 2 }, scene);
+            textPlane.material = textMat;
+            textPlane.position = new BABYLON.Vector3(pos.x, 5.5, pos.z);
+            textPlane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+
+            // Коллайдер для взаимодействия
+            const collider = BABYLON.MeshBuilder.CreateSphere("collider_" + index, { diameter: radius * 2 }, scene);
+            collider.isVisible = false;
+            collider.position = new BABYLON.Vector3(pos.x, 0, pos.z);
+            collider.metadata = {
+                id: data.id,
+                title: data.title,
+                content: data.content,
+                activated: false
+            };
+            
+            // Сохраняем ссылки
+            data._meshes = [platform, pillar, glow, textPlane, collider];
+            data._particles = particleSystem;
+        }
+
+        function createTextTexture(text, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 60px Arial';
+            
+            // Тень
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 30;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillText('📚 ' + text, canvas.width / 2, canvas.height / 2 + 5);
+            
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = color || '#88aaff';
+            ctx.fillText('📚 ' + text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new BABYLON.DynamicTexture('text_' + Date.now(), canvas, scene);
+            return texture;
+        }
+
+        function createDecorations() {
+            // Случайные туманные деревья
+            for (let i = 0; i < 40; i++) {
+                const height = 1 + Math.random() * 4;
+                const tree = BABYLON.MeshBuilder.CreateCylinder("tree_" + i, { 
+                    height: height, 
+                    diameterTop: 0.05, 
+                    diameterBottom: 0.1 + Math.random() * 0.2 
+                }, scene);
+                const treeMat = new BABYLON.StandardMaterial("treeMat_" + i, scene);
+                treeMat.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.1);
+                treeMat.emissiveColor = new BABYLON.Color3(0.02, 0.02, 0.04);
+                treeMat.alpha = 0.3 + Math.random() * 0.3;
+                tree.material = treeMat;
+                
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 10 + Math.random() * 25;
+                tree.position = new BABYLON.Vector3(
+                    Math.cos(angle) * distance,
+                    height / 2 - 0.5,
+                    Math.sin(angle) * distance
+                );
+                tree.rotation.x = (Math.random() - 0.5) * 0.1;
+                tree.rotation.z = (Math.random() - 0.5) * 0.1;
+            }
+        }
+
+        function createGUI() {
+            const advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+            
+            // Кроссхаир
+            const crosshair = new BABYLON.GUI.Text("crosshair", "+");
+            crosshair.color = "rgba(255,255,255,0.2)";
+            crosshair.fontSize = 40;
+            crosshair.fontFamily = "Arial";
+            crosshair.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+            crosshair.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+            advancedTexture.addControl(crosshair);
+        }
+
+        function setupControls() {
+            // Блокировка мыши
+            canvas.addEventListener('click', () => {
+                if (isGameStarted) {
+                    canvas.requestPointerLock();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isLocked = document.pointerLockElement === canvas;
+                if (isLocked) {
+                    document.getElementById('hud').style.display = 'block';
+                    document.getElementById('progress').style.display = 'block';
+                } else if (isGameStarted) {
+                    document.getElementById('hud').style.display = 'none';
+                }
+            });
+            
+            // Клавиатура
+            document.addEventListener('keydown', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = true; e.preventDefault(); break;
+                    case 'KeyA': keys.a = true; e.preventDefault(); break;
+                    case 'KeyS': keys.s = true; e.preventDefault(); break;
+                    case 'KeyD': keys.d = true; e.preventDefault(); break;
+                    case 'KeyE': checkInteraction(); e.preventDefault(); break;
+                    case 'Escape': 
+                        if (document.pointerLockElement) {
+                            document.exitPointerLock();
+                        }
+                        break;
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                switch(e.code) {
+                    case 'KeyW': keys.w = false; e.preventDefault(); break;
+                    case 'KeyA': keys.a = false; e.preventDefault(); break;
+                    case 'KeyS': keys.s = false; e.preventDefault(); break;
+                    case 'KeyD': keys.d = false; e.preventDefault(); break;
+                }
+            });
+        }
+
+        function updatePlayer() {
+            if (!isLocked) return;
+            
+            // Движение
+            const speed = 0.05;
+            const forward = new BABYLON.Vector3(-Math.sin(camera.rotation.y), 0, -Math.cos(camera.rotation.y));
+            const right = new BABYLON.Vector3(Math.cos(camera.rotation.y), 0, -Math.sin(camera.rotation.y));
+            
+            const moveVec = new BABYLON.Vector3(0, 0, 0);
+            if (keys.w) moveVec.addInPlace(forward);
+            if (keys.s) moveVec.subtractInPlace(forward);
+            if (keys.a) moveVec.subtractInPlace(right);
+            if (keys.d) moveVec.addInPlace(right);
+            
+            if (moveVec.length() > 0) {
+                moveVec.normalize().scaleInPlace(speed);
+                camera.position.addInPlace(moveVec);
+            }
+            
+            // Обновляем положение фонарика
+            const flashlightParent = scene.getMeshByName("flashlightParent");
+            if (flashlightParent) {
+                flashlightParent.position = camera.position;
+                flashlightParent.rotation = camera.rotation;
+            }
+            
+            // Проверка взаимодействия (автоматически)
+            checkProximity();
+        }
+
+        function checkProximity() {
+            courseData.forEach((data) => {
+                if (data._meshes && data._meshes.length > 0) {
+                    const collider = data._meshes[data._meshes.length - 1];
+                    if (collider && !collider.metadata.activated) {
+                        const dist = BABYLON.Vector3.Distance(camera.position, collider.position);
+                        if (dist < 3.5) {
+                            // Подсветка при приближении
+                            const pillar = data._meshes[1];
+                            if (pillar) {
+                                pillar.material.emissiveIntensity = 1.5;
+                            }
+                            // Показываем подсказку
+                            document.getElementById('hud').innerHTML = '🔦 <span style="color:#ffcc66;">Нажмите E</span> чтобы изучить: ' + data.title;
+                        } else {
+                            const pillar = data._meshes[1];
+                            if (pillar) {
+                                pillar.material.emissiveIntensity = 0.5;
+                            }
+                            if (!foundObjects.has(data.id)) {
+                                document.getElementById('hud').innerHTML = '🔦 <span>Исследуйте мир</span> · Найдите все области обучения';
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function checkInteraction() {
+            if (!isLocked) return;
+            
+            courseData.forEach((data) => {
+                if (data._meshes && data._meshes.length > 0) {
+                    const collider = data._meshes[data._meshes.length - 1];
+                    if (collider && !collider.metadata.activated) {
+                        const dist = BABYLON.Vector3.Distance(camera.position, collider.position);
+                        if (dist < 4) {
+                            showSlide(data.id, data.title, data.content);
+                            collider.metadata.activated = true;
+                            foundObjects.add(data.id);
+                            updateProgress();
+                            
+                            // Визуальный эффект активации
+                            const pillar = data._meshes[1];
+                            if (pillar) {
+                                pillar.material.emissiveIntensity = 2;
+                            }
+                            const glow = data._meshes[2];
+                            if (glow) {
+                                glow.material.alpha = 0.5;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showSlide(id, title, content) {
+            const overlay = document.getElementById('slide-overlay');
+            document.getElementById('slide-title').textContent = '📖 ' + title;
+            document.getElementById('slide-content').textContent = content;
+            overlay.style.display = 'block';
+            
+            if (document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+            isLocked = false;
+        }
+
+        function closeSlide() {
+            document.getElementById('slide-overlay').style.display = 'none';
+            if (isGameStarted) {
+                canvas.requestPointerLock();
+            }
+        }
+
+        function updateProgress() {
+            const count = foundObjects.size;
+            document.getElementById('progress-count').textContent = count;
+            
+            if (count === courseData.length) {
+                document.getElementById('hud').innerHTML = '🎉 <span style="color:#ffcc66;">Поздравляем! Вы нашли все области!</span>';
+                document.getElementById('progress').style.borderColor = '#ffcc66';
+            }
+        }
+
+        function startGame() {
+            document.getElementById('blocker').style.display = 'none';
+            isGameStarted = true;
+            canvas.requestPointerLock();
+            
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('progress').style.display = 'block';
+        }
+
+        // Запуск
+        window.onload = initBabylon;
+    </script>
+</body>
+</html>
