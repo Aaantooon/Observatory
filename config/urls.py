@@ -11,6 +11,13 @@ urlpatterns = [
     # --- Форум (Machina) ---
     path('forum/', include('machina.urls')),
     
+    # --- Авторизация (VK + стандартная) ---
+    # ОБЯЗАТЕЛЬНО добавить этот путь для работы входа через VK
+    path('', include('social_django.urls')),
+
+    # Стандартные пути auth (login, logout и т.д.)
+    path('accounts/', include('django.contrib.auth.urls')),
+    
     # --- Страницы сайта ---
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),

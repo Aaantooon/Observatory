@@ -18,7 +18,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
-# ===== INSTALLED_APPS С MACHINA =====
+# ===== INSTALLED_APPS =====
 INSTALLED_APPS = [
     # Стандартные приложения Django
     'django.contrib.admin',
@@ -34,7 +34,7 @@ INSTALLED_APPS = [
     'haystack',
     'widget_tweaks',
     
-    # Machina (все приложения вручную)
+    # Machina
     'machina',
     'machina.apps.forum',
     'machina.apps.forum_conversation',
@@ -47,14 +47,21 @@ INSTALLED_APPS = [
     'machina.apps.forum_member',
     'machina.apps.forum_permission',
     
-    # Ваши приложения
+    # Сторонние приложения
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+    'social_django', # <--- ДОБАВЛЕНО ДЛЯ ВХОДА ЧЕРЕЗ VK
+    
+    # Ваши приложения
     'myapp',
     'bot_api',
     'observer3d',
+    
+    # Авторизация вк
+    'sslserver',
 ]
+
 # =======================================
 
 MIDDLEWARE = [
@@ -68,6 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'machina.apps.forum_permission.middleware.ForumPermissionMiddleware',
+    'social_django.middleware.SocialAuthExceptionMiddleware', # <--- ДОБАВЛЕНО
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -87,6 +95,9 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'machina.core.context_processors.metadata',
+                # ДОБАВЛЕНО ДЛЯ КНОПОК ВХОДА
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -155,9 +166,27 @@ HAYSTACK_SIGNAL_PROCESSOR = 'haystack.signals.RealtimeSignalProcessor'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'auth.User'
-LOGIN_URL = '/accounts/login/'
+
+# ===== НАСТРОЙКИ ВХОДА (ИЗМЕНЕНО) =====
+#LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# ===== НАСТРОЙКИ АВТОРИЗАЦИИ VK =====
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.vk.VKOAuth2',  # Вход через ВК
+    'django.contrib.auth.backends.ModelBackend', # Обычный вход по паролю
+)
+
+# Вставьте сюда ваши данные из приложения ВКонтакте
+SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID', '')    # ID приложения
+SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET', '') # Защищенный ключ
+SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email'] # Запрашиваем email
+
+# Чтобы избежать ошибок связки аккаунтов
+SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = False
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+# =======================================
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -185,6 +214,7 @@ ADMIN_INDEX_TITLE = "Добро пожаловать в панель управ�
 
 VK_TOKEN = os.getenv('VK_TOKEN')
 VK_GROUP_ID = os.getenv('VK_GROUP_ID')
+VK_APP_ID = os.getenv('VK_APP_ID', '54728530')
 
 MACHINA_FORUM_NAME = 'Путь наблюдателя'
 MACHINA_MAIN_CRISPY_TEMPLATE_PACK = 'bootstrap5'
