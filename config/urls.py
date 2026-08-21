@@ -7,18 +7,10 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bot_api.urls')),
-    
-    # --- Форум (Machina) ---
     path('forum/', include('machina.urls')),
-    
-    # --- Авторизация (VK + стандартная) ---
-    # ОБЯЗАТЕЛЬНО добавить этот путь для работы входа через VK
-    path('', include('social_django.urls')),
-
-    # Стандартные пути auth (login, logout и т.д.)
+    path('', include('social_django.urls', namespace='social')),
     path('accounts/', include('django.contrib.auth.urls')),
     
-    # --- Страницы сайта ---
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
     path('map/', views.map_view, name='map'),
@@ -26,10 +18,8 @@ urlpatterns = [
     path('put/', views.put_view, name='put'),
     path('flashlight/', views.flashlight_view, name='flashlight'),
     
-    # --- Наблюдения (myapp) ---
-    path('observations/', include('myapp.urls')),
+    path('', include('myapp.urls')),
     
-    # --- 3D Мир ---
     path('3d/', include('observer3d.urls')),
 ]
 
