@@ -2,13 +2,12 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.contrib import messages
-from .models import Observation, Module, UserCourseProgress, GameAssociation
+from django.db.models import Count
+from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak
+from datetime import date
 import json
 
-# ===== СУЩЕСТВУЮЩИЕ VIEWS (НЕ ТРОГАЙ) =====
-# ... твой существующий код ...
-
-# ===== НОВЫЕ VIEWS ДЛЯ КУРСА =====
+# ===== КУРС =====
 
 @login_required
 def course_index(request):
@@ -27,11 +26,16 @@ def course_index(request):
             'is_unlocked': is_unlocked,
             'is_current': progress.current_module and module.id == progress.current_module.id
         })
+    
+    # Статистика
+    streak, _ = UserStreak.objects.get_or_create(user=request.user)
+    
     return render(request, 'myapp/course/index.html', {
         'modules': modules_data,
         'progress_percent': progress.get_progress_percent(),
         'completed_count': progress.completed_modules.count(),
         'total_count': modules.count(),
+        'streak': streak.current_streak,
     })
 
 @login_required
@@ -54,6 +58,7 @@ def module_detail(request, module_number):
         'next_module': module.get_next(),
         'prev_module': module.get_prev(),
         'associations': associations,
+        'streak': UserStreak.objects.get_or_create(user=request.user)[0].current_streak,
     })
 
 @login_required
@@ -69,8 +74,14 @@ def complete_module(request, module_number):
         messages.info(request, 'Этот модуль уже пройден')
     else:
         progress.complete_module(module)
+        # Обновляем серию
+        streak, _ = UserStreak.objects.get_or_create(user=request.user)
+        streak.update_streak()
         messages.success(request, f'🎉 Модуль "{module.title}" успешно завершён!')
     return redirect('course_module', module_number=module_number)
+
+
+# ===== API =====
 
 @login_required
 def course_progress_api(request):
@@ -79,12 +90,15 @@ def course_progress_api(request):
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
     game_state = progress.get_game_state()
+    streak, _ = UserStreak.objects.get_or_create(user=request.user)
     return JsonResponse({
         'modules': game_state['modules'],
         'progress_percent': game_state['progress_percent'],
         'current_module_id': game_state['current_module_id'],
         'is_finished': game_state['is_finished'],
         'completed_module_ids': list(progress.completed_modules.values_list('id', flat=True)),
+        'streak': streak.current_streak,
+        'max_streak': streak.max_streak,
     })
 
 @login_required
@@ -108,10 +122,14 @@ def complete_module_api(request):
             if prev and not progress.is_module_completed(prev):
                 return JsonResponse({'error': 'Предыдущий модуль не пройден'}, status=403)
         progress.complete_module(module)
+        # Обновляем серию
+        streak, _ = UserStreak.objects.get_or_create(user=request.user)
+        streak.update_streak()
         return JsonResponse({
             'success': True,
             'progress_percent': progress.get_progress_percent(),
             'is_finished': progress.completed_at is not None,
+            'streak': streak.current_streak,
             'next_module': {
                 'id': progress.current_module.id if progress.current_module else None,
                 'number': progress.current_module.number if progress.current_module else None,
@@ -152,3 +170,29 @@ def association_api(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+# ===== СТАТИСТИКА ДЛЯ ГЛАВНОЙ =====
+
+def get_user_stats(request):
+    """Получить статистику пользователя для главной"""
+    if not request.user.is_authenticated:
+        return {
+            'total_modules': 0,
+            'completed': 0,
+            'progress': 0,
+            'streak': 0,
+        }
+    
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    streak, _ = UserStreak.objects.get_or_create(user=request.user)
+    
+    return {
+        'total_modules': Module.objects.filter(is_published=True).count(),
+        'completed': progress.completed_modules.count(),
+        'progress': progress.get_progress_percent(),
+        'streak': streak.current_streak,
+    }

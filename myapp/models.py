@@ -59,11 +59,14 @@ class Module(models.Model):
     description = models.TextField(verbose_name="Описание")
     content = models.TextField(verbose_name="Содержание лекции", blank=True)
     
+    # 3D позиция
     position_x = models.FloatField(default=0, verbose_name="Позиция X в 3D")
     position_z = models.FloatField(default=0, verbose_name="Позиция Z в 3D")
     color = models.CharField(max_length=7, default="#6cbfff", verbose_name="Цвет в 3D")
     
+    # Контент
     key_concepts = models.JSONField(default=list, verbose_name="Ключевые понятия")
+    associations = models.JSONField(default=list, verbose_name="Ассоциации")
     duration = models.PositiveIntegerField(default=30, verbose_name="Длительность (мин)")
     is_published = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
@@ -147,15 +150,21 @@ class UserCourseProgress(models.Model):
                 'color': m.color,
                 'x': m.position_x,
                 'z': m.position_z,
-                'status': status
+                'status': status,
+                'associations': m.associations
             })
-        return {'modules': result, 'progress_percent': self.get_progress_percent(), 'current_module_id': self.current_module.id if self.current_module else None, 'is_finished': self.completed_at is not None}
+        return {
+            'modules': result, 
+            'progress_percent': self.get_progress_percent(), 
+            'current_module_id': self.current_module.id if self.current_module else None, 
+            'is_finished': self.completed_at is not None
+        }
 
 
 class GameAssociation(models.Model):
     """Ассоциации из игры"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='game_associations')
-    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='associations')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='game_associations')
     object_name = models.CharField(max_length=100, verbose_name="Объект")
     association = models.TextField(verbose_name="Ассоциация")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -167,3 +176,43 @@ class GameAssociation(models.Model):
     
     def __str__(self):
         return f"{self.user.username}: {self.object_name} → {self.association[:30]}"
+
+
+class UserStreak(models.Model):
+    """Серия пользователя"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='streak')
+    current_streak = models.IntegerField(default=0, verbose_name="Текущая серия")
+    max_streak = models.IntegerField(default=0, verbose_name="Максимальная серия")
+    last_activity = models.DateField(null=True, blank=True, verbose_name="Последняя активность")
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Серия пользователя"
+        verbose_name_plural = "Серии пользователей"
+    
+    def __str__(self):
+        return f"{self.user.username}: {self.current_streak} дней"
+    
+    def update_streak(self):
+        from datetime import date, timedelta
+        today = date.today()
+        
+        if not self.last_activity:
+            self.current_streak = 1
+            self.max_streak = max(self.max_streak, self.current_streak)
+            self.last_activity = today
+            self.save()
+            return True
+        
+        if self.last_activity == today:
+            return False
+        
+        if self.last_activity == today - timedelta(days=1):
+            self.current_streak += 1
+        else:
+            self.current_streak = 1
+        
+        self.max_streak = max(self.max_streak, self.current_streak)
+        self.last_activity = today
+        self.save()
+        return True
