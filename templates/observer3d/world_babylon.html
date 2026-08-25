@@ -2,69 +2,104 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Путь наблюдателя</title>
+    <title>Путь наблюдателя — Начало</title>
     <style>
         *{margin:0;padding:0;overflow:hidden}
-        body{background:#05070a;font-family:'Segoe UI',sans-serif;cursor:crosshair}
+        body{background:#030508;font-family:'Segoe UI',sans-serif;cursor:crosshair}
         #canvas{width:100vw;height:100vh;display:block}
         
         #ui{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
-            background:rgba(5,7,10,0.92);border:1px solid rgba(226,192,68,0.08);
+            background:rgba(3,5,8,0.8);border:1px solid rgba(74,106,138,0.04);
             border-radius:16px;padding:14px 28px;text-align:center;z-index:100;
-            backdrop-filter:blur(12px);pointer-events:none;min-width:280px;
-            box-shadow:0 0 60px rgba(0,0,0,0.9)}
-        #ui .title{color:#8899aa;font-size:0.9rem;font-weight:300;letter-spacing:3px}
-        #ui .desc{color:#5a6a7a;font-size:0.75rem;margin-top:4px;letter-spacing:1px}
-        #ui .hint{color:#3a4a5a;font-size:0.6rem;margin-top:6px;letter-spacing:2px}
-        #ui .progress{color:#e2c044;font-size:0.7rem;margin-top:8px;opacity:0.3}
-        #ui .progress span{color:#e2c044;font-size:0.8rem;opacity:0.6}
+            backdrop-filter:blur(20px);pointer-events:none;min-width:280px;
+            box-shadow:0 0 100px rgba(0,0,0,0.95)}
+        #ui .title{color:#5a7a8a;font-size:0.75rem;font-weight:300;letter-spacing:5px;text-transform:uppercase}
+        #ui .desc{color:#3a5a6a;font-size:0.6rem;margin-top:4px;letter-spacing:3px}
+        #ui .hint{color:#2a3a4a;font-size:0.45rem;margin-top:6px;letter-spacing:2px}
+        #ui .progress{color:#4a6a8a;font-size:0.6rem;margin-top:8px;opacity:0.2;letter-spacing:3px}
+        #ui .progress span{opacity:0.3}
         
         #vignette{position:fixed;top:0;left:0;width:100vw;height:100vh;
-            background:radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%);
+            background:radial-gradient(ellipse at 45% 50%, transparent 20%, rgba(0,0,0,0.9) 100%);
             pointer-events:none;z-index:10}
         
-        #label3d{position:fixed;top:50%;left:50%;transform:translate(-50%, -100%);
-            color:#e2c044;font-size:1.4rem;letter-spacing:3px;z-index:20;
-            pointer-events:none;opacity:0;transition:opacity 0.4s ease;
-            text-shadow:0 0 40px rgba(226,192,68,0.15), 0 0 80px rgba(226,192,68,0.05)}
-        #label3d .sub{font-size:0.7rem;color:#5a6a7a;letter-spacing:1px;display:block;margin-top:4px}
+        #label3d{position:fixed;top:50%;left:50%;transform:translate(-50%, -130%);
+            color:#7a9aba;font-size:1rem;letter-spacing:5px;z-index:20;
+            pointer-events:none;opacity:0;transition:opacity 0.8s ease;
+            text-shadow:0 0 80px rgba(74,106,138,0.05)}
+        #label3d .sub{font-size:0.5rem;color:#3a5a6a;letter-spacing:4px;display:block;margin-top:6px}
+        
+        #riddle-box{position:fixed;top:58%;left:50%;transform:translate(-50%, -50%);
+            z-index:15;pointer-events:none;opacity:0;transition:opacity 1s ease;
+            text-align:center;max-width:500px;width:90%}
+        #riddle-box .question{color:#6a8aaa;font-size:0.85rem;letter-spacing:3px;
+            text-shadow:0 0 60px rgba(74,106,138,0.03);font-weight:300}
+        #riddle-box .answer{color:#2a4a5a;font-size:0.55rem;margin-top:10px;letter-spacing:3px;
+            border-top:1px solid rgba(74,106,138,0.04);padding-top:10px}
+        
+        #intro{position:fixed;top:0;left:0;width:100vw;height:100vh;
+            background:rgba(3,5,8,0.95);z-index:300;display:flex;flex-direction:column;
+            justify-content:center;align-items:center;padding:40px;text-align:center;
+            animation:fadeIn 2s ease}
+        #intro h1{color:#7a9aba;font-weight:300;font-size:2rem;letter-spacing:8px;margin-bottom:20px}
+        #intro p{color:#3a5a6a;font-size:0.9rem;line-height:2;max-width:500px;letter-spacing:1px}
+        #intro .hands{font-size:3rem;margin:20px 0;opacity:0.4}
+        #intro button{margin-top:30px;padding:12px 50px;background:transparent;
+            border:1px solid rgba(74,106,138,0.15);color:#5a7a8a;border-radius:50px;
+            cursor:pointer;font-size:0.8rem;letter-spacing:4px;transition:0.5s}
+        #intro button:hover{background:rgba(74,106,138,0.05);border-color:rgba(74,106,138,0.3)}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         
         #modal{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;
-            background:rgba(0,0,0,0.85);z-index:200;justify-content:center;align-items:center}
-        #modal .box{background:rgba(5,7,10,0.96);border:1px solid rgba(226,192,68,0.1);
-            border-radius:16px;padding:40px;max-width:440px;text-align:center;
-            animation:fadeIn 0.5s ease}
-        @keyframes fadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-        #modal .box h2{color:#e2c044;font-weight:300;margin-bottom:16px;font-size:1.4rem;letter-spacing:3px}
-        #modal .box p{color:#8899aa;font-size:0.95rem;line-height:1.9;letter-spacing:0.5px}
-        #modal .box .icon{font-size:2rem;display:block;margin-bottom:12px}
-        #modal .box button{margin-top:24px;padding:10px 36px;background:transparent;
-            border:1px solid rgba(226,192,68,0.15);color:#8899aa;border-radius:50px;
-            cursor:pointer;font-size:0.8rem;letter-spacing:2px;transition:0.3s}
-        #modal .box button:hover{background:rgba(226,192,68,0.05);border-color:rgba(226,192,68,0.25)}
+            background:rgba(0,0,0,0.93);z-index:200;justify-content:center;align-items:center}
+        #modal .box{background:rgba(5,7,10,0.96);border:1px solid rgba(74,106,138,0.04);
+            border-radius:20px;padding:48px;max-width:420px;text-align:center;
+            animation:fadeIn 0.8s ease}
+        #modal .box h2{color:#7a9aba;font-weight:300;margin-bottom:12px;font-size:1.3rem;letter-spacing:5px}
+        #modal .box .icon{font-size:2.5rem;display:block;margin-bottom:12px}
+        #modal .box p{color:#4a6a7a;font-size:0.85rem;line-height:2;letter-spacing:1px}
+        #modal .box .riddle{color:#2a4a5a;font-size:0.75rem;margin:16px 0;padding:16px;
+            border:1px solid rgba(74,106,138,0.03);border-radius:12px;letter-spacing:2px}
+        #modal .box button{margin-top:24px;padding:12px 40px;background:transparent;
+            border:1px solid rgba(74,106,138,0.06);color:#4a6a7a;border-radius:50px;
+            cursor:pointer;font-size:0.65rem;letter-spacing:4px;transition:0.5s}
+        #modal .box button:hover{background:rgba(74,106,138,0.03);border-color:rgba(74,106,138,0.12)}
         
-        #flashlight-icon{position:fixed;bottom:100px;right:30px;font-size:2rem;z-index:15;
-            opacity:0.2;pointer-events:none;transition:opacity 0.5s}
-        
-        #breath-indicator{position:fixed;bottom:100px;left:30px;color:#2a3a4a;font-size:0.6rem;
-            z-index:15;letter-spacing:2px;opacity:0.3;pointer-events:none}
+        #flashlight-icon{position:fixed;bottom:100px;right:30px;font-size:1.4rem;z-index:15;
+            opacity:0.06;pointer-events:none;transition:opacity 0.8s;filter:blur(1px)}
+        #breath-indicator{position:fixed;bottom:100px;left:30px;color:#0a1a2a;font-size:0.4rem;
+            z-index:15;letter-spacing:4px;opacity:0.06;pointer-events:none}
         
         @media(max-width:768px){#ui{min-width:200px;padding:10px 16px;bottom:15px}
-        #label3d{font-size:1rem}#modal .box{padding:24px}}
+        #label3d{font-size:0.8rem}#modal .box{padding:24px}#intro h1{font-size:1.5rem}}
     </style>
 </head>
 <body>
 
+<div id="intro">
+    <h1>❄️ Кто я?</h1>
+    <div class="hands">🖐️</div>
+    <p>Я стою на дороге. Вокруг туман.<br>
+    Я смотрю на свои руки, ноги — это тело.<br>
+    Но я не понимаю, кто я?<br>
+    <span style="color:#4a6a7a;font-size:0.8rem;">Я делаю выбор. Я — это выбор.</span></p>
+    <button onclick="startGame()">✧ Начать путь</button>
+</div>
+
 <div id="vignette"></div>
 <div id="flashlight-icon">🔦</div>
-<div id="breath-indicator">◈ дыхание</div>
+<div id="breath-indicator">❄️ ДЫХАНИЕ</div>
 <div id="label3d"></div>
+<div id="riddle-box">
+    <div class="question" id="riddleQuestion">❓</div>
+    <div class="answer" id="riddleAnswer">✦ наведи и кликни</div>
+</div>
 <canvas id="canvas"></canvas>
 
 <div id="ui">
-    <div class="title" id="title">🌫️ Туман зовёт</div>
-    <div class="desc" id="desc">Иди вперёд. Наводи фонарик на образы.</div>
-    <div class="hint" id="hint">WASD — ходьба · Мышь — осмотр · Клик — взаимодействие</div>
+    <div class="title" id="title">🌫️ Туман скрывает ответы</div>
+    <div class="desc" id="desc">Задай вопрос, наведи фонарик — ответ придёт.</div>
+    <div class="hint" id="hint">WASD · Мышь · Клик по свету</div>
     <div class="progress" id="progress">0 <span>/ 5</span></div>
 </div>
 
@@ -73,41 +108,38 @@
         <span class="icon" id="modalIcon">✦</span>
         <h2 id="modalTitle">Тема</h2>
         <p id="modalText">Текст урока</p>
-        <button onclick="document.getElementById('modal').style.display='none'">✕ Продолжить путь</button>
+        <div class="riddle" id="modalRiddle">❓</div>
+        <button onclick="document.getElementById('modal').style.display='none'">✕ Продолжить</button>
     </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/6.37.0/babylon.js"></script>
 <script>
 // ============================================================
-// ДАННЫЕ КУРСА С ИКОНАМИ
+// ДАННЫЕ КУРСА — каждый образ = ответ на вопрос
 // ============================================================
 const SLIDES = [
-    { title:'Введение в наблюдение', color:'#4a7a9a', icon:'👁️', lesson:'Просто наблюдай. Не оценивай. Будь свидетелем.' },
-    { title:'Стресс и его проявления', color:'#c04a4a', icon:'⚡', lesson:'Стресс — реакция. Научись видеть его до того, как он захватит тебя.' },
-    { title:'Практика внимательности', color:'#4ac06a', icon:'🌿', lesson:'Дыхание — мост между телом и умом. Просто дыши.' },
-    { title:'Эмоциональный интеллект', color:'#c08a4a', icon:'🌀', lesson:'Эмоции — энергия. Направь её в созидание.' },
-    { title:'Путь к себе', color:'#8a4ac0', icon:'🌟', lesson:'Ты — целое. Все части уже внутри тебя.' }
+    { title:'Введение в наблюдение', color:'#4a7a9a', icon:'👁️', lesson:'Просто наблюдай. Не оценивай. Будь свидетелем.', riddle:'Что видит всё, но молчит?', answer:'Наблюдатель' },
+    { title:'Стресс и его проявления', color:'#6a3a3a', icon:'⚡', lesson:'Стресс — реакция. Научись видеть его до того, как он захватит тебя.', riddle:'Что приходит без зова?', answer:'Тревога' },
+    { title:'Практика внимательности', color:'#3a6a4a', icon:'🌿', lesson:'Дыхание — мост между телом и умом. Просто дыши.', riddle:'Что есть у каждого, но никто не держит?', answer:'Мгновение' },
+    { title:'Эмоциональный интеллект', color:'#6a5a3a', icon:'🌀', lesson:'Эмоции — энергия. Направь её в созидание.', riddle:'Что меняет форму, но остаётся собой?', answer:'Чувство' },
+    { title:'Путь к себе', color:'#5a3a6a', icon:'🌟', lesson:'Ты — целое. Все части уже внутри тебя.', riddle:'Что ищут все, но находят только внутри?', answer:'Истина' }
 ];
 
 let completed = 0;
-let currentTarget = null;
 let breathTime = 0;
-let fogTarget = 0.025;
+let fogTarget = 0.015;
+let riddleVisible = false;
 let isMoving = false;
 let stepTimer = 0;
 
 // ============================================================
-// ЗВУК (Web Audio)
+// ЗВУК
 // ============================================================
 let audioCtx = null;
-
 function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
-
 function playStep() {
     if (!audioCtx) return;
     try {
@@ -115,12 +147,12 @@ function playStep() {
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.frequency.value = 80 + Math.random() * 40;
+        osc.frequency.value = 40 + Math.random() * 15;
         osc.type = 'sine';
-        gain.gain.value = 0.02;
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+        gain.gain.value = 0.005;
+        gain.gain.exponentialRampToValueAtTime(0.0002, audioCtx.currentTime + 0.15);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.1);
+        osc.stop(audioCtx.currentTime + 0.15);
     } catch(e) {}
 }
 
@@ -128,144 +160,228 @@ function playStep() {
 // BABYLON
 // ============================================================
 const canvas = document.getElementById('canvas');
-const engine = new BABYLON.Engine(canvas, true);
+const engine = new BABYLON.Engine(canvas, true, { antialias: true });
 const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.02, 0.025, 0.04, 1);
 
-// --- ТУМАН ---
+// ===== ИСПРАВЛЕНИЕ 1: ОКРУЖЕНИЕ ДЛЯ ОБЪЁМНЫХ МАТЕРИАЛОВ =====
+scene.createDefaultEnvironment({ createSkybox: false, createGround: false });
+
+scene.clearColor = new BABYLON.Color4(0.008, 0.012, 0.02, 1);
+
+// ===== ТУМАН =====
 scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
-scene.fogDensity = 0.025;
-scene.fogColor = new BABYLON.Color3(0.02, 0.025, 0.04);
+scene.fogDensity = 0.015;
+scene.fogColor = new BABYLON.Color3(0.008, 0.012, 0.02);
 
-// === КАМЕРА С WASD ===
+// ===== КАМЕРА =====
 const camera = new BABYLON.FreeCamera('cam', new BABYLON.Vector3(0, 1.6, 0), scene);
 camera.attachControl(canvas, true);
-camera.speed = 0.3;
-camera.minZ = 0.1;
-camera.maxZ = 30;
+camera.speed = 0.18;
+camera.minZ = 0.05;
+camera.maxZ = 50;
 camera.rotation.y = Math.PI;
+camera.keysUp.push(87);
+camera.keysDown.push(83);
+camera.keysLeft.push(65);
+camera.keysRight.push(68);
 
-// ===== ВАЖНО: добавляем WASD для ходьбы =====
-camera.keysUp.push(87);    // W
-camera.keysDown.push(83);  // S
-camera.keysLeft.push(65);  // A
-camera.keysRight.push(68); // D
+// ===== ОСВЕЩЕНИЕ =====
+const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, -0.3), scene);
+hemi.intensity = 0.02;
+hemi.groundColor = new BABYLON.Color3(0.003, 0.006, 0.01);
 
-// --- СВЕТ ---
-const ambient = new BABYLON.HemisphericLight('ambient', new BABYLON.Vector3(0, 1, 0), scene);
-ambient.intensity = 0.06;
+// ===== ИСПРАВЛЕНИЕ 2: УМЕНЬШЕНА ИНТЕНСИВНОСТЬ СВЕТА =====
+const deepLight = new BABYLON.PointLight('deep', new BABYLON.Vector3(0, 1.5, -40), scene);
+deepLight.intensity = 0.8; // было 2.5
+deepLight.distance = 50;
+deepLight.diffuse = new BABYLON.Color3(0.2, 0.5, 1);
+deepLight.specular = new BABYLON.Color3(0.05, 0.15, 0.3);
 
-// Фонарик
-const flashlight = new BABYLON.SpotLight('flash',
+const deepLight2 = new BABYLON.PointLight('deep2', new BABYLON.Vector3(0, 0.5, -35), scene);
+deepLight2.intensity = 1.5;
+deepLight2.distance = 40;
+deepLight2.diffuse = new BABYLON.Color3(0.15, 0.4, 0.8);
+
+// Фонарик игрока
+const flash = new BABYLON.SpotLight('flash',
     new BABYLON.Vector3(0, 1.4, 0.5),
     new BABYLON.Vector3(0, 0, 1),
-    Math.PI / 4, 1.5, scene
+    Math.PI / 3.5, 2.0, scene
 );
-flashlight.parent = camera;
-flashlight.intensity = 0.5;
-flashlight.distance = 14;
-flashlight.diffuse = new BABYLON.Color3(0.25, 0.35, 0.55);
+flash.parent = camera;
+flash.intensity = 0.3;
+flash.distance = 20;
+flash.diffuse = new BABYLON.Color3(0.15, 0.3, 0.5);
 
-const warmLight = new BABYLON.SpotLight('warm',
-    new BABYLON.Vector3(0, 1.4, 0.5),
-    new BABYLON.Vector3(0, 0, 1),
-    Math.PI / 5, 1.2, scene
-);
-warmLight.parent = camera;
-warmLight.intensity = 0.15;
-warmLight.distance = 8;
-warmLight.diffuse = new BABYLON.Color3(0.7, 0.6, 0.4);
-
-// --- ЗЕМЛЯ ---
-const ground = BABYLON.MeshBuilder.CreateGround('ground', {width:80, height:80}, scene);
+// ===== ПОЛ =====
+const ground = BABYLON.MeshBuilder.CreateGround('ground', {width:120, height:120}, scene);
 const groundMat = new BABYLON.StandardMaterial('groundMat', scene);
-groundMat.diffuseColor = new BABYLON.Color3(0.02, 0.025, 0.03);
+groundMat.diffuseColor = new BABYLON.Color3(0.01, 0.012, 0.018);
+groundMat.specularColor = new BABYLON.Color3(0.005, 0.008, 0.015);
+groundMat.specularPower = 60;
 ground.material = groundMat;
 ground.position.y = -0.5;
 
-// --- ДОРОГА ---
+// ===== ДОРОГА =====
 const pathPoints = [];
-for (let i = 0; i <= 80; i++) {
-    const z = -i * 0.7;
-    const x = Math.sin(i * 0.12) * 2.0 + Math.sin(i * 0.35 + 0.5) * 0.5;
+for (let i = 0; i <= 100; i++) {
+    const z = -i * 0.6;
+    const x = Math.sin(i * 0.08 + 0.3) * 2.0 + Math.sin(i * 0.25 + 0.5) * 0.5;
     pathPoints.push(new BABYLON.Vector3(x, -0.48, z));
 }
 const path = BABYLON.MeshBuilder.CreateLines('path', { points: pathPoints }, scene);
-path.color = new BABYLON.Color3(0.08, 0.07, 0.05);
+path.color = new BABYLON.Color3(0.03, 0.025, 0.015);
+path.alpha = 0.5;
 
-// Камни
-for (let i = 0; i < 80; i+=1.5) {
+// ===== ЛУЖИ =====
+for (let i = 0; i < 80; i+=2) {
     const idx = Math.floor(i);
-    if (idx >= pathPoints.length) break;
+    if (idx >= pathPoints.length) continue;
     const p = pathPoints[idx];
-    const stone = BABYLON.MeshBuilder.CreateSphere('stone', {diameter: 0.03 + Math.random()*0.06}, scene);
-    const sMat = new BABYLON.StandardMaterial('sMat', scene);
-    const g = 0.03 + Math.random() * 0.05;
-    sMat.diffuseColor = new BABYLON.Color3(g, g, g+0.01);
-    stone.material = sMat;
-    stone.position = new BABYLON.Vector3(p.x + (Math.random()-0.5)*0.4, -0.48, p.z + (Math.random()-0.5)*0.25);
+    const w = 0.2 + Math.random() * 0.4;
+    const h = 0.08 + Math.random() * 0.2;
+    const puddle = BABYLON.MeshBuilder.CreateGround('puddle', {width: w, height: h}, scene);
+    const pMat = new BABYLON.StandardMaterial('pMat', scene);
+    pMat.diffuseColor = new BABYLON.Color3(0.01, 0.03, 0.05);
+    pMat.specularColor = new BABYLON.Color3(0.08, 0.15, 0.3);
+    pMat.specularPower = 100;
+    pMat.alpha = 0.2 + Math.random() * 0.3;
+    puddle.material = pMat;
+    puddle.position = new BABYLON.Vector3(p.x + (Math.random()-0.5)*0.2, -0.48, p.z + (Math.random()-0.5)*0.2);
+    puddle.rotation.x = -Math.PI/2;
 }
 
-// --- ДЕРЕВЬЯ ---
-function createTree(x, z, scale) {
+// ============================================================
+// ДЕРЕВЬЯ — ИСПРАВЛЕНИЕ 3: УБРАНЫ БЛИКИ
+// ============================================================
+function createTree(x, z, scale, isBig = false) {
     const group = new BABYLON.TransformNode('tree');
     group.position = new BABYLON.Vector3(x, 0, z);
-    group.scaling = new BABYLON.Vector3(scale, scale, scale);
+    const s = isBig ? scale * 1.8 : scale;
+    group.scaling = new BABYLON.Vector3(s, s, s);
 
-    const trunk = BABYLON.MeshBuilder.CreateCylinder('trunk', {height: 2 + Math.random()*1.5, diameter: 0.08 + Math.random()*0.06}, scene);
+    const height = isBig ? 3 + Math.random()*2.5 : 2 + Math.random()*2;
+    const diameter = isBig ? 0.15 + Math.random()*0.15 : 0.06 + Math.random()*0.08;
+    const trunk = BABYLON.MeshBuilder.CreateCylinder('trunk', {
+        height: height,
+        diameter: diameter,
+        tessellation: 7
+    }, scene);
     const tMat = new BABYLON.StandardMaterial('tMat', scene);
-    const dark = 0.02 + Math.random() * 0.03;
-    tMat.diffuseColor = new BABYLON.Color3(dark, dark+0.01, dark+0.005);
+    const dark = isBig ? 0.005 + Math.random()*0.01 : 0.01 + Math.random()*0.015;
+    tMat.diffuseColor = new BABYLON.Color3(dark, dark+0.002, dark+0.001);
+    tMat.specularColor = new BABYLON.Color3(0, 0, 0);
     trunk.material = tMat;
-    trunk.position.y = 1 + Math.random()*0.5;
+    trunk.position.y = height/2 * 0.7 + 0.2;
     trunk.parent = group;
     trunk.rotation.z = (Math.random()-0.5)*0.15;
+    trunk.rotation.x = (Math.random()-0.5)*0.08;
 
-    for (let j = 0; j < 3 + Math.floor(Math.random()*3); j++) {
+    if (isBig) {
+        for (let j = 0; j < 4; j++) {
+            const root = BABYLON.MeshBuilder.CreateCylinder('root', {
+                height: 0.5 + Math.random()*0.6,
+                diameter: 0.02 + Math.random()*0.04,
+                tessellation: 4
+            }, scene);
+            const rMat = new BABYLON.StandardMaterial('rMat', scene);
+            rMat.diffuseColor = new BABYLON.Color3(dark-0.002, dark, dark-0.001);
+            rMat.specularColor = new BABYLON.Color3(0, 0, 0);
+            root.material = rMat;
+            root.parent = group;
+            const angle = Math.random() * Math.PI * 2;
+            root.position = new BABYLON.Vector3(
+                Math.cos(angle) * 0.08,
+                0.1 + Math.random()*0.2,
+                Math.sin(angle) * 0.08
+            );
+            root.rotation.x = (Math.random()-0.5)*0.5;
+            root.rotation.z = (Math.random()-0.5)*0.5;
+            root.rotation.y = angle;
+        }
+    }
+
+    for (let j = 0; j < 5 + Math.floor(Math.random()*5); j++) {
         const branch = BABYLON.MeshBuilder.CreateCylinder('branch', 
-            {height: 0.6 + Math.random()*0.8, diameter: 0.02 + Math.random()*0.03}, scene);
+            {height: 0.4 + Math.random()*1.8, diameter: 0.01 + Math.random()*0.025, tessellation: 4}, scene);
         const bMat = new BABYLON.StandardMaterial('bMat', scene);
-        bMat.diffuseColor = new BABYLON.Color3(dark+0.01, dark+0.02, dark+0.01);
+        bMat.diffuseColor = new BABYLON.Color3(dark+0.005, dark+0.008, dark+0.003);
+        bMat.specularColor = new BABYLON.Color3(0, 0, 0);
         branch.material = bMat;
         branch.parent = group;
         const angle = Math.random() * Math.PI * 2;
+        const h = 0.6 + Math.random() * 1.2;
         branch.position = new BABYLON.Vector3(
-            Math.cos(angle) * 0.08,
-            1.2 + Math.random() * 0.5,
-            Math.sin(angle) * 0.08
+            Math.cos(angle) * 0.05,
+            h,
+            Math.sin(angle) * 0.05
         );
-        branch.rotation.x = (Math.random()-0.5) * 0.6;
-        branch.rotation.z = (Math.random()-0.5) * 0.6;
+        branch.rotation.x = (Math.random()-0.5) * 1.0;
+        branch.rotation.z = (Math.random()-0.5) * 1.0;
         branch.rotation.y = Math.random() * Math.PI * 2;
     }
+
+    for (let j = 0; j < 10; j++) {
+        const moss = BABYLON.MeshBuilder.CreateSphere('moss', {diameter: 0.02 + Math.random()*0.06}, scene);
+        const mMat = new BABYLON.StandardMaterial('mMat', scene);
+        const g = 0.008 + Math.random() * 0.015;
+        mMat.diffuseColor = new BABYLON.Color3(g*0.2, g*0.8, g*0.1);
+        mMat.specularColor = new BABYLON.Color3(0, 0, 0);
+        moss.material = mMat;
+        moss.parent = group;
+        const angle = Math.random() * Math.PI * 2;
+        moss.position = new BABYLON.Vector3(
+            Math.cos(angle) * 0.06,
+            0.1 + Math.random() * height * 0.7,
+            Math.sin(angle) * 0.06
+        );
+    }
+
     return group;
 }
 
-for (let i = 0; i < 100; i++) {
-    let x = (Math.random() - 0.5) * 40;
-    let z = -Math.random() * 50;
+// Большие деревья по краям
+const bigTreePositions = [
+    { x: -5.5, z: -1, scale: 1.2 },
+    { x: 5.5, z: -0.5, scale: 1.0 },
+    { x: -6, z: -3, scale: 1.5 },
+    { x: 6, z: -2.5, scale: 1.3 },
+    { x: -4.5, z: -5, scale: 1.0 },
+    { x: 5, z: -4.5, scale: 0.9 }
+];
+bigTreePositions.forEach(p => createTree(p.x, p.z, p.scale, true));
+
+for (let i = 0; i < 180; i++) {
+    let x = (Math.random() - 0.5) * 55;
+    let z = -Math.random() * 65;
     let onRoad = false;
     for (let j = 0; j < pathPoints.length; j+=5) {
         const p = pathPoints[j];
-        if (Math.abs(x - p.x) < 1.2 && Math.abs(z - p.z) < 0.8) { onRoad = true; break; }
+        if (Math.abs(x - p.x) < 2.0 && Math.abs(z - p.z) < 1.2) { onRoad = true; break; }
     }
-    if (!onRoad && Math.abs(x) < 8 && z > -5) onRoad = true;
-    if (!onRoad) createTree(x, z, 0.6 + Math.random() * 0.8);
+    if (!onRoad && Math.abs(x) < 12 && z > -8) onRoad = true;
+    if (!onRoad) {
+        const isBig = (Math.abs(x) > 8 && z > -15) || (Math.random() < 0.05);
+        createTree(x, z, 0.4 + Math.random() * 0.8, isBig);
+    }
 }
 
 // ============================================================
-// ОБЪЕКТЫ КУРСА
+// ОБЪЕКТЫ КУРСА (образы)
 // ============================================================
 const objects = [];
 const objPositions = [
-    { z: -5, x: -1.2 },
-    { z: -11, x: 1.8 },
-    { z: -17, x: -1.5 },
-    { z: -23, x: 1.2 },
-    { z: -29, x: 0.0 }
+    { z: -6, x: -1.5 },
+    { z: -13, x: 2.0 },
+    { z: -20, x: -1.8 },
+    { z: -27, x: 1.5 },
+    { z: -34, x: 0.0 }
 ];
 
 const label = document.getElementById('label3d');
+const riddleBox = document.getElementById('riddle-box');
+const riddleQ = document.getElementById('riddleQuestion');
+const riddleA = document.getElementById('riddleAnswer');
 
 SLIDES.forEach((data, i) => {
     const pos = objPositions[i];
@@ -283,66 +399,74 @@ SLIDES.forEach((data, i) => {
         title: data.title, 
         lesson: data.lesson,
         icon: data.icon,
+        riddle: data.riddle,
+        answer: data.answer,
         appearProgress: 0
     };
 
-    // Сфера
-    const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', {diameter: 0.6}, scene);
-    const mat = new BABYLON.StandardMaterial('mat', scene);
-    mat.diffuseColor = color;
-    mat.emissiveColor = color.scale(0.3);
-    mat.roughness = 0.2;
+    const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', {
+        diameter: 0.5 + i*0.02,
+        segments: 32
+    }, scene);
+    const mat = new BABYLON.PBRMaterial('mat', scene);
+    mat.albedoColor = color;
+    mat.emissiveColor = new BABYLON.Color3(0.2, 0.5, 1);
+    mat.emissiveIntensity = 0.3;
+    mat.roughness = 0.05;
     mat.metallic = 0.1;
-    mat.alpha = 0.1;
+    mat.alpha = 0.02;
     sphere.material = mat;
-    sphere.position.y = 0.2;
+    sphere.position.y = 0.15;
     sphere.parent = group;
 
-    // Свечение
-    const glow = BABYLON.MeshBuilder.CreateSphere('glow', {diameter: 1.4}, scene);
-    const gMat = new BABYLON.StandardMaterial('gMat', scene);
-    gMat.diffuseColor = color;
-    gMat.alpha = 0.01;
-    gMat.emissiveColor = color.scale(0.03);
+    const glow = BABYLON.MeshBuilder.CreateSphere('glow', {
+        diameter: 1.8 + i*0.15,
+        segments: 16
+    }, scene);
+    const gMat = new BABYLON.PBRMaterial('gMat', scene);
+    gMat.albedoColor = new BABYLON.Color3(0.1, 0.3, 0.7);
+    gMat.emissiveColor = new BABYLON.Color3(0.15, 0.4, 0.9);
+    gMat.emissiveIntensity = 0.05;
+    gMat.alpha = 0.005;
+    gMat.roughness = 1;
     glow.material = gMat;
-    glow.position.y = 0.2;
+    glow.position.y = 0.15;
     glow.parent = group;
 
-    // Кольцо
-    const ring = BABYLON.MeshBuilder.CreateTorus('ring', {diameter: 1.0, thickness: 0.015}, scene);
-    const rMat = new BABYLON.StandardMaterial('rMat', scene);
-    rMat.diffuseColor = color;
-    rMat.emissiveColor = color.scale(0.08);
-    rMat.alpha = 0.05;
+    const ring = BABYLON.MeshBuilder.CreateTorus('ring', {diameter: 0.9 + i*0.05, thickness: 0.008}, scene);
+    const rMat = new BABYLON.PBRMaterial('rMat', scene);
+    rMat.albedoColor = new BABYLON.Color3(0.2, 0.5, 0.9);
+    rMat.emissiveColor = new BABYLON.Color3(0.2, 0.5, 1);
+    rMat.emissiveIntensity = 0.15;
+    rMat.alpha = 0.04;
+    rMat.roughness = 0.3;
+    rMat.metallic = 0.5;
     ring.material = rMat;
-    ring.position.y = 0.2;
-    ring.rotation.x = Math.PI/2 + 0.2;
+    ring.position.y = 0.15;
+    ring.rotation.x = Math.PI/2 + 0.15;
+    ring.rotation.z = 0.2;
     ring.parent = group;
 
-    // Частицы
-    for (let j = 0; j < 8; j++) {
-        const p = BABYLON.MeshBuilder.CreateSphere('p', {diameter: 0.01 + Math.random()*0.015}, scene);
-        const pMat = new BABYLON.StandardMaterial('pMat', scene);
-        const c = color.clone();
-        c.r += (Math.random()-0.5)*0.1;
-        c.g += (Math.random()-0.5)*0.1;
-        c.b += (Math.random()-0.5)*0.1;
-        pMat.diffuseColor = c;
-        pMat.emissiveColor = c.scale(0.5);
-        pMat.alpha = 0.1 + Math.random()*0.2;
+    for (let j = 0; j < 15; j++) {
+        const p = BABYLON.MeshBuilder.CreateSphere('p', {diameter: 0.005 + Math.random()*0.015}, scene);
+        const pMat = new BABYLON.PBRMaterial('pMat', scene);
+        const brightness = 0.3 + Math.random()*0.5;
+        pMat.albedoColor = new BABYLON.Color3(0.3*brightness, 0.6*brightness, brightness);
+        pMat.emissiveColor = new BABYLON.Color3(0.2*brightness, 0.5*brightness, brightness);
+        pMat.emissiveIntensity = 0.5 + Math.random()*0.5;
+        pMat.alpha = 0.15 + Math.random()*0.3;
         p.material = pMat;
         const angle = Math.random() * Math.PI * 2;
-        const radius = 0.4 + Math.random() * 0.4;
+        const radius = 0.2 + Math.random() * 0.7;
         p.position = new BABYLON.Vector3(
             Math.cos(angle) * radius,
-            0.2 + Math.sin(angle * 2 + j) * 0.1,
+            0.15 + Math.sin(angle * 2 + j) * 0.15,
             Math.sin(angle) * radius
         );
         p.parent = group;
-        p.userData = { angle, radius, speed: 0.003 + Math.random()*0.005, yOff: Math.random()*Math.PI*2 };
+        p.userData = { angle, radius, speed: 0.002 + Math.random()*0.005, yOff: Math.random()*Math.PI*2 };
     }
 
-    // Клик
     sphere.actionManager = new BABYLON.ActionManager(scene);
     sphere.actionManager.registerAction(
         new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
@@ -350,16 +474,17 @@ SLIDES.forEach((data, i) => {
                 initAudio();
                 group.userData.completed = true;
                 completed++;
-                mat.emissiveIntensity = 1.5;
-                mat.alpha = 0.6;
+                mat.emissiveIntensity = 2.0;
+                mat.alpha = 0.3;
                 document.getElementById('modalIcon').textContent = data.icon;
                 document.getElementById('modalTitle').textContent = data.title;
                 document.getElementById('modalText').textContent = data.lesson;
+                document.getElementById('modalRiddle').textContent = `❓ ${data.riddle} — ${data.answer}`;
                 document.getElementById('modal').style.display = 'flex';
                 document.getElementById('progress').innerHTML = `${completed} <span>/ ${SLIDES.length}</span>`;
                 if (completed === SLIDES.length) {
-                    document.getElementById('title').textContent = '🌟 Путь завершён!';
-                    document.getElementById('desc').textContent = 'Ты стал наблюдателем. Свет внутри тебя.';
+                    document.getElementById('title').textContent = '🌟 Свет найден';
+                    document.getElementById('desc').textContent = 'Ты нашёл ответы на свои вопросы.';
                 }
             }
         })
@@ -369,131 +494,110 @@ SLIDES.forEach((data, i) => {
 });
 
 // ============================================================
-// ГЛАВНЫЙ ЦИКЛ
+// ЦИКЛ
 // ============================================================
 scene.registerBeforeRender(() => {
     const time = Date.now() * 0.001;
     breathTime += 0.01;
 
-    // Дыхание камеры
-    const breath = Math.sin(breathTime * 1.2) * 0.003;
+    const breath = Math.sin(breathTime * 1.0) * 0.005;
     camera.position.y = 1.6 + breath;
-    document.getElementById('breath-indicator').style.opacity = 0.15 + Math.sin(breathTime * 1.2) * 0.1 + 0.15;
 
-    // Шаги
     const wasMoving = isMoving;
     isMoving = Math.abs(camera.position.x) > 0.001 || Math.abs(camera.position.z) > 0.001;
     if (isMoving && !wasMoving) stepTimer = 0;
     if (isMoving) {
         stepTimer += 0.01;
-        if (stepTimer > 0.3) {
-            stepTimer = 0;
-            playStep();
-        }
+        if (stepTimer > 0.45) { stepTimer = 0; playStep(); }
     }
 
-    // Анимация объектов (появление из тумана)
     objects.forEach((group, i) => {
         const dist = BABYLON.Vector3.Distance(camera.position, group.position);
-        const appearSpeed = 0.005;
-        if (dist < 12 && !group.userData.completed) {
+        const appearSpeed = 0.004;
+        if (dist < 18 && !group.userData.completed) {
             group.userData.appearProgress = Math.min(1, group.userData.appearProgress + appearSpeed);
-        } else if (dist > 15) {
-            group.userData.appearProgress = Math.max(0, group.userData.appearProgress - appearSpeed * 0.5);
+        } else if (dist > 22) {
+            group.userData.appearProgress = Math.max(0, group.userData.appearProgress - appearSpeed * 0.2);
         }
         
         const progress = group.userData.appearProgress;
         const sphere = group.getChildren().find(c => c.name === 'sphere');
         if (sphere && sphere.material) {
-            sphere.material.alpha = 0.05 + progress * 0.85;
-            sphere.material.emissiveIntensity = 0.1 + progress * 0.4;
+            sphere.material.alpha = 0.01 + progress * 0.5;
+            sphere.material.emissiveIntensity = 0.1 + progress * 0.7;
         }
-        const glow = group.getChildren().find(c => c.name === 'glow');
-        if (glow && glow.material) {
-            glow.material.alpha = progress * 0.04;
-        }
-        const ring = group.getChildren().find(c => c.name === 'ring');
-        if (ring && ring.material) {
-            ring.material.alpha = progress * 0.15;
-        }
-        group.getChildMeshes().forEach(m => {
-            if (m.name === 'p' && m.material) {
-                m.material.alpha = (0.05 + progress * 0.35) * (0.5 + Math.random()*0.5);
-            }
-        });
-        
-        if (!group.userData.completed && progress > 0.1) {
-            group.rotation.y += 0.003;
+        if (!group.userData.completed && progress > 0.03) {
+            group.rotation.y += 0.0015;
             if (sphere) {
-                const pulse = Math.sin(time * 0.8 + i * 1.2) * 0.5 + 0.5;
-                const s = 1 + pulse * 0.04 * progress;
-                sphere.scaling = new BABYLON.Vector3(s, s, s);
+                const pulse = Math.sin(time * 0.6 + i * 1.3) * 0.5 + 0.5;
+                sphere.scaling = new BABYLON.Vector3(1 + pulse * 0.015 * progress, 1 + pulse * 0.015 * progress, 1 + pulse * 0.015 * progress);
             }
         }
         group.getChildMeshes().forEach(m => {
-            if (m.userData && m.userData.angle !== undefined && progress > 0.1) {
+            if (m.userData && m.userData.angle !== undefined && progress > 0.03) {
                 m.userData.angle += m.userData.speed * progress;
                 const a = m.userData.angle;
                 const r = m.userData.radius;
                 m.position.x = Math.cos(a) * r;
                 m.position.z = Math.sin(a) * r;
-                m.position.y = 0.2 + Math.sin(a * 1.5 + m.userData.yOff) * 0.1 * progress;
+                m.position.y = 0.15 + Math.sin(a * 1.5 + m.userData.yOff) * 0.08 * progress;
             }
         });
     });
 
-    // Raycast: фонарик и надписи
     const ray = new BABYLON.Ray(camera.position, camera.getDirection(new BABYLON.Vector3(0, 0, 1)));
-    ray.length = 12;
+    ray.length = 20;
     const hit = scene.pickWithRay(ray, (m) => {
-        return m.name === 'sphere' && m.parent && !m.parent.userData.completed && m.parent.userData.appearProgress > 0.5;
+        return m.name === 'sphere' && m.parent && !m.parent.userData.completed && m.parent.userData.appearProgress > 0.2;
     });
 
     if (hit && hit.pickedMesh) {
         const group = hit.pickedMesh.parent;
         const idx = group.userData.slide;
         const data = SLIDES[idx];
-        label.innerHTML = `${data.icon} ${data.title} <span class="sub">✦ наведи и кликни</span>`;
+        
+        label.innerHTML = `${data.icon} ${data.title} <span class="sub">❄️ ${data.riddle}</span>`;
         label.style.opacity = '1';
-        flashlight.intensity = 1.0 + Math.sin(time * 2) * 0.15;
-        warmLight.intensity = 0.5 + Math.sin(time * 1.5) * 0.1;
-        fogTarget = 0.008;
-        const sphere = group.getChildren().find(c => c.name === 'sphere');
-        if (sphere && sphere.material) {
-            sphere.material.emissiveIntensity = 0.8 + Math.sin(time * 2) * 0.2;
-        }
-        currentTarget = group;
-        document.getElementById('flashlight-icon').style.opacity = '0.8';
+        
+        riddleQ.textContent = `❓ ${data.riddle}`;
+        riddleA.textContent = `✦ кликни, чтобы узнать ответ`;
+        riddleBox.style.opacity = '1';
+        riddleVisible = true;
+        
+        flash.intensity = 0.6 + Math.sin(time * 1.2) * 0.1;
+        fogTarget = 0.005;
+        document.getElementById('flashlight-icon').style.opacity = '0.3';
     } else {
         label.style.opacity = '0';
-        flashlight.intensity = 0.5;
-        warmLight.intensity = 0.15;
-        fogTarget = 0.025;
-        objects.forEach(g => {
-            const sphere = g.getChildren().find(c => c.name === 'sphere');
-            if (sphere && sphere.material && !g.userData.completed) {
-                sphere.material.emissiveIntensity = 0.1 + g.userData.appearProgress * 0.3;
-            }
-        });
-        currentTarget = null;
-        document.getElementById('flashlight-icon').style.opacity = '0.2';
+        if (riddleVisible) {
+            riddleBox.style.opacity = '0';
+            riddleVisible = false;
+        }
+        flash.intensity = 0.3;
+        fogTarget = 0.015;
+        document.getElementById('flashlight-icon').style.opacity = '0.06';
     }
 
-    scene.fogDensity += (fogTarget - scene.fogDensity) * 0.015;
-
-    if (!hit && completed < SLIDES.length) {
-        document.getElementById('title').textContent = '🌫️ Туман зовёт';
-        document.getElementById('desc').textContent = 'Иди вперёд. Образы появляются из тумана.';
-    }
+    scene.fogDensity += (fogTarget - scene.fogDensity) * 0.008;
 });
 
 // ============================================================
-// РЕСАЙЗ И ЗАПУСК
+// НАЧАЛО ИГРЫ
+// ============================================================
+function startGame() {
+    document.getElementById('intro').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('intro').style.display = 'none';
+    }, 1000);
+}
+
+// ============================================================
+// ЗАПУСК
 // ============================================================
 window.addEventListener('resize', () => engine.resize());
 engine.runRenderLoop(() => scene.render());
 
-console.log('🔦 Путь наблюдателя: WASD — ходьба, мышь — осмотр, клик — взаимодействие.');
+console.log('❄️ Холодный лес. Ты — наблюдатель.');
 </script>
 </body>
 </html>

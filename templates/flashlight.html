@@ -5,429 +5,366 @@
 
 {% block extra_head %}
 <style>
-    .flashlight-container {
+    .observer-layout {
         max-width: 1200px;
         margin: 0 auto;
         padding: 40px 20px;
-        display: flex;
-        gap: 50px;
-        align-items: flex-start;
-        min-height: 70vh;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 25px;
     }
 
-    /* ===== ЛЕВАЯ ЧАСТЬ: КУРС ===== */
-    .flashlight-main {
-        flex: 1.5;
-        padding: 20px 10px;
-    }
-    .flashlight-main .course-header {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 30px;
-        border-bottom: 1px solid rgba(226,192,68,0.1);
-        padding-bottom: 15px;
-    }
-    .flashlight-main .course-header .icon {
-        font-size: 2rem;
-    }
-    .flashlight-main .course-header h2 {
-        color: #e2c044;
-        font-size: 1.3rem;
-        font-weight: 300;
-        letter-spacing: 1px;
-        margin: 0;
-    }
-    .flashlight-main .course-header .progress-text {
-        color: #5a5a5a;
-        font-size: 0.8rem;
-        margin-left: auto;
-        letter-spacing: 1px;
-    }
-
-    /* ===== СЛАЙДЫ КУРСА ===== */
-    .slide-list {
+    /* ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== */
+    .game-block {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
         display: flex;
         flex-direction: column;
-        gap: 12px;
     }
-    .slide-item {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        padding: 14px 18px;
+    .game-block:hover {
+        border-color: rgba(226,192,68,0.15);
+        box-shadow: 0 0 40px rgba(226,192,68,0.03);
+    }
+    .game-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .game-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .game-block .preview {
+        background: rgba(0,0,0,0.25);
         border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+    }
+    .game-block .preview .scene-icon {
+        font-size: 2rem;
+        opacity: 0.3;
+        margin-bottom: 4px;
+    }
+    .game-block .preview .scene-desc {
+        color: #5a6a7e;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+    .game-block .preview .scene-sub {
+        color: #3a4a5a;
+        font-size: 0.55rem;
+        letter-spacing: 1px;
+        margin-top: 4px;
+    }
+    .game-block .btn-enter {
+        display: inline-block;
+        padding: 10px 30px;
+        background: rgba(226,192,68,0.08);
+        border: 1px solid rgba(226,192,68,0.15);
+        border-radius: 50px;
+        color: #e2c044;
+        text-decoration: none;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .game-block .btn-enter:hover {
+        background: rgba(226,192,68,0.15);
+        border-color: rgba(226,192,68,0.3);
+        box-shadow: 0 0 30px rgba(226,192,68,0.05);
+    }
+
+    /* ===== 2. МЕНТАЛЬНАЯ КАРТА ===== */
+    .map-block {
         background: rgba(22,33,62,0.3);
-        border: 1px solid rgba(255,255,255,0.04);
-        transition: all 0.4s ease;
-        cursor: default;
-        position: relative;
-    }
-    .slide-item:hover {
-        background: rgba(22,33,62,0.5);
-        border-color: rgba(226,192,68,0.1);
-    }
-    .slide-item .num {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
         display: flex;
+        flex-direction: column;
+    }
+    .map-block:hover {
+        border-color: rgba(226,192,68,0.15);
+    }
+    .map-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .map-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .map-block .map-preview {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        font-size: 0.75rem;
-        font-weight: 600;
-        flex-shrink: 0;
-        background: rgba(255,255,255,0.05);
-        color: #5a5a5a;
-        border: 1px solid rgba(255,255,255,0.05);
-        transition: all 0.3s ease;
+        gap: 4px;
     }
-    .slide-item.completed .num {
-        background: rgba(226,192,68,0.15);
-        color: #e2c044;
-        border-color: rgba(226,192,68,0.2);
-    }
-    .slide-item.active .num {
-        background: #e2c044;
-        color: #0b0e14;
-        border-color: #e2c044;
-        box-shadow: 0 0 20px rgba(226,192,68,0.2);
-    }
-    .slide-item .info {
-        flex: 1;
-    }
-    .slide-item .info .title {
-        color: #d4d9e6;
-        font-size: 0.95rem;
-        font-weight: 400;
-        transition: all 0.3s ease;
-    }
-    .slide-item.active .info .title {
-        color: #e2c044;
-    }
-    .slide-item.completed .info .title {
-        color: #8a8a8a;
-    }
-    .slide-item .info .desc {
-        color: #5a5a5a;
-        font-size: 0.75rem;
-        margin-top: 2px;
-    }
-    .slide-item .status {
-        font-size: 1rem;
-        flex-shrink: 0;
-    }
-    .slide-item .status .check {
-        color: #e2c044;
-    }
-    .slide-item .status .lock {
-        color: #3a3a3a;
-    }
-    .slide-item .status .arrow-right {
-        color: #e2c044;
-        animation: pulseArrow 2s ease-in-out infinite;
-    }
-    @keyframes pulseArrow {
-        0%, 100% { transform: translateX(0); opacity: 0.5; }
-        50% { transform: translateX(5px); opacity: 1; }
-    }
-
-    /* ===== ПРОГРЕСС-БАР ===== */
-    .progress-bar-wrap {
-        margin-top: 25px;
-        background: rgba(255,255,255,0.04);
-        border-radius: 10px;
-        height: 4px;
-        overflow: hidden;
-        position: relative;
-    }
-    .progress-bar-wrap .fill {
-        height: 100%;
-        background: linear-gradient(90deg, #e2c044, #f0d65a);
-        border-radius: 10px;
-        transition: width 0.8s ease;
-        width: 0%;
-        box-shadow: 0 0 20px rgba(226,192,68,0.2);
-    }
-    .progress-stats {
+    .map-block .map-preview .row {
         display: flex;
-        justify-content: space-between;
-        margin-top: 8px;
-        color: #4a4a4a;
-        font-size: 0.7rem;
-        letter-spacing: 1px;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        align-items: center;
     }
-
-    /* ===== ПРАВАЯ ЧАСТЬ: ПРИЛОЖЕНИЕ ===== */
-    .flashlight-app {
-        flex: 1;
-        max-width: 380px;
-        padding-top: 20px;
-        position: sticky;
-        top: 20px;
-    }
-    .flashlight-app .app-label {
-        color: #aab3c9;
-        font-size: 0.7rem;
-        font-weight: 400;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        margin-bottom: 18px;
-        opacity: 0.4;
-        text-align: center;
-    }
-
-    /* ===== КАРТОЧКА ПРИЛОЖЕНИЯ ===== */
-    .app-card {
-        background: rgba(22,33,62,0.5);
-        border: 2px solid rgba(226,192,68,0.15);
-        border-radius: 20px;
-        padding: 35px 25px;
-        text-decoration: none;
-        color: inherit;
-        display: block;
-        transition: all 0.5s ease;
-        backdrop-filter: blur(10px);
-        position: relative;
-        overflow: hidden;
-        cursor: pointer;
-        text-align: center;
-    }
-    .app-card::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle at 30% 30%, rgba(226,192,68,0.05), transparent 60%);
-        pointer-events: none;
-        transition: all 0.6s ease;
-    }
-    .app-card:hover::before {
-        transform: scale(1.2);
-    }
-    .app-card:hover {
-        transform: translateY(-5px) scale(1.02);
-        border-color: rgba(226,192,68,0.5);
-        box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(226,192,68,0.05);
-        background: rgba(22,33,62,0.7);
-    }
-    .app-card .app-icon {
-        font-size: 3.5rem;
-        display: block;
-        margin-bottom: 12px;
-        animation: lanternGlow 3s ease-in-out infinite;
-    }
-    @keyframes lanternGlow {
-        0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.2); }
-        50% { text-shadow: 0 0 40px rgba(226,192,68,0.5), 0 0 80px rgba(226,192,68,0.15); }
-    }
-    .app-card h3 {
-        color: #e2c044;
-        font-size: 1.3rem;
-        font-weight: 400;
-        letter-spacing: 1px;
-        margin-bottom: 6px;
-    }
-    .app-card p {
-        color: #8a8a8a;
-        font-size: 0.85rem;
-        margin: 0;
-        line-height: 1.5;
-    }
-    .app-card .arrow {
+    .map-block .map-preview .node {
         display: inline-block;
-        margin-top: 18px;
-        padding: 8px 30px;
+        padding: 4px 12px;
         border-radius: 50px;
-        font-size: 0.8rem;
-        background: rgba(226,192,68,0.1);
-        color: #e2c044;
-        border: 1px solid rgba(226,192,68,0.15);
+        font-size: 0.55rem;
         letter-spacing: 1px;
+        border: 1px solid rgba(226,192,68,0.06);
+        color: #8a8a8a;
+        white-space: nowrap;
+    }
+    .map-block .map-preview .node.active {
+        border-color: rgba(226,192,68,0.2);
+        background: rgba(226,192,68,0.05);
+        color: #e2c044;
+    }
+    .map-block .map-preview .arrow {
+        color: #2a3a4a;
+        font-size: 0.6rem;
+    }
+    .map-block .map-preview .map-label {
+        color: #2a3a4a;
+        font-size: 0.45rem;
+        letter-spacing: 2px;
+        margin-top: 6px;
+    }
+    .map-block .btn-map {
+        display: inline-block;
+        padding: 8px 30px;
+        background: rgba(226,192,68,0.05);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 50px;
+        color: #5a7a8a;
+        text-decoration: none;
+        font-size: 0.7rem;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .map-block .btn-map:hover {
+        border-color: rgba(226,192,68,0.15);
+        color: #8a9aaa;
+    }
+
+    /* ===== 3. КУРС-АССОЦИАЦИИ ===== */
+    .course-block {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .course-block:hover {
+        border-color: rgba(226,192,68,0.15);
+    }
+    .course-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .course-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .course-block .assoc-list {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .course-block .assoc-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.02);
         transition: all 0.3s ease;
     }
-    .app-card:hover .arrow {
-        background: rgba(226,192,68,0.18);
-        border-color: rgba(226,192,68,0.3);
-        box-shadow: 0 0 30px rgba(226,192,68,0.08);
+    .course-block .assoc-item:hover {
+        border-color: rgba(226,192,68,0.04);
+        background: rgba(22,33,62,0.2);
+    }
+    .course-block .assoc-item .num {
+        color: #2a3a4a;
+        font-size: 0.5rem;
+        letter-spacing: 1px;
+        min-width: 22px;
+    }
+    .course-block .assoc-item .info {
+        flex: 1;
+    }
+    .course-block .assoc-item .info .title {
+        color: #d4d9e6;
+        font-size: 0.75rem;
+    }
+    .course-block .assoc-item .info .assoc {
+        color: #5a6a7e;
+        font-size: 0.6rem;
+        letter-spacing: 1px;
+    }
+    .course-block .assoc-item .badge {
+        padding: 2px 10px;
+        border-radius: 50px;
+        font-size: 0.45rem;
+        letter-spacing: 1px;
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.04);
+        color: #4a5a6a;
+        white-space: nowrap;
     }
 
     /* ===== АДАПТИВ ===== */
+    @media (max-width: 992px) {
+        .observer-layout {
+            grid-template-columns: 1fr 1fr;
+        }
+        .course-block {
+            grid-column: 1 / -1;
+        }
+    }
     @media (max-width: 768px) {
-        .flashlight-container {
-            flex-direction: column;
+        .observer-layout {
+            grid-template-columns: 1fr;
             padding: 20px 15px;
-            gap: 30px;
         }
-        .flashlight-app {
-            max-width: 100%;
-            width: 100%;
-            position: static;
+        .game-block, .map-block, .course-block {
+            padding: 20px 16px;
         }
-        .flashlight-main .course-header h2 {
-            font-size: 1.1rem;
-        }
-        .slide-item {
-            padding: 12px 14px;
-        }
-        .slide-item .info .title {
-            font-size: 0.85rem;
+        .course-block .assoc-item {
+            flex-wrap: wrap;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="flashlight-container">
 
-    <!-- ===== ЛЕВАЯ ЧАСТЬ: КУРС ===== -->
-    <div class="flashlight-main">
-        <div class="course-header">
-            <span class="icon">📚</span>
-            <h2>Курс «Путь наблюдателя»</h2>
-            <span class="progress-text" id="progressText">0 / 5</span>
+<div class="observer-layout">
+
+    <!-- ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== -->
+    <div class="game-block">
+        <div class="block-icon">🔦</div>
+        <h2>Игра «Образы»</h2>
+        <div class="preview">
+            <div class="scene-icon">🌫️</div>
+            <div class="scene-desc">Туман · Фонарик · Загадки</div>
+            <div class="scene-sub">Наведи свет на образы — получи ответы</div>
         </div>
-
-        <div class="slide-list" id="slideList">
-            <!-- Слайд 1 -->
-            <div class="slide-item completed" data-slide="1">
-                <span class="num">1</span>
-                <div class="info">
-                    <div class="title">Введение в наблюдение</div>
-                    <div class="desc">Первый шаг к осознанности</div>
-                </div>
-                <span class="status"><span class="check">✓</span></span>
-            </div>
-
-            <!-- Слайд 2 -->
-            <div class="slide-item active" data-slide="2">
-                <span class="num">2</span>
-                <div class="info">
-                    <div class="title">Стресс и его проявления</div>
-                    <div class="desc">Учимся распознавать</div>
-                </div>
-                <span class="status"><span class="arrow-right">▶</span></span>
-            </div>
-
-            <!-- Слайд 3 -->
-            <div class="slide-item" data-slide="3">
-                <span class="num">3</span>
-                <div class="info">
-                    <div class="title">Практика внимательности</div>
-                    <div class="desc">Быть здесь и сейчас</div>
-                </div>
-                <span class="status"><span class="lock">🔒</span></span>
-            </div>
-
-            <!-- Слайд 4 -->
-            <div class="slide-item" data-slide="4">
-                <span class="num">4</span>
-                <div class="info">
-                    <div class="title">Эмоциональный интеллект</div>
-                    <div class="desc">Управление эмоциями</div>
-                </div>
-                <span class="status"><span class="lock">🔒</span></span>
-            </div>
-
-            <!-- Слайд 5 -->
-            <div class="slide-item" data-slide="5">
-                <span class="num">5</span>
-                <div class="info">
-                    <div class="title">Путь к себе</div>
-                    <div class="desc">Интеграция практик</div>
-                </div>
-                <span class="status"><span class="lock">🔒</span></span>
-            </div>
-        </div>
-
-        <!-- Прогресс-бар -->
-        <div class="progress-bar-wrap">
-            <div class="fill" id="progressFill" style="width: 20%;"></div>
-        </div>
-        <div class="progress-stats">
-            <span>Начало пути</span>
-            <span id="progressPercent">20%</span>
-            <span>Осознанность</span>
-        </div>
+        <a href="{% url 'observer3d:world' %}" class="btn-enter">🔦 Войти в 3D-мир</a>
     </div>
 
-    <!-- ===== ПРАВАЯ ЧАСТЬ: ПРИЛОЖЕНИЕ ===== -->
-    <div class="flashlight-app">
-        <div class="app-label">📱 Приложение</div>
+    <!-- ===== 2. МЕНТАЛЬНАЯ КАРТА ===== -->
+    <div class="map-block">
+        <div class="block-icon">🧠</div>
+        <h2>Ментальная карта</h2>
+        <div class="map-preview">
+            <div class="row">
+                <span class="node active">👁️ Наблюдение</span>
+                <span class="arrow">→</span>
+                <span class="node">⚡ Стресс</span>
+                <span class="arrow">→</span>
+                <span class="node">🌿 Внимательность</span>
+            </div>
+            <div class="row">
+                <span class="arrow">↕</span>
+                <span class="node">🌀 Эмоции</span>
+                <span class="arrow">↕</span>
+                <span class="node">🌟 Путь</span>
+            </div>
+            <div class="map-label">связи между темами курса</div>
+        </div>
+        <a href="/map/" class="btn-map">🗺️ Открыть карту</a>
+    </div>
 
-        <a href="{% url 'observer3d:world' %}" class="app-card">
-            <span class="app-icon">🌍</span>
-            <h3>Наблюдатель</h3>
-            <p>Исследуй курс в трёхмерном пространстве</p>
-            <span class="arrow">🔦 Войти</span>
-        </a>
+    <!-- ===== 3. КУРС-АССОЦИАЦИИ ===== -->
+    <div class="course-block">
+        <div class="block-icon">📚</div>
+        <h2>Курс-ассоциации</h2>
+        <div class="assoc-list">
+            <div class="assoc-item">
+                <span class="num">01</span>
+                <div class="info">
+                    <div class="title">👁️ Введение в наблюдение</div>
+                    <div class="assoc">Ассоциация: «Свидетель»</div>
+                </div>
+                <span class="badge">основа</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">02</span>
+                <div class="info">
+                    <div class="title">⚡ Стресс и его проявления</div>
+                    <div class="assoc">Ассоциация: «Реакция»</div>
+                </div>
+                <span class="badge">распознавание</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">03</span>
+                <div class="info">
+                    <div class="title">🌿 Практика внимательности</div>
+                    <div class="assoc">Ассоциация: «Мост»</div>
+                </div>
+                <span class="badge">практика</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">04</span>
+                <div class="info">
+                    <div class="title">🌀 Эмоциональный интеллект</div>
+                    <div class="assoc">Ассоциация: «Энергия»</div>
+                </div>
+                <span class="badge">управление</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">05</span>
+                <div class="info">
+                    <div class="title">🌟 Путь к себе</div>
+                    <div class="assoc">Ассоциация: «Целое»</div>
+                </div>
+                <span class="badge">интеграция</span>
+            </div>
+        </div>
     </div>
 
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const items = document.querySelectorAll('.slide-item');
-        const progressFill = document.getElementById('progressFill');
-        const progressText = document.getElementById('progressText');
-        const progressPercent = document.getElementById('progressPercent');
-
-        function updateProgress() {
-            const total = items.length;
-            let completed = 0;
-            let active = false;
-
-            items.forEach(function(item) {
-                if (item.classList.contains('completed')) {
-                    completed++;
-                }
-                if (item.classList.contains('active')) {
-                    active = true;
-                }
-            });
-
-            // Если нет активного, но есть completed — ставим активным следующий
-            if (!active && completed < total) {
-                items[completed].classList.add('active');
-                // Обновляем статус
-                const status = items[completed].querySelector('.status');
-                status.innerHTML = '<span class="arrow-right">▶</span>';
-            }
-
-            // Пересчитываем
-            completed = 0;
-            items.forEach(function(item) {
-                if (item.classList.contains('completed')) {
-                    completed++;
-                }
-            });
-
-            const percent = Math.round((completed / total) * 100);
-            progressFill.style.width = percent + '%';
-            progressText.textContent = completed + ' / ' + total;
-            progressPercent.textContent = percent + '%';
-
-            // Если все пройдены
-            if (completed === total) {
-                progressFill.style.background = 'linear-gradient(90deg, #e2c044, #ffcc66, #e2c044)';
-                progressFill.style.backgroundSize = '200% 100%';
-                progressFill.style.animation = 'shimmer 2s ease-in-out infinite';
-            }
-        }
-
-        // Добавляем анимацию shimmer для завершённого курса
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes shimmer {
-                0% { background-position: 200% 0; }
-                100% { background-position: -200% 0; }
-            }
-        `;
-        document.head.appendChild(style);
-
-        updateProgress();
+        console.log('🔦 Путь наблюдателя — Фонарик');
     });
 </script>
+
 {% endblock %}

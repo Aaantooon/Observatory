@@ -4,7 +4,6 @@
 
 {% block content %}
 <style>
-    /* ===== БАЗОВЫЕ СТИЛИ ===== */
     .path-journey {
         max-width: 700px;
         margin: 0 auto;
@@ -12,7 +11,6 @@
         position: relative;
     }
 
-    /* ===== АНИМАЦИЯ ТУМАНА НА ФОНЕ ===== */
     .fog-layer {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
@@ -31,7 +29,6 @@
         75% { transform: translate(15px, 5px); }
     }
 
-    /* ===== КОНТЕЙНЕРЫ ШАГОВ ===== */
     .step-container {
         position: relative;
         z-index: 1;
@@ -46,7 +43,6 @@
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ===== ШАГ 1: ВЫБОР ===== */
     .welcome-card {
         text-align: center;
         padding: 40px 30px;
@@ -84,7 +80,6 @@
         font-style: normal;
     }
 
-    /* ===== КНОПКИ ВЫБОРА ===== */
     .choice-buttons {
         display: flex;
         flex-direction: column;
@@ -102,8 +97,6 @@
         text-decoration: none;
         display: block;
         text-align: center;
-        position: relative;
-        overflow: hidden;
     }
     .btn-light {
         background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
@@ -167,7 +160,6 @@
         box-shadow: 0 0 20px rgba(226,192,68,0.3);
     }
 
-    /* ===== КАРТОЧКА РЕЗУЛЬТАТА ===== */
     .result-card {
         text-align: center;
         padding: 35px 25px;
@@ -190,9 +182,17 @@
     .result-card .next-btn {
         margin-top: 20px;
     }
+
+    @media (max-width: 768px) {
+        .welcome-card h1 {
+            font-size: 1.4rem;
+        }
+        .welcome-card {
+            padding: 30px 20px;
+        }
+    }
 </style>
 
-<!-- Слой тумана на фоне -->
 <div class="fog-layer"></div>
 
 <div class="path-journey">
@@ -236,7 +236,7 @@
             <br>
             <p>Тогда предлагаю <em>начать создавать карту</em>.</p>
             <p>Твоя карта не будет пустой.<br>Я расставлю направления и покажу дороги.</p>
-            <a href="/map/" class="btn-choice btn-light next-btn">🗺️ Посмотреть карту</a>
+            <a href="{% url 'map' %}" class="btn-choice btn-light next-btn">🗺️ Посмотреть карту</a>
         </div>
     </div>
 
@@ -270,16 +270,13 @@
 
 <script>
     function goTo(stepId) {
-        // Скрываем все шаги
         document.querySelectorAll('.step-container').forEach(function(el) {
             el.classList.remove('active');
         });
-        // Показываем нужный
         var target = document.getElementById(stepId);
         if (target) {
             target.classList.add('active');
         }
-        // Плавный скролл наверх
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
