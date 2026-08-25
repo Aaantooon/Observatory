@@ -50,21 +50,18 @@ def send_to_telegram(sender, instance, created, **kwargs):
             print(f"❌ Ошибка отправки в Telegram: {e}")
 
 
-# ===== НОВЫЕ МОДЕЛИ ДЛЯ КУРСА =====
+# ===== МОДУЛИ КУРСА =====
 class Module(models.Model):
-    """Модуль курса 'Путь наблюдателя'"""
     number = models.PositiveIntegerField(unique=True, verbose_name="Номер модуля")
     title = models.CharField(max_length=200, verbose_name="Название")
     subtitle = models.CharField(max_length=200, blank=True, verbose_name="Подзаголовок")
     description = models.TextField(verbose_name="Описание")
     content = models.TextField(verbose_name="Содержание лекции", blank=True)
     
-    # 3D позиция
     position_x = models.FloatField(default=0, verbose_name="Позиция X в 3D")
     position_z = models.FloatField(default=0, verbose_name="Позиция Z в 3D")
     color = models.CharField(max_length=7, default="#6cbfff", verbose_name="Цвет в 3D")
     
-    # Контент
     key_concepts = models.JSONField(default=list, verbose_name="Ключевые понятия")
     associations = models.JSONField(default=list, verbose_name="Ассоциации")
     duration = models.PositiveIntegerField(default=30, verbose_name="Длительность (мин)")
@@ -72,6 +69,12 @@ class Module(models.Model):
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # НОВЫЕ ПОЛЯ
+    video_url = models.URLField(blank=True, verbose_name="Ссылка на видео")
+    pdf_file = models.FileField(upload_to='modules/pdfs/', blank=True, null=True, verbose_name="PDF-файл")
+    test_questions = models.JSONField(default=list, blank=True, verbose_name="Вопросы для теста")
+    allow_comments = models.BooleanField(default=True, verbose_name="Разрешить комментарии")
     
     class Meta:
         ordering = ['number']
@@ -88,8 +91,8 @@ class Module(models.Model):
         return Module.objects.filter(number=self.number - 1, is_published=True).first()
 
 
+# ===== ПРОГРЕСС ПОЛЬЗОВАТЕЛЯ =====
 class UserCourseProgress(models.Model):
-    """Прогресс пользователя в курсе"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='course_progress')
     current_module = models.ForeignKey(Module, on_delete=models.SET_NULL, null=True, blank=True, related_name='users_at')
     completed_modules = models.ManyToManyField(Module, blank=True, related_name='completed_by')
@@ -161,8 +164,8 @@ class UserCourseProgress(models.Model):
         }
 
 
+# ===== АССОЦИАЦИИ ИЗ ИГРЫ =====
 class GameAssociation(models.Model):
-    """Ассоциации из игры"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='game_associations')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='game_associations')
     object_name = models.CharField(max_length=100, verbose_name="Объект")
@@ -178,8 +181,8 @@ class GameAssociation(models.Model):
         return f"{self.user.username}: {self.object_name} → {self.association[:30]}"
 
 
+# ===== СЕРИЯ ПОЛЬЗОВАТЕЛЯ =====
 class UserStreak(models.Model):
-    """Серия пользователя"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='streak')
     current_streak = models.IntegerField(default=0, verbose_name="Текущая серия")
     max_streak = models.IntegerField(default=0, verbose_name="Максимальная серия")
@@ -216,3 +219,39 @@ class UserStreak(models.Model):
         self.last_activity = today
         self.save()
         return True
+
+
+# ===== КОММЕНТАРИИ К МОДУЛЯМ =====
+class ModuleComment(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='module_comments')
+    text = models.TextField(verbose_name="Текст комментария")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Комментарий к модулю"
+        verbose_name_plural = "Комментарии к модулям"
+    
+    def __str__(self):
+        return f"{self.user.username} — {self.module.title} ({self.created_at.strftime('%d.%m.%Y')})"
+
+
+# ===== ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ =====
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name="Аватарка")
+    bio = models.TextField(blank=True, verbose_name="О себе")
+    location = models.CharField(max_length=200, blank=True, verbose_name="Город")
+    website = models.URLField(blank=True, verbose_name="Сайт")
+    telegram = models.CharField(max_length=100, blank=True, verbose_name="Telegram")
+    notifications_enabled = models.BooleanField(default=True, verbose_name="Уведомления")
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Профиль пользователя"
+        verbose_name_plural = "Профили пользователей"
+    
+    def __str__(self):
+        return f"Профиль {self.user.username}"

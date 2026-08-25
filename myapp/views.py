@@ -1,13 +1,16 @@
+from django.contrib.auth.models import User
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.contrib.auth.models import User
+from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Count
-from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak
-from datetime import date
+from django.db.models import Count, Q
+from django.db import models
+from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile
 import json
+import csv
+from datetime import date
 
-# ===== КУРС =====
 
 @login_required
 def course_index(request):
@@ -27,7 +30,6 @@ def course_index(request):
             'is_current': progress.current_module and module.id == progress.current_module.id
         })
     
-    # Статистика
     streak, _ = UserStreak.objects.get_or_create(user=request.user)
     
     return render(request, 'myapp/course/index.html', {
@@ -36,6 +38,7 @@ def course_index(request):
         'completed_count': progress.completed_modules.count(),
         'total_count': modules.count(),
         'streak': streak.current_streak,
+        'max_streak': streak.max_streak,
     })
 
 @login_required
@@ -52,13 +55,19 @@ def module_detail(request, module_number):
             return redirect('course_index')
     is_completed = progress.is_module_completed(module)
     associations = request.user.game_associations.filter(module=module)
+    comments = module.comments.all() if module.allow_comments else []
+    streak, _ = UserStreak.objects.get_or_create(user=request.user)
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    
     return render(request, 'myapp/course/module.html', {
         'module': module,
         'is_completed': is_completed,
         'next_module': module.get_next(),
         'prev_module': module.get_prev(),
         'associations': associations,
-        'streak': UserStreak.objects.get_or_create(user=request.user)[0].current_streak,
+        'comments': comments,
+        'streak': streak.current_streak,
+        'profile': profile,
     })
 
 @login_required
@@ -74,14 +83,11 @@ def complete_module(request, module_number):
         messages.info(request, 'Этот модуль уже пройден')
     else:
         progress.complete_module(module)
-        # Обновляем серию
         streak, _ = UserStreak.objects.get_or_create(user=request.user)
         streak.update_streak()
         messages.success(request, f'🎉 Модуль "{module.title}" успешно завершён!')
     return redirect('course_module', module_number=module_number)
 
-
-# ===== API =====
 
 @login_required
 def course_progress_api(request):
@@ -122,7 +128,6 @@ def complete_module_api(request):
             if prev and not progress.is_module_completed(prev):
                 return JsonResponse({'error': 'Предыдущий модуль не пройден'}, status=403)
         progress.complete_module(module)
-        # Обновляем серию
         streak, _ = UserStreak.objects.get_or_create(user=request.user)
         streak.update_streak()
         return JsonResponse({
@@ -130,6 +135,7 @@ def complete_module_api(request):
             'progress_percent': progress.get_progress_percent(),
             'is_finished': progress.completed_at is not None,
             'streak': streak.current_streak,
+            'max_streak': streak.max_streak,
             'next_module': {
                 'id': progress.current_module.id if progress.current_module else None,
                 'number': progress.current_module.number if progress.current_module else None,
@@ -172,27 +178,106 @@ def association_api(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-# ===== СТАТИСТИКА ДЛЯ ГЛАВНОЙ =====
+@login_required
+def add_comment(request, module_number):
+    if request.method != 'POST':
+        return redirect('course_index')
+    module = get_object_or_404(Module, number=module_number)
+    text = request.POST.get('text', '').strip()
+    if text:
+        ModuleComment.objects.create(
+            module=module,
+            user=request.user,
+            text=text
+        )
+        messages.success(request, '💬 Комментарий добавлен')
+    return redirect('course_module', module_number=module_number)
 
-def get_user_stats(request):
-    """Получить статистику пользователя для главной"""
-    if not request.user.is_authenticated:
-        return {
-            'total_modules': 0,
-            'completed': 0,
-            'progress': 0,
-            'streak': 0,
-        }
-    
+
+def search_course(request):
+    query = request.GET.get('q', '').strip()
+    results = []
+    if query:
+        results = Module.objects.filter(
+            Q(title__icontains=query) |
+            Q(subtitle__icontains=query) |
+            Q(description__icontains=query) |
+            Q(content__icontains=query) |
+            Q(key_concepts__icontains=query)
+        ).filter(is_published=True)
+    return render(request, 'search_results.html', {
+        'query': query,
+        'results': results,
+    })
+
+
+@login_required
+def export_progress(request):
     progress, _ = UserCourseProgress.objects.get_or_create(
         user=request.user,
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
-    streak, _ = UserStreak.objects.get_or_create(user=request.user)
+    modules = Module.objects.filter(is_published=True).order_by('number')
     
-    return {
-        'total_modules': Module.objects.filter(is_published=True).count(),
-        'completed': progress.completed_modules.count(),
-        'progress': progress.get_progress_percent(),
-        'streak': streak.current_streak,
-    }
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="progress_{request.user.username}_{date.today()}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Модуль', 'Название', 'Статус', 'Ассоциации'])
+    
+    for module in modules:
+        status = '✅ Пройдено' if progress.is_module_completed(module) else '⏳ Не пройдено'
+        associations = ', '.join(module.associations) if module.associations else '-'
+        writer.writerow([module.number, module.title, status, associations])
+    
+    writer.writerow([])
+    writer.writerow(['Итого', f'{progress.completed_modules.count()}/{modules.count()}', f'{progress.get_progress_percent()}%', ''])
+    
+    return response
+
+
+@login_required
+def edit_profile(request):
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    
+    if request.method == 'POST':
+        profile.bio = request.POST.get('bio', '')
+        profile.location = request.POST.get('location', '')
+        profile.website = request.POST.get('website', '')
+        profile.telegram = request.POST.get('telegram', '')
+        profile.notifications_enabled = request.POST.get('notifications') == 'on'
+        
+        if request.FILES.get('avatar'):
+            profile.avatar = request.FILES['avatar']
+        
+        profile.save()
+        messages.success(request, '✅ Профиль обновлён')
+        return redirect('profile')
+    
+    return render(request, 'edit_profile.html', {
+        'profile': profile,
+    })
+
+
+class Bookmark(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookmarks')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='bookmarked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['user', 'module']
+    
+    def __str__(self):
+        return f"{self.user.username} → {self.module.title}"
+
+
+@login_required
+def toggle_bookmark(request, module_number):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    module = get_object_or_404(Module, number=module_number)
+    bookmark, created = Bookmark.objects.get_or_create(user=request.user, module=module)
+    if not created:
+        bookmark.delete()
+        return JsonResponse({'bookmarked': False})
+    return JsonResponse({'bookmarked': True})
