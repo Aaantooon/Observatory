@@ -1,52 +1,89 @@
-# Виртуальное окружение
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
 venv/
 .venv/
+ENV/
+env.bak/
+venv.bak/
 
-# База данных SQLite
-db.sqlite3
-*.sqlite3
-*.sqlite3-journal
-
-# Кэш Python
-__pycache__/
+# Django
+*.log
+*.pot
 *.pyc
-*.pyo
+*.mo
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+coverage/
+htmlcov/
+.django_storage
 
-# Локальные настройки
+# Environment Variables
 .env
 .env.local
-secrets.json
-
-# Статика и медиа
-staticfiles/
-media/
-static_collected/
-
-# Логи
-*.log
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
-*.iml
-*.iws
+*.swp
+*.swo
+*~
+.ropeproject/
+.venv/
 
-# Системные файлы
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Тесты и покрытие
-.coverage
-htmlcov/
-.pytest_cache/
+# Git
+.gitignore
+.git/
 
-# Временные файлы
-*.tmp
-*.temp
+# Logs
+logs/
+*.log
 
-# Сборка и дистрибутивы
-*.egg-info/
-dist/
-build/
-*.whl
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+
+# Node (если используешь)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker (если используешь)
+*.pid
+docker-compose.override.yml
+
+# Secret files
+*.pem
+*.key
+*.crt
+*.p12
+
+# Project specific
+project_code.txt
+structure.txt
+observatory.db.env

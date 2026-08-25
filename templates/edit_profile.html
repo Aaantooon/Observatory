@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}Редактировать профиль{% endblock %}
+
+{% block content %}
+<style>
+    .edit-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .edit-container h1 {
+        color: #e2c044;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        color: #aab3c9;
+        font-size: 0.85rem;
+        letter-spacing: 1px;
+        display: block;
+        margin-bottom: 6px;
+    }
+    .form-group input, .form-group textarea {
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(22,33,62,0.4);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 12px;
+        color: #d4d9e6;
+        font-size: 0.95rem;
+        transition: border-color 0.3s ease;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+        outline: none;
+        border-color: rgba(226,192,68,0.3);
+    }
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+    .form-group .current-avatar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 0;
+    }
+    .form-group .current-avatar img {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: rgba(22,33,62,0.3);
+    }
+    .form-group .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .form-group .checkbox input {
+        width: auto;
+    }
+    .form-group .checkbox label {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+    .btn-save {
+        padding: 12px 40px;
+        background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
+        border: 2px solid #e2c044;
+        border-radius: 50px;
+        color: #e2c044;
+        font-size: 0.9rem;
+        letter-spacing: 2px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .btn-save:hover {
+        background: rgba(226,192,68,0.2);
+        box-shadow: 0 0 40px rgba(226,192,68,0.15);
+    }
+    .btn-back {
+        display: inline-block;
+        margin-top: 16px;
+        color: #5a6a7e;
+        text-decoration: none;
+        font-size: 0.85rem;
+        transition: color 0.3s ease;
+        text-align: center;
+        width: 100%;
+    }
+    .btn-back:hover {
+        color: #aab3c9;
+    }
+    @media (max-width: 768px) {
+        .edit-container {
+            padding: 20px 15px;
+        }
+    }
+</style>
+
+<div class="edit-container">
+    <h1>✏️ Редактировать профиль</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label>Аватарка</label>
+            <div class="current-avatar">
+                {% if profile.avatar %}
+                    <img src="{{ profile.avatar.url }}" alt="Аватар">
+                {% else %}
+                    <div style="width:60px;height:60px;border-radius:50%;background:rgba(22,33,62,0.3);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🕯️</div>
+                {% endif %}
+                <input type="file" name="avatar" accept="image/*">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>О себе</label>
+            <textarea name="bio" placeholder="Расскажи о себе...">{{ profile.bio }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Город</label>
+            <input type="text" name="location" value="{{ profile.location }}" placeholder="Где ты находишься?">
+        </div>
+
+        <div class="form-group">
+            <label>Сайт</label>
+            <input type="url" name="website" value="{{ profile.website }}" placeholder="https://...">
+        </div>
+
+        <div class="form-group">
+            <label>Telegram</label>
+            <input type="text" name="telegram" value="{{ profile.telegram }}" placeholder="@username">
+        </div>
+
+        <div class="form-group">
+            <div class="checkbox">
+                <input type="checkbox" name="notifications" {% if profile.notifications_enabled %}checked{% endif %}>
+                <label>Получать уведомления</label>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-save">💾 Сохранить</button>
+        <a href="{% url 'profile' %}" class="btn-back">← Вернуться в профиль</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Поиск — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<style>
+    .search-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .search-container h1 {
+        color: #e2c044;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 20px;
+    }
+    .search-box {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+    }
+    .search-box input {
+        flex: 1;
+        padding: 14px 20px;
+        background: rgba(22,33,62,0.4);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 12px;
+        color: #d4d9e6;
+        font-size: 1rem;
+    }
+    .search-box input:focus {
+        outline: none;
+        border-color: rgba(226,192,68,0.3);
+    }
+    .search-box button {
+        padding: 14px 30px;
+        background: rgba(226,192,68,0.08);
+        border: 1px solid rgba(226,192,68,0.15);
+        border-radius: 50px;
+        color: #e2c044;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .search-box button:hover {
+        background: rgba(226,192,68,0.15);
+    }
+    .result-item {
+        padding: 16px 20px;
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.02);
+        border-radius: 12px;
+        margin-bottom: 12px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    .result-item:hover {
+        border-color: rgba(226,192,68,0.1);
+        background: rgba(22,33,62,0.5);
+        transform: translateX(4px);
+    }
+    .result-item .title {
+        color: #e2c044;
+        font-size: 1.1rem;
+        margin-bottom: 4px;
+    }
+    .result-item .subtitle {
+        color: #5a6a7e;
+        font-size: 0.85rem;
+    }
+    .result-item .assoc {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+    }
+    .result-item .assoc span {
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.04);
+        color: #4a5a6a;
+        padding: 2px 12px;
+        border-radius: 10px;
+        font-size: 0.6rem;
+        letter-spacing: 1px;
+    }
+    .no-results {
+        text-align: center;
+        color: #5a6a7e;
+        padding: 40px 0;
+    }
+    .no-results .icon {
+        font-size: 3rem;
+        opacity: 0.2;
+        display: block;
+        margin-bottom: 16px;
+    }
+</style>
+
+<div class="search-container">
+    <h1>🔍 Поиск по курсу</h1>
+    
+    <form class="search-box" method="get">
+        <input type="text" name="q" placeholder="Что ищешь?" value="{{ query }}">
+        <button type="submit">Найти</button>
+    </form>
+
+    {% if query %}
+        {% if results %}
+            <p style="color:#5a6a7e;margin-bottom:16px;">Найдено: {{ results|length }} модулей</p>
+            {% for module in results %}
+                <a href="{% url 'course_module' module.number %}" class="result-item">
+                    <div class="title">{{ module.number }}. {{ module.title }}</div>
+                    <div class="subtitle">{{ module.subtitle }}</div>
+                    {% if module.associations %}
+                        <div class="assoc">
+                            {% for assoc in module.associations %}
+                                <span>{{ assoc }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        {% else %}
+            <div class="no-results">
+                <span class="icon">🌫️</span>
+                <p>Ничего не найдено по запросу «{{ query }}»</p>
+                <p style="font-size:0.8rem;">Попробуй изменить запрос</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="no-results">
+            <span class="icon">🔦</span>
+            <p>Напиши что-нибудь в поиск</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

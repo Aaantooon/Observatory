@@ -1,0 +1,4660 @@
+================================================================================
+ФАЙЛ: bot_api\__init__.py
+================================================================================
+
+
+
+================================================================================
+ФАЙЛ: bot_api\admin.py
+================================================================================
+
+from django.contrib import admin
+from .models import User, Exercise, Result
+
+@admin.register(User)
+class UserAdmin(admin.ModelAdmin):
+    list_display = ['vk_id', 'first_name', 'last_name', 'registered_at']
+    search_fields = ['vk_id', 'first_name', 'last_name']
+    list_filter = ['registered_at']
+
+@admin.register(Exercise)
+class ExerciseAdmin(admin.ModelAdmin):
+    list_display = ['title', 'type', 'order']
+    list_filter = ['type']
+    ordering = ['order']
+
+@admin.register(Result)
+class ResultAdmin(admin.ModelAdmin):
+    list_display = ['user', 'exercise', 'completed_at', 'is_approved']
+    list_filter = ['is_approved', 'completed_at']
+    search_fields = ['user__vk_id', 'user__first_name']
+
+================================================================================
+ФАЙЛ: bot_api\apps.py
+================================================================================
+
+from django.apps import AppConfig
+
+class BotApiConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'bot_api'
+    verbose_name = 'API для VK бота'
+
+================================================================================
+ФАЙЛ: bot_api\models.py
+================================================================================
+
+from django.db import models
+
+class User(models.Model):
+    vk_id = models.CharField(max_length=50, unique=True, db_index=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True)
+    registered_at = models.DateTimeField(auto_now_add=True)
+    streak = models.IntegerField(default=0, verbose_name="Серия дней")
+    last_activity_date = models.DateField(null=True, blank=True, verbose_name="Последняя активность")
+
+    class Meta:
+        ordering = ['-registered_at']
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} (ID: {self.vk_id})"
+
+
+class Exercise(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    type = models.CharField(max_length=50, default='default')
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
+
+
+class Result(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='results')
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
+    result_data = models.JSONField()
+    is_approved = models.BooleanField(default=False)
+    corrected_data = models.JSONField(null=True, blank=True)
+    correction_comment = models.TextField(blank=True)
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-completed_at']
+
+    def __str__(self):
+        return f"{self.user} - {self.exercise.title}"
+
+
+class ExerciseProgress(models.Model):
+    """Сохраняет прогресс упражнения для продолжения"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='progresses')
+    exercise_type = models.CharField(max_length=50, default='besilki')
+    data = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'exercise_type']
+
+    def __str__(self):
+        return f"{self.user} - {self.exercise_type}"
+
+================================================================================
+ФАЙЛ: bot_api\serializers.py
+================================================================================
+
+from rest_framework import serializers
+from .models import User, Exercise, Result
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'vk_id', 'first_name', 'last_name', 'registered_at', 'streak', 'last_activity_date']
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = ['id', 'title', 'description', 'type', 'order']
+
+class ResultSerializer(serializers.ModelSerializer):
+    exercise_title = serializers.ReadOnlyField(source='exercise.title')
+    
+    class Meta:
+        model = Result
+        fields = [
+            'id', 'user', 'exercise', 'exercise_title',
+            'result_data', 'is_approved', 'corrected_data',
+            'correction_comment', 'completed_at'
+        ]
+        read_only_fields = ['user', 'completed_at']
+
+================================================================================
+ФАЙЛ: bot_api\tests.py
+================================================================================
+
+from django.test import TestCase
+
+# Create your tests here.
+
+
+================================================================================
+ФАЙЛ: bot_api\urls.py
+================================================================================
+
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet, ExerciseViewSet, ResultViewSet, ProgressViewSet
+
+router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='users')
+router.register(r'exercises', ExerciseViewSet, basename='exercises')
+router.register(r'results', ResultViewSet, basename='results')
+router.register(r'progress', ProgressViewSet, basename='progress')
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
+
+================================================================================
+ФАЙЛ: bot_api\views.py
+================================================================================
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from datetime import date, timedelta
+from .models import User, Exercise, Result, ExerciseProgress
+from .serializers import UserSerializer, ExerciseSerializer, ResultSerializer
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        vk_id = self.request.query_params.get('vk_id')
+        if vk_id:
+            queryset = queryset.filter(vk_id=str(vk_id))
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        vk_id = request.data.get('vk_id')
+        if vk_id:
+            user = User.objects.filter(vk_id=str(vk_id)).first()
+            if user:
+                serializer = self.get_serializer(user)
+                return Response(serializer.data)
+        return super().create(request, *args, **kwargs)
+
+    @action(detail=False, methods=['post'])
+    def update_streak(self, request):
+        vk_id = request.data.get('vk_id')
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            today = date.today()
+            
+            if user.last_activity_date == today:
+                return Response({'streak': user.streak, 'message': 'already_today'})
+            elif user.last_activity_date == today - timedelta(days=1):
+                user.streak += 1
+            else:
+                user.streak = 1 if user.last_activity_date else 0
+            
+            user.last_activity_date = today
+            user.save()
+            
+            return Response({'streak': user.streak, 'message': 'updated'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ExerciseViewSet(viewsets.ModelViewSet):
+    queryset = Exercise.objects.all()
+    serializer_class = ExerciseSerializer
+
+
+class ResultViewSet(viewsets.ModelViewSet):
+    queryset = Result.objects.all()
+    serializer_class = ResultSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        vk_id = self.request.query_params.get('vk_id')
+        if vk_id:
+            queryset = queryset.filter(user__vk_id=str(vk_id))
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        user_vk_id = request.data.get('user_vk_id')
+        exercise_id = request.data.get('exercise_id')
+        
+        try:
+            user = User.objects.get(vk_id=str(user_vk_id))
+            exercise = Exercise.objects.get(id=exercise_id)
+            
+            result = Result.objects.create(
+                user=user,
+                exercise=exercise,
+                result_data=request.data.get('result_data', {})
+            )
+            
+            serializer = self.get_serializer(result)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exercise.DoesNotExist:
+            return Response(
+                {'error': 'Exercise not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ProgressViewSet(viewsets.ViewSet):
+    """API для сохранения и восстановления прогресса упражнений"""
+
+    @action(detail=False, methods=['post'])
+    def save(self, request):
+        vk_id = request.data.get('vk_id')
+        exercise_type = request.data.get('exercise_type', 'besilki')
+        data = request.data.get('data', {})
+
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            progress, created = ExerciseProgress.objects.update_or_create(
+                user=user,
+                exercise_type=exercise_type,
+                defaults={'data': data}
+            )
+            return Response({'status': 'saved', 'created': created})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def get(self, request):
+        vk_id = request.query_params.get('vk_id')
+        exercise_type = request.query_params.get('exercise_type', 'besilki')
+
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            progress = ExerciseProgress.objects.filter(
+                user=user,
+                exercise_type=exercise_type
+            ).first()
+
+            if progress:
+                return Response({'data': progress.data, 'exists': True})
+            return Response({'exists': False})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['delete'])
+    def delete(self, request):
+        vk_id = request.data.get('vk_id')
+        exercise_type = request.data.get('exercise_type', 'besilki')
+
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            ExerciseProgress.objects.filter(
+                user=user,
+                exercise_type=exercise_type
+            ).delete()
+            return Response({'status': 'deleted'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+================================================================================
+ФАЙЛ: config\__init__.py
+================================================================================
+
+
+
+================================================================================
+ФАЙЛ: config\asgi.py
+================================================================================
+
+import os
+from django.core.asgi import get_asgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+application = get_asgi_application()
+
+================================================================================
+ФАЙЛ: config\settings.py
+================================================================================
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from machina import MACHINA_MAIN_STATIC_DIR
+from machina import MACHINA_MAIN_TEMPLATE_DIR
+
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY не найден в .env файле!")
+
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# ===== INSTALLED_APPS =====
+INSTALLED_APPS = [
+    # Стандартные приложения Django
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'django.contrib.humanize',
+    
+    # Зависимости Machina
+    'mptt',
+    'haystack',
+    'widget_tweaks',
+    
+    # Machina
+    'machina',
+    'machina.apps.forum',
+    'machina.apps.forum_conversation',
+    'machina.apps.forum_conversation.forum_attachments',
+    'machina.apps.forum_conversation.forum_polls',
+    'machina.apps.forum_feeds',
+    'machina.apps.forum_moderation',
+    'machina.apps.forum_search',
+    'machina.apps.forum_tracking',
+    'machina.apps.forum_member',
+    'machina.apps.forum_permission',
+    
+    # Сторонние приложения
+    'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
+    'social_django', # <--- ДОБАВЛЕНО ДЛЯ ВХОДА ЧЕРЕЗ VK
+    
+    # Ваши приложения
+    'myapp',
+    'bot_api',
+    'observer3d',
+    
+    # Авторизация вк
+    'sslserver',
+]
+
+# =======================================
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'machina.apps.forum_permission.middleware.ForumPermissionMiddleware',
+    'social_django.middleware.SocialAuthExceptionMiddleware', # <--- ДОБАВЛЕНО
+]
+
+ROOT_URLCONF = 'config.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            BASE_DIR / 'templates',
+            MACHINA_MAIN_TEMPLATE_DIR,
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'machina.core.context_processors.metadata',
+                # ДОБАВЛЕНО ДЛЯ КНОПОК ВХОДА
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'config.wsgi.application'
+
+# --- PostgreSQL ---
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'observatory_db'),
+        'USER': os.getenv('DB_USER', 'observatory_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
+LANGUAGE_CODE = 'ru-ru'
+TIME_ZONE = 'Europe/Moscow'
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+    MACHINA_MAIN_STATIC_DIR,
+]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'machina_attachments': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'cache',
+    },
+}
+
+HAYSTACK_CONNECTIONS = {
+    'default': {
+        'ENGINE': 'haystack.backends.simple_backend.SimpleEngine',
+    },
+}
+HAYSTACK_SIGNAL_PROCESSOR = 'haystack.signals.RealtimeSignalProcessor'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+AUTH_USER_MODEL = 'auth.User'
+
+# ===== НАСТРОЙКИ ВХОДА (ИЗМЕНЕНО) =====
+#LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+# ===== НАСТРОЙКИ АВТОРИЗАЦИИ VK =====
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.vk.VKOAuth2',  # Вход через ВК
+    'django.contrib.auth.backends.ModelBackend', # Обычный вход по паролю
+)
+
+# Вставьте сюда ваши данные из приложения ВКонтакте
+SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID', '')    # ID приложения
+SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET', '') # Защищенный ключ
+SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email'] # Запрашиваем email
+
+# Чтобы избежать ошибок связки аккаунтов
+SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = False
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+# =======================================
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+}
+
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == ['']:
+    CORS_ALLOWED_ORIGINS = ['http://localhost:8000']
+
+CORS_ALLOW_CREDENTIALS = True
+
+SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False') == 'True'
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+
+ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
+ADMIN_SITE_TITLE = "Путь Наблюдателя"
+ADMIN_INDEX_TITLE = "Добро пожаловать в панель управления!"
+
+VK_TOKEN = os.getenv('VK_TOKEN')
+VK_GROUP_ID = os.getenv('VK_GROUP_ID')
+VK_APP_ID = os.getenv('VK_APP_ID', '54728530')
+
+MACHINA_FORUM_NAME = 'Путь наблюдателя'
+MACHINA_MAIN_CRISPY_TEMPLATE_PACK = 'bootstrap5'
+
+================================================================================
+ФАЙЛ: config\urls.py
+================================================================================
+
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from . import views
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include('bot_api.urls')),
+    path('forum/', include('machina.urls')),
+    path('', include('social_django.urls', namespace='social')),
+    path('accounts/', include('django.contrib.auth.urls')),
+    
+    path('', views.home, name='home'),
+    path('about/', views.about, name='about'),
+    path('map/', views.map_view, name='map'),
+    path('observer/', views.observer_view, name='observer'),
+    path('put/', views.put_view, name='put'),
+    path('flashlight/', views.flashlight_view, name='flashlight'),
+    
+    path('', include('myapp.urls')),
+    
+    path('3d/', include('observer3d.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+================================================================================
+ФАЙЛ: config\views.py
+================================================================================
+
+from django.shortcuts import render
+
+def home(request):
+    return render(request, 'home.html', {
+        'title': 'Главная — Путь наблюдателя',
+        'subtitle': 'Фонарь рассеивает туман: шаг за шагом мы видим путь'
+    })
+
+def about(request):
+    return render(request, 'about.html', {
+        'title': 'О проекте — Путь наблюдателя'
+    })
+
+def map_view(request):
+    return render(request, 'map.html', {
+        'title': 'Карта пути наблюдателя'
+    })
+
+def observer_view(request):
+    return render(request, 'observer_map.html')
+
+def put_view(request):
+    return render(request, 'put.html')
+
+def flashlight_view(request):
+    return render(request, 'flashlight.html', {
+        'title': 'Фонарик — Путь наблюдателя'
+    })
+
+================================================================================
+ФАЙЛ: config\wsgi.py
+================================================================================
+
+import os
+from django.core.wsgi import get_wsgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+application = get_wsgi_application()
+
+================================================================================
+ФАЙЛ: myapp\templates\myapp\course\index.html
+================================================================================
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Курс «Путь наблюдателя»{% endblock %}
+
+{% block extra_head %}
+<style>
+    .course-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .course-header {
+        text-align: center;
+        padding: 30px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+    }
+    .course-header h1 {
+        font-size: 2.5rem;
+        font-weight: 300;
+        color: #d4d9e6;
+        letter-spacing: 2px;
+    }
+    .course-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.1rem;
+    }
+    .progress-bar-wrap {
+        background: rgba(255,255,255,0.04);
+        border-radius: 10px;
+        height: 6px;
+        overflow: hidden;
+        margin: 20px 0;
+    }
+    .progress-bar-wrap .fill {
+        height: 100%;
+        background: linear-gradient(90deg, #e2c044, #f0d65a);
+        border-radius: 10px;
+        transition: width 0.8s ease;
+    }
+    .progress-stats {
+        display: flex;
+        justify-content: space-between;
+        color: #5a5a5a;
+        font-size: 0.85rem;
+    }
+    .modules-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 20px;
+    }
+    .module-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        transition: all 0.4s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+    .module-card:hover {
+        background: rgba(22,33,62,0.5);
+        border-color: rgba(226,192,68,0.1);
+        transform: translateX(4px);
+    }
+    .module-card.locked {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .module-card.locked:hover {
+        transform: none;
+        background: rgba(22,33,62,0.3);
+        border-color: rgba(255,255,255,0.04);
+    }
+    .module-card.completed {
+        border-color: rgba(226,192,68,0.1);
+    }
+    .module-card .num {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+        flex-shrink: 0;
+        background: rgba(255,255,255,0.05);
+        color: #5a5a5a;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .module-card.completed .num {
+        background: rgba(226,192,68,0.15);
+        color: #e2c044;
+        border-color: rgba(226,192,68,0.2);
+    }
+    .module-card.current .num {
+        background: #e2c044;
+        color: #0b0e14;
+        border-color: #e2c044;
+    }
+    .module-card .info {
+        flex: 1;
+    }
+    .module-card .info .title {
+        color: #d4d9e6;
+        font-size: 0.95rem;
+    }
+    .module-card .info .desc {
+        color: #5a5a5a;
+        font-size: 0.8rem;
+    }
+    .module-card .status-icon {
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="course-container">
+    <div class="course-header">
+        <h1>🗺️ Путь наблюдателя</h1>
+        <p class="subtitle">Курс по созданию карт реальности</p>
+    </div>
+
+    <div class="progress-bar-wrap">
+        <div class="fill" style="width: {{ progress_percent }}%"></div>
+    </div>
+    <div class="progress-stats">
+        <span>Прогресс</span>
+        <span>{{ progress_percent }}% • {{ completed_count }}/{{ total_count }}</span>
+    </div>
+
+    <div class="modules-grid">
+        {% for item in modules %}
+            {% if item.is_unlocked %}
+                <a href="{% url 'course_module' item.module.number %}" class="module-card {% if item.is_completed %}completed{% endif %} {% if item.is_current %}current{% endif %}">
+                    <span class="num">{{ item.module.number }}</span>
+                    <div class="info">
+                        <div class="title">{{ item.module.title }}</div>
+                        <div class="desc">{{ item.module.subtitle }}</div>
+                    </div>
+                    <span class="status-icon">{% if item.is_completed %}✅{% else %}▶{% endif %}</span>
+                </a>
+            {% else %}
+                <div class="module-card locked">
+                    <span class="num">{{ item.module.number }}</span>
+                    <div class="info">
+                        <div class="title">{{ item.module.title }}</div>
+                        <div class="desc">🔒 Заблокировано</div>
+                    </div>
+                    <span class="status-icon">🔒</span>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+================================================================================
+ФАЙЛ: myapp\templates\myapp\course\module.html
+================================================================================
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Модуль {{ module.number }}: {{ module.title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .module-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .module-nav {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .module-nav a {
+        color: #8a8a8a;
+        text-decoration: none;
+        font-size: 0.85rem;
+        transition: color 0.3s ease;
+    }
+    .module-nav a:hover {
+        color: #e2c044;
+    }
+    .module-header .module-badge {
+        display: inline-block;
+        background: rgba(226,192,68,0.1);
+        color: #e2c044;
+        padding: 4px 16px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+        border: 1px solid rgba(226,192,68,0.1);
+    }
+    .module-header h1 {
+        color: #d4d9e6;
+        font-size: 2.2rem;
+        font-weight: 300;
+        margin: 0 0 6px 0;
+    }
+    .module-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.1rem;
+    }
+    .module-header .duration {
+        color: #5a5a5a;
+        font-size: 0.85rem;
+        margin-top: 8px;
+    }
+    .module-content {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+    }
+    .module-content .content-body {
+        color: #b0b8c8;
+        font-size: 1rem;
+        line-height: 1.8;
+    }
+    .module-content .content-body h2 {
+        color: #d4d9e6;
+        font-size: 1.4rem;
+        font-weight: 300;
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }
+    .module-content .content-body p {
+        margin-bottom: 12px;
+    }
+    .key-concepts {
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin: 20px 0;
+    }
+    .key-concepts h3 {
+        color: #e2c044;
+        font-size: 0.9rem;
+        font-weight: 400;
+        letter-spacing: 1px;
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+    }
+    .key-concepts ul {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .key-concepts li {
+        background: rgba(226,192,68,0.05);
+        color: #c0c8d8;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        border: 1px solid rgba(226,192,68,0.05);
+    }
+    .game-integration {
+        background: linear-gradient(135deg, rgba(22,33,62,0.5), rgba(226,192,68,0.05));
+        border: 1px solid rgba(226,192,68,0.1);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .game-integration h3 {
+        color: #e2c044;
+        font-size: 1rem;
+        font-weight: 400;
+        margin: 0 0 4px 0;
+    }
+    .game-integration p {
+        color: #8a8a8a;
+        font-size: 0.9rem;
+        margin: 0 0 16px 0;
+    }
+    .game-integration .btn-game {
+        display: inline-block;
+        padding: 10px 32px;
+        background: rgba(226,192,68,0.1);
+        border: 1px solid rgba(226,192,68,0.2);
+        border-radius: 50px;
+        color: #e2c044;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+    .game-integration .btn-game:hover {
+        background: rgba(226,192,68,0.18);
+        border-color: rgba(226,192,68,0.4);
+    }
+    .module-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255,255,255,0.04);
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-actions .btn {
+        padding: 10px 28px;
+        border-radius: 50px;
+        border: none;
+        font-size: 0.9rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-weight: 400;
+        letter-spacing: 1px;
+    }
+    .module-actions .btn-complete {
+        background: linear-gradient(135deg, #e2c044, #c9a830);
+        color: #0b0e14;
+    }
+    .module-actions .btn-complete:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(226,192,68,0.25);
+    }
+    .module-actions .btn-secondary {
+        background: rgba(255,255,255,0.05);
+        color: #8a8a8a;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .module-actions .btn-secondary:hover {
+        background: rgba(255,255,255,0.08);
+    }
+    .module-actions .completed-badge {
+        color: #e2c044;
+        font-size: 0.9rem;
+    }
+    @media (max-width: 768px) {
+        .module-container { padding: 20px 15px; }
+        .module-header h1 { font-size: 1.6rem; }
+        .module-content { padding: 20px; }
+        .module-actions { flex-direction: column; align-items: stretch; }
+        .module-actions .btn { text-align: center; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="module-container">
+    <nav class="module-nav">
+        <a href="{% url 'course_index' %}">← К списку модулей</a>
+        <div>
+            {% if prev_module %}<a href="{% url 'course_module' prev_module.number %}">← {{ prev_module.title }}</a>{% endif %}
+            {% if next_module and is_completed %}<a href="{% url 'course_module' next_module.number %}">{{ next_module.title }} →</a>{% endif %}
+        </div>
+    </nav>
+
+    <header class="module-header">
+        <span class="module-badge">Модуль {{ module.number }}</span>
+        <h1>{{ module.title }}</h1>
+        <p class="subtitle">{{ module.subtitle }}</p>
+        <p class="duration">⏱️ {{ module.duration }} минут</p>
+    </header>
+
+    <div class="module-content">
+        <div class="content-body">{{ module.content|safe }}</div>
+    </div>
+
+    {% if module.key_concepts %}
+    <div class="key-concepts">
+        <h3>🔑 Ключевые понятия</h3>
+        <ul>{% for concept in module.key_concepts %}<li>{{ concept }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <div class="game-integration">
+        <h3>🎮 Практика в игре</h3>
+        <p>Закрепи материал в трёхмерном пространстве</p>
+        <a href="/3d/" class="btn-game">🔦 Перейти в 3D-мир</a>
+    </div>
+
+    <div class="module-actions">
+        {% if is_completed %}
+            <div class="completed-badge">✅ Модуль пройден</div>
+            <a href="{% url 'course_index' %}" class="btn btn-secondary">📚 К списку модулей</a>
+        {% else %}
+            <form method="post" action="{% url 'complete_module' module.number %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-complete">✅ Завершить модуль</button>
+            </form>
+            <a href="{% url 'course_index' %}" class="btn btn-secondary">📚 К списку модулей</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+================================================================================
+ФАЙЛ: myapp\__init__.py
+================================================================================
+
+
+
+================================================================================
+ФАЙЛ: myapp\admin.py
+================================================================================
+
+from django.contrib import admin
+
+# Register your models here.
+
+
+================================================================================
+ФАЙЛ: myapp\apps.py
+================================================================================
+
+from django.apps import AppConfig
+
+
+class MyappConfig(AppConfig):
+    name = 'myapp'
+
+
+================================================================================
+ФАЙЛ: myapp\forms.py
+================================================================================
+
+from django import forms
+from .models import Observation
+
+class ObservationForm(forms.ModelForm):
+    class Meta:
+        model = Observation
+        fields = ['title', 'description', 'location', 'image']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 4}),
+        }
+
+================================================================================
+ФАЙЛ: myapp\models.py
+================================================================================
+
+from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+from django.utils import timezone
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ===== СУЩЕСТВУЮЩАЯ МОДЕЛЬ =====
+class Observation(models.Model):
+    title = models.CharField(max_length=200, verbose_name="Название наблюдения")
+    description = models.TextField(verbose_name="Описание")
+    location = models.CharField(max_length=200, verbose_name="Место наблюдения", blank=True)
+    image = models.ImageField(upload_to='observations/', blank=True, null=True, verbose_name="Фото")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата публикации")
+
+    def __str__(self):
+        return self.title
+
+
+@receiver(post_save, sender=Observation)
+def send_to_telegram(sender, instance, created, **kwargs):
+    if created:
+        try:
+            token = os.getenv('TG_BOT_TOKEN')
+            chat_id = os.getenv('TG_CHAT_ID')
+            if not token or not chat_id:
+                print("⚠️ TG_BOT_TOKEN или TG_CHAT_ID не заданы в .env файле")
+                return
+            message = f"🪐 <b>Новое наблюдение!</b>\n\n📍 <b>{instance.title}</b>\n"
+            if instance.location:
+                message += f"🗺️ {instance.location}\n"
+            message += f"\n{instance.description}"
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = {'chat_id': chat_id, 'text': message, 'parse_mode': 'HTML'}
+            response = requests.post(url, data=data)
+            if response.status_code != 200:
+                print(f"⚠️ Ошибка отправки текста в Telegram: {response.text}")
+            if instance.image:
+                image_url = f"http://127.0.0.1:8000{instance.image.url}"
+                photo_url = f"https://api.telegram.org/bot{token}/sendPhoto"
+                photo_data = {'chat_id': chat_id, 'photo': image_url, 'caption': f"📸 Фото к посту: {instance.title}"}
+                photo_response = requests.post(photo_url, data=photo_data)
+                if photo_response.status_code != 200:
+                    print(f"⚠️ Ошибка отправки фото в Telegram: {photo_response.text}")
+        except Exception as e:
+            print(f"❌ Ошибка отправки в Telegram: {e}")
+
+
+# ===== НОВЫЕ МОДЕЛИ ДЛЯ КУРСА =====
+class Module(models.Model):
+    """Модуль курса 'Путь наблюдателя'"""
+    number = models.PositiveIntegerField(unique=True, verbose_name="Номер модуля")
+    title = models.CharField(max_length=200, verbose_name="Название")
+    subtitle = models.CharField(max_length=200, blank=True, verbose_name="Подзаголовок")
+    description = models.TextField(verbose_name="Описание")
+    content = models.TextField(verbose_name="Содержание лекции", blank=True)
+    
+    position_x = models.FloatField(default=0, verbose_name="Позиция X в 3D")
+    position_z = models.FloatField(default=0, verbose_name="Позиция Z в 3D")
+    color = models.CharField(max_length=7, default="#6cbfff", verbose_name="Цвет в 3D")
+    
+    key_concepts = models.JSONField(default=list, verbose_name="Ключевые понятия")
+    duration = models.PositiveIntegerField(default=30, verbose_name="Длительность (мин)")
+    is_published = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['number']
+        verbose_name = "Модуль"
+        verbose_name_plural = "Модули курса"
+    
+    def __str__(self):
+        return f"{self.number}. {self.title}"
+    
+    def get_next(self):
+        return Module.objects.filter(number=self.number + 1, is_published=True).first()
+    
+    def get_prev(self):
+        return Module.objects.filter(number=self.number - 1, is_published=True).first()
+
+
+class UserCourseProgress(models.Model):
+    """Прогресс пользователя в курсе"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='course_progress')
+    current_module = models.ForeignKey(Module, on_delete=models.SET_NULL, null=True, blank=True, related_name='users_at')
+    completed_modules = models.ManyToManyField(Module, blank=True, related_name='completed_by')
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Прогресс пользователя"
+        verbose_name_plural = "Прогресс пользователей"
+    
+    def __str__(self):
+        module = self.current_module
+        return f"{self.user.username} - {module.title if module else 'Завершён'}"
+    
+    def get_progress_percent(self):
+        total = Module.objects.filter(is_published=True).count()
+        if total == 0:
+            return 0
+        return int((self.completed_modules.count() / total) * 100)
+    
+    def is_module_completed(self, module):
+        return self.completed_modules.filter(id=module.id).exists()
+    
+    def complete_module(self, module):
+        if not self.is_module_completed(module):
+            self.completed_modules.add(module)
+            next_module = module.get_next()
+            if next_module:
+                self.current_module = next_module
+            else:
+                self.completed_at = timezone.now()
+            self.save()
+            return True
+        return False
+    
+    def get_game_state(self):
+        modules = Module.objects.filter(is_published=True).order_by('number')
+        completed_ids = list(self.completed_modules.values_list('id', flat=True))
+        result = []
+        for m in modules:
+            if m.id in completed_ids:
+                status = 'completed'
+            elif self.current_module and m.id == self.current_module.id:
+                status = 'unlocked'
+            elif m.number == 1:
+                status = 'unlocked'
+            else:
+                prev = m.get_prev()
+                if prev and prev.id in completed_ids:
+                    status = 'unlocked'
+                else:
+                    status = 'locked'
+            result.append({
+                'id': m.id,
+                'number': m.number,
+                'title': m.title,
+                'subtitle': m.subtitle,
+                'color': m.color,
+                'x': m.position_x,
+                'z': m.position_z,
+                'status': status
+            })
+        return {'modules': result, 'progress_percent': self.get_progress_percent(), 'current_module_id': self.current_module.id if self.current_module else None, 'is_finished': self.completed_at is not None}
+
+
+class GameAssociation(models.Model):
+    """Ассоциации из игры"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='game_associations')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='associations')
+    object_name = models.CharField(max_length=100, verbose_name="Объект")
+    association = models.TextField(verbose_name="Ассоциация")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Ассоциация"
+        verbose_name_plural = "Ассоциации"
+    
+    def __str__(self):
+        return f"{self.user.username}: {self.object_name} → {self.association[:30]}"
+
+================================================================================
+ФАЙЛ: myapp\tests.py
+================================================================================
+
+from django.test import TestCase
+
+# Create your tests here.
+
+
+================================================================================
+ФАЙЛ: myapp\urls.py
+================================================================================
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('course/', views.course_index, name='course_index'),
+    path('course/module/<int:module_number>/', views.module_detail, name='course_module'),
+    path('course/module/<int:module_number>/complete/', views.complete_module, name='complete_module'),
+    path('api/course/progress/', views.course_progress_api, name='api_course_progress'),
+    path('api/course/complete/', views.complete_module_api, name='api_course_complete'),
+    path('api/course/association/', views.association_api, name='api_course_association'),
+]
+
+================================================================================
+ФАЙЛ: myapp\views.py
+================================================================================
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.contrib import messages
+from .models import Observation, Module, UserCourseProgress, GameAssociation
+import json
+
+# ===== СУЩЕСТВУЮЩИЕ VIEWS (НЕ ТРОГАЙ) =====
+# ... твой существующий код ...
+
+# ===== НОВЫЕ VIEWS ДЛЯ КУРСА =====
+
+@login_required
+def course_index(request):
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    modules = Module.objects.filter(is_published=True).order_by('number')
+    modules_data = []
+    for module in modules:
+        is_completed = progress.is_module_completed(module)
+        is_unlocked = module.number == 1 or (module.get_prev() and progress.is_module_completed(module.get_prev())) or is_completed
+        modules_data.append({
+            'module': module,
+            'is_completed': is_completed,
+            'is_unlocked': is_unlocked,
+            'is_current': progress.current_module and module.id == progress.current_module.id
+        })
+    return render(request, 'myapp/course/index.html', {
+        'modules': modules_data,
+        'progress_percent': progress.get_progress_percent(),
+        'completed_count': progress.completed_modules.count(),
+        'total_count': modules.count(),
+    })
+
+@login_required
+def module_detail(request, module_number):
+    module = get_object_or_404(Module, number=module_number, is_published=True)
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    if module.number > 1:
+        prev = module.get_prev()
+        if prev and not progress.is_module_completed(prev):
+            messages.warning(request, 'Сначала пройдите предыдущий модуль')
+            return redirect('course_index')
+    is_completed = progress.is_module_completed(module)
+    associations = request.user.game_associations.filter(module=module)
+    return render(request, 'myapp/course/module.html', {
+        'module': module,
+        'is_completed': is_completed,
+        'next_module': module.get_next(),
+        'prev_module': module.get_prev(),
+        'associations': associations,
+    })
+
+@login_required
+def complete_module(request, module_number):
+    if request.method != 'POST':
+        return redirect('course_index')
+    module = get_object_or_404(Module, number=module_number, is_published=True)
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    if progress.is_module_completed(module):
+        messages.info(request, 'Этот модуль уже пройден')
+    else:
+        progress.complete_module(module)
+        messages.success(request, f'🎉 Модуль "{module.title}" успешно завершён!')
+    return redirect('course_module', module_number=module_number)
+
+@login_required
+def course_progress_api(request):
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    game_state = progress.get_game_state()
+    return JsonResponse({
+        'modules': game_state['modules'],
+        'progress_percent': game_state['progress_percent'],
+        'current_module_id': game_state['current_module_id'],
+        'is_finished': game_state['is_finished'],
+        'completed_module_ids': list(progress.completed_modules.values_list('id', flat=True)),
+    })
+
+@login_required
+def complete_module_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+        module_id = data.get('module_id')
+        if not module_id:
+            return JsonResponse({'error': 'module_id required'}, status=400)
+        module = get_object_or_404(Module, id=module_id)
+        progress, _ = UserCourseProgress.objects.get_or_create(
+            user=request.user,
+            defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+        )
+        if progress.is_module_completed(module):
+            return JsonResponse({'success': True, 'already_completed': True})
+        if module.number > 1:
+            prev = module.get_prev()
+            if prev and not progress.is_module_completed(prev):
+                return JsonResponse({'error': 'Предыдущий модуль не пройден'}, status=403)
+        progress.complete_module(module)
+        return JsonResponse({
+            'success': True,
+            'progress_percent': progress.get_progress_percent(),
+            'is_finished': progress.completed_at is not None,
+            'next_module': {
+                'id': progress.current_module.id if progress.current_module else None,
+                'number': progress.current_module.number if progress.current_module else None,
+                'title': progress.current_module.title if progress.current_module else None,
+            } if progress.current_module else None
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def association_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+        module_id = data.get('module_id')
+        object_name = data.get('object_name', '').strip()
+        association = data.get('association', '').strip()
+        if not all([module_id, object_name, association]):
+            return JsonResponse({'error': 'Все поля обязательны'}, status=400)
+        module = get_object_or_404(Module, id=module_id)
+        assoc = GameAssociation.objects.create(
+            user=request.user,
+            module=module,
+            object_name=object_name,
+            association=association
+        )
+        return JsonResponse({
+            'success': True,
+            'association': {
+                'id': assoc.id,
+                'object': assoc.object_name,
+                'association': assoc.association,
+                'created_at': assoc.created_at.isoformat()
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+================================================================================
+ФАЙЛ: observer3d\__init__.py
+================================================================================
+
+
+
+================================================================================
+ФАЙЛ: observer3d\apps.py
+================================================================================
+
+from django.apps import AppConfig
+
+class Observer3dConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'observer3d'
+    verbose_name = '3D Мир Наблюдателя'
+
+
+================================================================================
+ФАЙЛ: observer3d\urls.py
+================================================================================
+
+from django.urls import path
+from . import views
+
+app_name = 'observer3d'
+
+urlpatterns = [
+    path('', views.babylon_world, name='world'),
+]
+
+
+================================================================================
+ФАЙЛ: observer3d\views.py
+================================================================================
+
+from django.shortcuts import render
+
+def babylon_world(request):
+    return render(request, 'observer3d/world_babylon.html')
+
+================================================================================
+ФАЙЛ: static\admin\css\custom.css
+================================================================================
+
+/* static/admin/css/custom.css */
+/* Украшаем админку */
+
+#header {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    color: white;
+}
+
+#header a:link, #header a:visited {
+    color: white !important;
+}
+
+.module h2, .module caption, .inline-group h2 {
+    background: #2c3e50;
+    color: white;
+}
+
+/* Карточки для результатов */
+.results .row1 {
+    transition: background 0.2s;
+}
+
+.results .row1:hover {
+    background: #f0f3f5;
+}
+
+/* Бейджи статусов */
+.field-status_badge span {
+    display: inline-block;
+    font-weight: 500;
+}
+
+/* Адаптив */
+@media (max-width: 767px) {
+    #content {
+        padding: 10px;
+    }
+    .field-status_badge span {
+        font-size: 10px;
+        padding: 2px 8px !important;
+    }
+}
+
+================================================================================
+ФАЙЛ: static\css\game.css
+================================================================================
+
+* { margin: 0; padding: 0; }
+body { overflow: hidden; background: #0a0a14; }
+
+#renderCanvas {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+#start-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(10, 10, 20, 0.9);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+#start-screen.hidden {
+    opacity: 0;
+    transform: scale(1.05);
+    pointer-events: none;
+}
+
+#start-screen h1 {
+    font-size: 52px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    background: linear-gradient(135deg, #6cbfff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+}
+
+#start-screen p {
+    font-size: 18px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+}
+
+#start-screen small {
+    color: rgba(255,255,255,0.2);
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+#start-screen .enter-icon {
+    font-size: 40px;
+    margin-top: 20px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+#ui {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,10,20,0.8);
+    backdrop-filter: blur(12px);
+    padding: 16px 32px;
+    border-radius: 16px;
+    text-align: center;
+    color: #fff;
+    min-width: 280px;
+    border: 1px solid rgba(255,255,255,0.05);
+    z-index: 10;
+}
+
+#step-title {
+    font-size: 20px;
+    color: #b8e6ff;
+    margin-bottom: 4px;
+}
+
+#progress {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    margin: 8px 0;
+}
+
+#fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6cbfff, #a78bfa);
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+#progress-text {
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 1px;
+}
+
+#exit {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    color: rgba(255,255,255,0.3);
+    text-decoration: none;
+    font-size: 14px;
+    z-index: 10;
+    padding: 8px 20px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.3s;
+    background: rgba(0,0,0,0.3);
+}
+
+#exit:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.15);
+}
+
+@media (max-width: 640px) {
+    #start-screen h1 { font-size: 30px; letter-spacing: 3px; }
+    #start-screen p { font-size: 15px; }
+    #ui { min-width: auto; width: 90%; padding: 14px 20px; }
+    #step-title { font-size: 17px; }
+}
+
+================================================================================
+ФАЙЛ: static\js\game.js
+================================================================================
+
+import * as BABYLON from '@babylonjs/core';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('renderCanvas');
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+
+    // СТАРТОВЫЙ ЭКРАН
+    const startScreen = document.getElementById('start-screen');
+    startScreen.addEventListener('click', function() {
+        startScreen.classList.add('hidden');
+        canvas.click();
+    });
+
+    // КАМЕРА
+    const camera = new BABYLON.UniversalCamera("camera", 
+        new BABYLON.Vector3(0, 1.7, 10), scene
+    );
+    camera.attachControl(canvas, true);
+    camera.speed = 0.15;
+
+    // ТУМАН
+    scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogDensity = 0.025;
+    scene.fogColor = new BABYLON.Color3(0.06, 0.06, 0.1);
+
+    // ФОНАРИК
+    const flashlight = new BABYLON.SpotLight("flashlight", 
+        new BABYLON.Vector3(0, 1.5, 0),
+        new BABYLON.Vector3(0, -1, -1),
+        Math.PI / 5, 20, 0.5
+    );
+    flashlight.intensity = 3;
+    flashlight.diffuse = new BABYLON.Color3(1, 0.95, 0.85);
+
+    // ПОЛ
+    const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+    groundMat.diffuseColor = new BABYLON.Color3(0.06, 0.06, 0.12);
+    const ground = BABYLON.MeshBuilder.CreateGround("ground", 
+        {width: 60, height: 60}, scene
+    );
+    ground.material = groundMat;
+
+    // ОСВЕЩЕНИЕ
+    const ambient = new BABYLON.HemisphericLight('ambient', 
+        new BABYLON.Vector3(0, 1, 0), scene
+    );
+    ambient.intensity = 0.1;
+
+    // ТЕМЫ КУРСА
+    const themes = [
+        { title: "Введение в наблюдение", color: "#6cbfff", x: -2, z: -5, desc: "Перейти шаг к осознанности" },
+        { title: "Стресс и его проявления", color: "#ff8a6c", x: 3, z: -9, desc: "Учимся распознавать" },
+        { title: "Практика внимательности", color: "#7ae0a0", x: -1, z: -14, desc: "Быть здесь и сейчас" },
+        { title: "Эмоциональный интеллект", color: "#ffb86c", x: 4, z: -19, desc: "Управление эмоциями" },
+        { title: "Путь к себе", color: "#c084fc", x: 0, z: -24, desc: "Интеграция практик" },
+    ];
+
+    const stepPositions = [];
+
+    themes.forEach(function(theme, i) {
+        // СТОЛБ
+        const pillar = BABYLON.MeshBuilder.CreateCylinder("pillar" + i, 
+            {height: 3, diameter: 0.7}, scene
+        );
+        pillar.position = new BABYLON.Vector3(theme.x, 1.5, theme.z);
+        
+        const mat = new BABYLON.StandardMaterial("mat" + i, scene);
+        mat.emissiveColor = BABYLON.Color3.FromHexString(theme.color);
+        mat.emissiveIntensity = 0.3;
+        pillar.material = mat;
+        
+        // СФЕРА
+        const sphere = BABYLON.MeshBuilder.CreateSphere("sphere" + i, 
+            {diameter: 0.4}, scene
+        );
+        sphere.position = new BABYLON.Vector3(theme.x, 3.2, theme.z);
+        const sphereMat = new BABYLON.StandardMaterial("sMat" + i, scene);
+        sphereMat.emissiveColor = BABYLON.Color3.FromHexString(theme.color);
+        sphereMat.emissiveIntensity = 0.8;
+        sphere.material = sphereMat;
+        
+        stepPositions.push({x: theme.x, z: theme.z, title: theme.title, desc: theme.desc, index: i});
+    });
+
+    // UI
+    let currentStep = -1;
+    const stepTitle = document.getElementById('step-title');
+    const fill = document.getElementById('fill');
+    const progressText = document.getElementById('progress-text');
+
+    scene.registerBeforeRender(function() {
+        // ФОНАРИК СЛЕДУЕТ ЗА КАМЕРОЙ
+        const pos = camera.position;
+        const forward = new BABYLON.Vector3(0, 0, -1);
+        const matrix = camera.getViewMatrix();
+        const direction = BABYLON.Vector3.TransformNormal(forward, matrix);
+        direction.normalize();
+        
+        flashlight.position.copyFrom(pos);
+        flashlight.position.y += 1.5;
+        flashlight.direction.copyFrom(direction);
+        
+        // ПРОВЕРКА ПРИБЛИЖЕНИЯ
+        let found = -1;
+        stepPositions.forEach(function(s, i) {
+            const dist = Math.sqrt(Math.pow(pos.x - s.x, 2) + Math.pow(pos.z - s.z, 2));
+            if (dist < 2.5) found = i;
+        });
+        
+        if (found !== currentStep && found !== -1) {
+            currentStep = found;
+            const step = stepPositions[found];
+            stepTitle.textContent = "📖 " + step.title;
+            const progress = ((found + 1) / stepPositions.length) * 100;
+            fill.style.width = progress + "%";
+            progressText.textContent = Math.round(progress) + "% • Путь наблюдателя";
+        }
+    });
+
+    // КЛАВИША E
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'e' || e.key === 'E') {
+            if (currentStep !== -1) {
+                const step = stepPositions[currentStep];
+                alert("📖 " + step.title + "\n\n" + step.desc);
+            }
+        }
+    });
+
+    // ЗАПУСК
+    engine.runRenderLoop(function() {
+        scene.render();
+    });
+    
+    window.addEventListener("resize", function() {
+        engine.resize();
+    });
+});
+
+================================================================================
+ФАЙЛ: templates\observer3d\world_babylon.html
+================================================================================
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Путь наблюдателя — Начало</title>
+    <style>
+        *{margin:0;padding:0;overflow:hidden}
+        body{background:#030508;font-family:'Segoe UI',sans-serif;cursor:crosshair}
+        #canvas{width:100vw;height:100vh;display:block}
+        
+        #ui{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+            background:rgba(3,5,8,0.8);border:1px solid rgba(74,106,138,0.04);
+            border-radius:16px;padding:14px 28px;text-align:center;z-index:100;
+            backdrop-filter:blur(20px);pointer-events:none;min-width:280px;
+            box-shadow:0 0 100px rgba(0,0,0,0.95)}
+        #ui .title{color:#5a7a8a;font-size:0.75rem;font-weight:300;letter-spacing:5px;text-transform:uppercase}
+        #ui .desc{color:#3a5a6a;font-size:0.6rem;margin-top:4px;letter-spacing:3px}
+        #ui .hint{color:#2a3a4a;font-size:0.45rem;margin-top:6px;letter-spacing:2px}
+        #ui .progress{color:#4a6a8a;font-size:0.6rem;margin-top:8px;opacity:0.2;letter-spacing:3px}
+        #ui .progress span{opacity:0.3}
+        
+        #vignette{position:fixed;top:0;left:0;width:100vw;height:100vh;
+            background:radial-gradient(ellipse at 45% 50%, transparent 20%, rgba(0,0,0,0.9) 100%);
+            pointer-events:none;z-index:10}
+        
+        #label3d{position:fixed;top:50%;left:50%;transform:translate(-50%, -130%);
+            color:#7a9aba;font-size:1rem;letter-spacing:5px;z-index:20;
+            pointer-events:none;opacity:0;transition:opacity 0.8s ease;
+            text-shadow:0 0 80px rgba(74,106,138,0.05)}
+        #label3d .sub{font-size:0.5rem;color:#3a5a6a;letter-spacing:4px;display:block;margin-top:6px}
+        
+        #riddle-box{position:fixed;top:58%;left:50%;transform:translate(-50%, -50%);
+            z-index:15;pointer-events:none;opacity:0;transition:opacity 1s ease;
+            text-align:center;max-width:500px;width:90%}
+        #riddle-box .question{color:#6a8aaa;font-size:0.85rem;letter-spacing:3px;
+            text-shadow:0 0 60px rgba(74,106,138,0.03);font-weight:300}
+        #riddle-box .answer{color:#2a4a5a;font-size:0.55rem;margin-top:10px;letter-spacing:3px;
+            border-top:1px solid rgba(74,106,138,0.04);padding-top:10px}
+        
+        #intro{position:fixed;top:0;left:0;width:100vw;height:100vh;
+            background:rgba(3,5,8,0.95);z-index:300;display:flex;flex-direction:column;
+            justify-content:center;align-items:center;padding:40px;text-align:center;
+            animation:fadeIn 2s ease}
+        #intro h1{color:#7a9aba;font-weight:300;font-size:2rem;letter-spacing:8px;margin-bottom:20px}
+        #intro p{color:#3a5a6a;font-size:0.9rem;line-height:2;max-width:500px;letter-spacing:1px}
+        #intro .hands{font-size:3rem;margin:20px 0;opacity:0.4}
+        #intro button{margin-top:30px;padding:12px 50px;background:transparent;
+            border:1px solid rgba(74,106,138,0.15);color:#5a7a8a;border-radius:50px;
+            cursor:pointer;font-size:0.8rem;letter-spacing:4px;transition:0.5s}
+        #intro button:hover{background:rgba(74,106,138,0.05);border-color:rgba(74,106,138,0.3)}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        
+        #modal{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;
+            background:rgba(0,0,0,0.93);z-index:200;justify-content:center;align-items:center}
+        #modal .box{background:rgba(5,7,10,0.96);border:1px solid rgba(74,106,138,0.04);
+            border-radius:20px;padding:48px;max-width:420px;text-align:center;
+            animation:fadeIn 0.8s ease}
+        #modal .box h2{color:#7a9aba;font-weight:300;margin-bottom:12px;font-size:1.3rem;letter-spacing:5px}
+        #modal .box .icon{font-size:2.5rem;display:block;margin-bottom:12px}
+        #modal .box p{color:#4a6a7a;font-size:0.85rem;line-height:2;letter-spacing:1px}
+        #modal .box .riddle{color:#2a4a5a;font-size:0.75rem;margin:16px 0;padding:16px;
+            border:1px solid rgba(74,106,138,0.03);border-radius:12px;letter-spacing:2px}
+        #modal .box button{margin-top:24px;padding:12px 40px;background:transparent;
+            border:1px solid rgba(74,106,138,0.06);color:#4a6a7a;border-radius:50px;
+            cursor:pointer;font-size:0.65rem;letter-spacing:4px;transition:0.5s}
+        #modal .box button:hover{background:rgba(74,106,138,0.03);border-color:rgba(74,106,138,0.12)}
+        
+        #flashlight-icon{position:fixed;bottom:100px;right:30px;font-size:1.4rem;z-index:15;
+            opacity:0.06;pointer-events:none;transition:opacity 0.8s;filter:blur(1px)}
+        #breath-indicator{position:fixed;bottom:100px;left:30px;color:#0a1a2a;font-size:0.4rem;
+            z-index:15;letter-spacing:4px;opacity:0.06;pointer-events:none}
+        
+        @media(max-width:768px){#ui{min-width:200px;padding:10px 16px;bottom:15px}
+        #label3d{font-size:0.8rem}#modal .box{padding:24px}#intro h1{font-size:1.5rem}}
+    </style>
+</head>
+<body>
+
+<div id="intro">
+    <h1>❄️ Кто я?</h1>
+    <div class="hands">🖐️</div>
+    <p>Я стою на дороге. Вокруг туман.<br>
+    Я смотрю на свои руки, ноги — это тело.<br>
+    Но я не понимаю, кто я?<br>
+    <span style="color:#4a6a7a;font-size:0.8rem;">Я делаю выбор. Я — это выбор.</span></p>
+    <button onclick="startGame()">✧ Начать путь</button>
+</div>
+
+<div id="vignette"></div>
+<div id="flashlight-icon">🔦</div>
+<div id="breath-indicator">❄️ ДЫХАНИЕ</div>
+<div id="label3d"></div>
+<div id="riddle-box">
+    <div class="question" id="riddleQuestion">❓</div>
+    <div class="answer" id="riddleAnswer">✦ наведи и кликни</div>
+</div>
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+    <div class="title" id="title">🌫️ Туман скрывает ответы</div>
+    <div class="desc" id="desc">Задай вопрос, наведи фонарик — ответ придёт.</div>
+    <div class="hint" id="hint">WASD · Мышь · Клик по свету</div>
+    <div class="progress" id="progress">0 <span>/ 5</span></div>
+</div>
+
+<div id="modal">
+    <div class="box">
+        <span class="icon" id="modalIcon">✦</span>
+        <h2 id="modalTitle">Тема</h2>
+        <p id="modalText">Текст урока</p>
+        <div class="riddle" id="modalRiddle">❓</div>
+        <button onclick="document.getElementById('modal').style.display='none'">✕ Продолжить</button>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/6.37.0/babylon.js"></script>
+<script>
+// ============================================================
+// ДАННЫЕ КУРСА — каждый образ = ответ на вопрос
+// ============================================================
+const SLIDES = [
+    { title:'Введение в наблюдение', color:'#4a7a9a', icon:'👁️', lesson:'Просто наблюдай. Не оценивай. Будь свидетелем.', riddle:'Что видит всё, но молчит?', answer:'Наблюдатель' },
+    { title:'Стресс и его проявления', color:'#6a3a3a', icon:'⚡', lesson:'Стресс — реакция. Научись видеть его до того, как он захватит тебя.', riddle:'Что приходит без зова?', answer:'Тревога' },
+    { title:'Практика внимательности', color:'#3a6a4a', icon:'🌿', lesson:'Дыхание — мост между телом и умом. Просто дыши.', riddle:'Что есть у каждого, но никто не держит?', answer:'Мгновение' },
+    { title:'Эмоциональный интеллект', color:'#6a5a3a', icon:'🌀', lesson:'Эмоции — энергия. Направь её в созидание.', riddle:'Что меняет форму, но остаётся собой?', answer:'Чувство' },
+    { title:'Путь к себе', color:'#5a3a6a', icon:'🌟', lesson:'Ты — целое. Все части уже внутри тебя.', riddle:'Что ищут все, но находят только внутри?', answer:'Истина' }
+];
+
+let completed = 0;
+let breathTime = 0;
+let fogTarget = 0.015;
+let riddleVisible = false;
+let isMoving = false;
+let stepTimer = 0;
+
+// ============================================================
+// ЗВУК
+// ============================================================
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playStep() {
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 40 + Math.random() * 15;
+        osc.type = 'sine';
+        gain.gain.value = 0.005;
+        gain.gain.exponentialRampToValueAtTime(0.0002, audioCtx.currentTime + 0.15);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    } catch(e) {}
+}
+
+// ============================================================
+// BABYLON
+// ============================================================
+const canvas = document.getElementById('canvas');
+const engine = new BABYLON.Engine(canvas, true, { antialias: true });
+const scene = new BABYLON.Scene(engine);
+
+// ===== ИСПРАВЛЕНИЕ 1: ОКРУЖЕНИЕ ДЛЯ ОБЪЁМНЫХ МАТЕРИАЛОВ =====
+scene.createDefaultEnvironment({ createSkybox: false, createGround: false });
+
+scene.clearColor = new BABYLON.Color4(0.008, 0.012, 0.02, 1);
+
+// ===== ТУМАН =====
+scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+scene.fogDensity = 0.015;
+scene.fogColor = new BABYLON.Color3(0.008, 0.012, 0.02);
+
+// ===== КАМЕРА =====
+const camera = new BABYLON.FreeCamera('cam', new BABYLON.Vector3(0, 1.6, 0), scene);
+camera.attachControl(canvas, true);
+camera.speed = 0.18;
+camera.minZ = 0.05;
+camera.maxZ = 50;
+camera.rotation.y = Math.PI;
+camera.keysUp.push(87);
+camera.keysDown.push(83);
+camera.keysLeft.push(65);
+camera.keysRight.push(68);
+
+// ===== ОСВЕЩЕНИЕ =====
+const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, -0.3), scene);
+hemi.intensity = 0.02;
+hemi.groundColor = new BABYLON.Color3(0.003, 0.006, 0.01);
+
+// ===== ИСПРАВЛЕНИЕ 2: УМЕНЬШЕНА ИНТЕНСИВНОСТЬ СВЕТА =====
+const deepLight = new BABYLON.PointLight('deep', new BABYLON.Vector3(0, 1.5, -40), scene);
+deepLight.intensity = 0.8; // было 2.5
+deepLight.distance = 50;
+deepLight.diffuse = new BABYLON.Color3(0.2, 0.5, 1);
+deepLight.specular = new BABYLON.Color3(0.05, 0.15, 0.3);
+
+const deepLight2 = new BABYLON.PointLight('deep2', new BABYLON.Vector3(0, 0.5, -35), scene);
+deepLight2.intensity = 1.5;
+deepLight2.distance = 40;
+deepLight2.diffuse = new BABYLON.Color3(0.15, 0.4, 0.8);
+
+// Фонарик игрока
+const flash = new BABYLON.SpotLight('flash',
+    new BABYLON.Vector3(0, 1.4, 0.5),
+    new BABYLON.Vector3(0, 0, 1),
+    Math.PI / 3.5, 2.0, scene
+);
+flash.parent = camera;
+flash.intensity = 0.3;
+flash.distance = 20;
+flash.diffuse = new BABYLON.Color3(0.15, 0.3, 0.5);
+
+// ===== ПОЛ =====
+const ground = BABYLON.MeshBuilder.CreateGround('ground', {width:120, height:120}, scene);
+const groundMat = new BABYLON.StandardMaterial('groundMat', scene);
+groundMat.diffuseColor = new BABYLON.Color3(0.01, 0.012, 0.018);
+groundMat.specularColor = new BABYLON.Color3(0.005, 0.008, 0.015);
+groundMat.specularPower = 60;
+ground.material = groundMat;
+ground.position.y = -0.5;
+
+// ===== ДОРОГА =====
+const pathPoints = [];
+for (let i = 0; i <= 100; i++) {
+    const z = -i * 0.6;
+    const x = Math.sin(i * 0.08 + 0.3) * 2.0 + Math.sin(i * 0.25 + 0.5) * 0.5;
+    pathPoints.push(new BABYLON.Vector3(x, -0.48, z));
+}
+const path = BABYLON.MeshBuilder.CreateLines('path', { points: pathPoints }, scene);
+path.color = new BABYLON.Color3(0.03, 0.025, 0.015);
+path.alpha = 0.5;
+
+// ===== ЛУЖИ =====
+for (let i = 0; i < 80; i+=2) {
+    const idx = Math.floor(i);
+    if (idx >= pathPoints.length) continue;
+    const p = pathPoints[idx];
+    const w = 0.2 + Math.random() * 0.4;
+    const h = 0.08 + Math.random() * 0.2;
+    const puddle = BABYLON.MeshBuilder.CreateGround('puddle', {width: w, height: h}, scene);
+    const pMat = new BABYLON.StandardMaterial('pMat', scene);
+    pMat.diffuseColor = new BABYLON.Color3(0.01, 0.03, 0.05);
+    pMat.specularColor = new BABYLON.Color3(0.08, 0.15, 0.3);
+    pMat.specularPower = 100;
+    pMat.alpha = 0.2 + Math.random() * 0.3;
+    puddle.material = pMat;
+    puddle.position = new BABYLON.Vector3(p.x + (Math.random()-0.5)*0.2, -0.48, p.z + (Math.random()-0.5)*0.2);
+    puddle.rotation.x = -Math.PI/2;
+}
+
+// ============================================================
+// ДЕРЕВЬЯ — ИСПРАВЛЕНИЕ 3: УБРАНЫ БЛИКИ
+// ============================================================
+function createTree(x, z, scale, isBig = false) {
+    const group = new BABYLON.TransformNode('tree');
+    group.position = new BABYLON.Vector3(x, 0, z);
+    const s = isBig ? scale * 1.8 : scale;
+    group.scaling = new BABYLON.Vector3(s, s, s);
+
+    const height = isBig ? 3 + Math.random()*2.5 : 2 + Math.random()*2;
+    const diameter = isBig ? 0.15 + Math.random()*0.15 : 0.06 + Math.random()*0.08;
+    const trunk = BABYLON.MeshBuilder.CreateCylinder('trunk', {
+        height: height,
+        diameter: diameter,
+        tessellation: 7
+    }, scene);
+    const tMat = new BABYLON.StandardMaterial('tMat', scene);
+    const dark = isBig ? 0.005 + Math.random()*0.01 : 0.01 + Math.random()*0.015;
+    tMat.diffuseColor = new BABYLON.Color3(dark, dark+0.002, dark+0.001);
+    tMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    trunk.material = tMat;
+    trunk.position.y = height/2 * 0.7 + 0.2;
+    trunk.parent = group;
+    trunk.rotation.z = (Math.random()-0.5)*0.15;
+    trunk.rotation.x = (Math.random()-0.5)*0.08;
+
+    if (isBig) {
+        for (let j = 0; j < 4; j++) {
+            const root = BABYLON.MeshBuilder.CreateCylinder('root', {
+                height: 0.5 + Math.random()*0.6,
+                diameter: 0.02 + Math.random()*0.04,
+                tessellation: 4
+            }, scene);
+            const rMat = new BABYLON.StandardMaterial('rMat', scene);
+            rMat.diffuseColor = new BABYLON.Color3(dark-0.002, dark, dark-0.001);
+            rMat.specularColor = new BABYLON.Color3(0, 0, 0);
+            root.material = rMat;
+            root.parent = group;
+            const angle = Math.random() * Math.PI * 2;
+            root.position = new BABYLON.Vector3(
+                Math.cos(angle) * 0.08,
+                0.1 + Math.random()*0.2,
+                Math.sin(angle) * 0.08
+            );
+            root.rotation.x = (Math.random()-0.5)*0.5;
+            root.rotation.z = (Math.random()-0.5)*0.5;
+            root.rotation.y = angle;
+        }
+    }
+
+    for (let j = 0; j < 5 + Math.floor(Math.random()*5); j++) {
+        const branch = BABYLON.MeshBuilder.CreateCylinder('branch', 
+            {height: 0.4 + Math.random()*1.8, diameter: 0.01 + Math.random()*0.025, tessellation: 4}, scene);
+        const bMat = new BABYLON.StandardMaterial('bMat', scene);
+        bMat.diffuseColor = new BABYLON.Color3(dark+0.005, dark+0.008, dark+0.003);
+        bMat.specularColor = new BABYLON.Color3(0, 0, 0);
+        branch.material = bMat;
+        branch.parent = group;
+        const angle = Math.random() * Math.PI * 2;
+        const h = 0.6 + Math.random() * 1.2;
+        branch.position = new BABYLON.Vector3(
+            Math.cos(angle) * 0.05,
+            h,
+            Math.sin(angle) * 0.05
+        );
+        branch.rotation.x = (Math.random()-0.5) * 1.0;
+        branch.rotation.z = (Math.random()-0.5) * 1.0;
+        branch.rotation.y = Math.random() * Math.PI * 2;
+    }
+
+    for (let j = 0; j < 10; j++) {
+        const moss = BABYLON.MeshBuilder.CreateSphere('moss', {diameter: 0.02 + Math.random()*0.06}, scene);
+        const mMat = new BABYLON.StandardMaterial('mMat', scene);
+        const g = 0.008 + Math.random() * 0.015;
+        mMat.diffuseColor = new BABYLON.Color3(g*0.2, g*0.8, g*0.1);
+        mMat.specularColor = new BABYLON.Color3(0, 0, 0);
+        moss.material = mMat;
+        moss.parent = group;
+        const angle = Math.random() * Math.PI * 2;
+        moss.position = new BABYLON.Vector3(
+            Math.cos(angle) * 0.06,
+            0.1 + Math.random() * height * 0.7,
+            Math.sin(angle) * 0.06
+        );
+    }
+
+    return group;
+}
+
+// Большие деревья по краям
+const bigTreePositions = [
+    { x: -5.5, z: -1, scale: 1.2 },
+    { x: 5.5, z: -0.5, scale: 1.0 },
+    { x: -6, z: -3, scale: 1.5 },
+    { x: 6, z: -2.5, scale: 1.3 },
+    { x: -4.5, z: -5, scale: 1.0 },
+    { x: 5, z: -4.5, scale: 0.9 }
+];
+bigTreePositions.forEach(p => createTree(p.x, p.z, p.scale, true));
+
+for (let i = 0; i < 180; i++) {
+    let x = (Math.random() - 0.5) * 55;
+    let z = -Math.random() * 65;
+    let onRoad = false;
+    for (let j = 0; j < pathPoints.length; j+=5) {
+        const p = pathPoints[j];
+        if (Math.abs(x - p.x) < 2.0 && Math.abs(z - p.z) < 1.2) { onRoad = true; break; }
+    }
+    if (!onRoad && Math.abs(x) < 12 && z > -8) onRoad = true;
+    if (!onRoad) {
+        const isBig = (Math.abs(x) > 8 && z > -15) || (Math.random() < 0.05);
+        createTree(x, z, 0.4 + Math.random() * 0.8, isBig);
+    }
+}
+
+// ============================================================
+// ОБЪЕКТЫ КУРСА (образы)
+// ============================================================
+const objects = [];
+const objPositions = [
+    { z: -6, x: -1.5 },
+    { z: -13, x: 2.0 },
+    { z: -20, x: -1.8 },
+    { z: -27, x: 1.5 },
+    { z: -34, x: 0.0 }
+];
+
+const label = document.getElementById('label3d');
+const riddleBox = document.getElementById('riddle-box');
+const riddleQ = document.getElementById('riddleQuestion');
+const riddleA = document.getElementById('riddleAnswer');
+
+SLIDES.forEach((data, i) => {
+    const pos = objPositions[i];
+    const color = new BABYLON.Color3(
+        parseInt(data.color.slice(1,3),16)/255,
+        parseInt(data.color.slice(3,5),16)/255,
+        parseInt(data.color.slice(5,7),16)/255
+    );
+
+    const group = new BABYLON.TransformNode('group');
+    group.position = new BABYLON.Vector3(pos.x, 0, pos.z);
+    group.userData = { 
+        slide: i, 
+        completed: false, 
+        title: data.title, 
+        lesson: data.lesson,
+        icon: data.icon,
+        riddle: data.riddle,
+        answer: data.answer,
+        appearProgress: 0
+    };
+
+    const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', {
+        diameter: 0.5 + i*0.02,
+        segments: 32
+    }, scene);
+    const mat = new BABYLON.PBRMaterial('mat', scene);
+    mat.albedoColor = color;
+    mat.emissiveColor = new BABYLON.Color3(0.2, 0.5, 1);
+    mat.emissiveIntensity = 0.3;
+    mat.roughness = 0.05;
+    mat.metallic = 0.1;
+    mat.alpha = 0.02;
+    sphere.material = mat;
+    sphere.position.y = 0.15;
+    sphere.parent = group;
+
+    const glow = BABYLON.MeshBuilder.CreateSphere('glow', {
+        diameter: 1.8 + i*0.15,
+        segments: 16
+    }, scene);
+    const gMat = new BABYLON.PBRMaterial('gMat', scene);
+    gMat.albedoColor = new BABYLON.Color3(0.1, 0.3, 0.7);
+    gMat.emissiveColor = new BABYLON.Color3(0.15, 0.4, 0.9);
+    gMat.emissiveIntensity = 0.05;
+    gMat.alpha = 0.005;
+    gMat.roughness = 1;
+    glow.material = gMat;
+    glow.position.y = 0.15;
+    glow.parent = group;
+
+    const ring = BABYLON.MeshBuilder.CreateTorus('ring', {diameter: 0.9 + i*0.05, thickness: 0.008}, scene);
+    const rMat = new BABYLON.PBRMaterial('rMat', scene);
+    rMat.albedoColor = new BABYLON.Color3(0.2, 0.5, 0.9);
+    rMat.emissiveColor = new BABYLON.Color3(0.2, 0.5, 1);
+    rMat.emissiveIntensity = 0.15;
+    rMat.alpha = 0.04;
+    rMat.roughness = 0.3;
+    rMat.metallic = 0.5;
+    ring.material = rMat;
+    ring.position.y = 0.15;
+    ring.rotation.x = Math.PI/2 + 0.15;
+    ring.rotation.z = 0.2;
+    ring.parent = group;
+
+    for (let j = 0; j < 15; j++) {
+        const p = BABYLON.MeshBuilder.CreateSphere('p', {diameter: 0.005 + Math.random()*0.015}, scene);
+        const pMat = new BABYLON.PBRMaterial('pMat', scene);
+        const brightness = 0.3 + Math.random()*0.5;
+        pMat.albedoColor = new BABYLON.Color3(0.3*brightness, 0.6*brightness, brightness);
+        pMat.emissiveColor = new BABYLON.Color3(0.2*brightness, 0.5*brightness, brightness);
+        pMat.emissiveIntensity = 0.5 + Math.random()*0.5;
+        pMat.alpha = 0.15 + Math.random()*0.3;
+        p.material = pMat;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 0.2 + Math.random() * 0.7;
+        p.position = new BABYLON.Vector3(
+            Math.cos(angle) * radius,
+            0.15 + Math.sin(angle * 2 + j) * 0.15,
+            Math.sin(angle) * radius
+        );
+        p.parent = group;
+        p.userData = { angle, radius, speed: 0.002 + Math.random()*0.005, yOff: Math.random()*Math.PI*2 };
+    }
+
+    sphere.actionManager = new BABYLON.ActionManager(scene);
+    sphere.actionManager.registerAction(
+        new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+            if (!group.userData.completed) {
+                initAudio();
+                group.userData.completed = true;
+                completed++;
+                mat.emissiveIntensity = 2.0;
+                mat.alpha = 0.3;
+                document.getElementById('modalIcon').textContent = data.icon;
+                document.getElementById('modalTitle').textContent = data.title;
+                document.getElementById('modalText').textContent = data.lesson;
+                document.getElementById('modalRiddle').textContent = `❓ ${data.riddle} — ${data.answer}`;
+                document.getElementById('modal').style.display = 'flex';
+                document.getElementById('progress').innerHTML = `${completed} <span>/ ${SLIDES.length}</span>`;
+                if (completed === SLIDES.length) {
+                    document.getElementById('title').textContent = '🌟 Свет найден';
+                    document.getElementById('desc').textContent = 'Ты нашёл ответы на свои вопросы.';
+                }
+            }
+        })
+    );
+
+    objects.push(group);
+});
+
+// ============================================================
+// ЦИКЛ
+// ============================================================
+scene.registerBeforeRender(() => {
+    const time = Date.now() * 0.001;
+    breathTime += 0.01;
+
+    const breath = Math.sin(breathTime * 1.0) * 0.005;
+    camera.position.y = 1.6 + breath;
+
+    const wasMoving = isMoving;
+    isMoving = Math.abs(camera.position.x) > 0.001 || Math.abs(camera.position.z) > 0.001;
+    if (isMoving && !wasMoving) stepTimer = 0;
+    if (isMoving) {
+        stepTimer += 0.01;
+        if (stepTimer > 0.45) { stepTimer = 0; playStep(); }
+    }
+
+    objects.forEach((group, i) => {
+        const dist = BABYLON.Vector3.Distance(camera.position, group.position);
+        const appearSpeed = 0.004;
+        if (dist < 18 && !group.userData.completed) {
+            group.userData.appearProgress = Math.min(1, group.userData.appearProgress + appearSpeed);
+        } else if (dist > 22) {
+            group.userData.appearProgress = Math.max(0, group.userData.appearProgress - appearSpeed * 0.2);
+        }
+        
+        const progress = group.userData.appearProgress;
+        const sphere = group.getChildren().find(c => c.name === 'sphere');
+        if (sphere && sphere.material) {
+            sphere.material.alpha = 0.01 + progress * 0.5;
+            sphere.material.emissiveIntensity = 0.1 + progress * 0.7;
+        }
+        if (!group.userData.completed && progress > 0.03) {
+            group.rotation.y += 0.0015;
+            if (sphere) {
+                const pulse = Math.sin(time * 0.6 + i * 1.3) * 0.5 + 0.5;
+                sphere.scaling = new BABYLON.Vector3(1 + pulse * 0.015 * progress, 1 + pulse * 0.015 * progress, 1 + pulse * 0.015 * progress);
+            }
+        }
+        group.getChildMeshes().forEach(m => {
+            if (m.userData && m.userData.angle !== undefined && progress > 0.03) {
+                m.userData.angle += m.userData.speed * progress;
+                const a = m.userData.angle;
+                const r = m.userData.radius;
+                m.position.x = Math.cos(a) * r;
+                m.position.z = Math.sin(a) * r;
+                m.position.y = 0.15 + Math.sin(a * 1.5 + m.userData.yOff) * 0.08 * progress;
+            }
+        });
+    });
+
+    const ray = new BABYLON.Ray(camera.position, camera.getDirection(new BABYLON.Vector3(0, 0, 1)));
+    ray.length = 20;
+    const hit = scene.pickWithRay(ray, (m) => {
+        return m.name === 'sphere' && m.parent && !m.parent.userData.completed && m.parent.userData.appearProgress > 0.2;
+    });
+
+    if (hit && hit.pickedMesh) {
+        const group = hit.pickedMesh.parent;
+        const idx = group.userData.slide;
+        const data = SLIDES[idx];
+        
+        label.innerHTML = `${data.icon} ${data.title} <span class="sub">❄️ ${data.riddle}</span>`;
+        label.style.opacity = '1';
+        
+        riddleQ.textContent = `❓ ${data.riddle}`;
+        riddleA.textContent = `✦ кликни, чтобы узнать ответ`;
+        riddleBox.style.opacity = '1';
+        riddleVisible = true;
+        
+        flash.intensity = 0.6 + Math.sin(time * 1.2) * 0.1;
+        fogTarget = 0.005;
+        document.getElementById('flashlight-icon').style.opacity = '0.3';
+    } else {
+        label.style.opacity = '0';
+        if (riddleVisible) {
+            riddleBox.style.opacity = '0';
+            riddleVisible = false;
+        }
+        flash.intensity = 0.3;
+        fogTarget = 0.015;
+        document.getElementById('flashlight-icon').style.opacity = '0.06';
+    }
+
+    scene.fogDensity += (fogTarget - scene.fogDensity) * 0.008;
+});
+
+// ============================================================
+// НАЧАЛО ИГРЫ
+// ============================================================
+function startGame() {
+    document.getElementById('intro').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('intro').style.display = 'none';
+    }, 1000);
+}
+
+// ============================================================
+// ЗАПУСК
+// ============================================================
+window.addEventListener('resize', () => engine.resize());
+engine.runRenderLoop(() => scene.render());
+
+console.log('❄️ Холодный лес. Ты — наблюдатель.');
+</script>
+</body>
+</html>
+
+================================================================================
+ФАЙЛ: templates\about.html
+================================================================================
+
+
+<!DOCTYPE html>
+
+<html>
+
+  <head><title>{{ title }}</title></head>
+
+  <body><h1>{{ title }}</h1></body>
+
+</html>
+
+
+
+
+================================================================================
+ФАЙЛ: templates\base.html
+================================================================================
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Путь наблюдателя{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #0b0e14;
+            color: #d4d9e6;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .navbar {
+            background: #141a24 !important;
+            border-bottom: 1px solid #2a3340;
+        }
+        .navbar-brand {
+            color: #e2c044 !important;
+            font-weight: bold;
+            font-size: 1.4rem;
+        }
+        .nav-link {
+            color: #aab3c9 !important;
+            transition: 0.3s;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #e2c044 !important;
+        }
+        .btn-lantern {
+            background: #e2c044;
+            color: #16213e !important;
+            font-weight: 600;
+        }
+        .btn-lantern:hover {
+            background: #f0d65a;
+            color: #0b0e14 !important;
+        }
+        .main-content {
+            padding: 40px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #5a6a7e;
+            border-top: 1px solid #1e2733;
+            margin-top: 40px;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
+                    <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">🔦 Фонарик</a></li>
+                    <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
+                    <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="{% url 'forum:index' %}">💬 Форум</a></li>
+                    <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
+                    <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
+
+                    {% if user.is_authenticated %}
+                        <li class="nav-item ms-2">
+                            <span class="nav-link text-warning">🕯️ {{ user.first_name|default:user.username }}</span>
+                        </li>
+                        <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="#">✏️ Оставить след</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#">Мой фонарик</a></li>
+                        <li class="nav-item">
+                            <form method="post" action="{% url 'logout' %}" style="display:inline;">
+                            {% csrf_token %}
+                             <input type="hidden" name="next" value="/">
+                             <button type="submit" class="nav-link text-danger btn btn-link p-0" style="border:none; background:none;">Выйти</button>
+                             </form>
+                        </li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link" href="#">Войти через VK</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <div class="footer">
+        <small>🔆 Путь наблюдателя — каждый день немного света</small>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+
+================================================================================
+ФАЙЛ: templates\flashlight.html
+================================================================================
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Фонарик — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .observer-layout {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 25px;
+    }
+
+    /* ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== */
+    .game-block {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .game-block:hover {
+        border-color: rgba(226,192,68,0.15);
+        box-shadow: 0 0 40px rgba(226,192,68,0.03);
+    }
+    .game-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .game-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .game-block .preview {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+    }
+    .game-block .preview .scene-icon {
+        font-size: 2rem;
+        opacity: 0.3;
+        margin-bottom: 4px;
+    }
+    .game-block .preview .scene-desc {
+        color: #5a6a7e;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+    .game-block .preview .scene-sub {
+        color: #3a4a5a;
+        font-size: 0.55rem;
+        letter-spacing: 1px;
+        margin-top: 4px;
+    }
+    .game-block .btn-enter {
+        display: inline-block;
+        padding: 10px 30px;
+        background: rgba(226,192,68,0.08);
+        border: 1px solid rgba(226,192,68,0.15);
+        border-radius: 50px;
+        color: #e2c044;
+        text-decoration: none;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .game-block .btn-enter:hover {
+        background: rgba(226,192,68,0.15);
+        border-color: rgba(226,192,68,0.3);
+        box-shadow: 0 0 30px rgba(226,192,68,0.05);
+    }
+
+    /* ===== 2. МЕНТАЛЬНАЯ КАРТА ===== */
+    .map-block {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .map-block:hover {
+        border-color: rgba(226,192,68,0.15);
+    }
+    .map-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .map-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .map-block .map-preview {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+    .map-block .map-preview .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        align-items: center;
+    }
+    .map-block .map-preview .node {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 50px;
+        font-size: 0.55rem;
+        letter-spacing: 1px;
+        border: 1px solid rgba(226,192,68,0.06);
+        color: #8a8a8a;
+        white-space: nowrap;
+    }
+    .map-block .map-preview .node.active {
+        border-color: rgba(226,192,68,0.2);
+        background: rgba(226,192,68,0.05);
+        color: #e2c044;
+    }
+    .map-block .map-preview .arrow {
+        color: #2a3a4a;
+        font-size: 0.6rem;
+    }
+    .map-block .map-preview .map-label {
+        color: #2a3a4a;
+        font-size: 0.45rem;
+        letter-spacing: 2px;
+        margin-top: 6px;
+    }
+    .map-block .btn-map {
+        display: inline-block;
+        padding: 8px 30px;
+        background: rgba(226,192,68,0.05);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 50px;
+        color: #5a7a8a;
+        text-decoration: none;
+        font-size: 0.7rem;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .map-block .btn-map:hover {
+        border-color: rgba(226,192,68,0.15);
+        color: #8a9aaa;
+    }
+
+    /* ===== 3. КУРС-АССОЦИАЦИИ ===== */
+    .course-block {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.5s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .course-block:hover {
+        border-color: rgba(226,192,68,0.15);
+    }
+    .course-block .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .course-block h2 {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .course-block .assoc-list {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .course-block .assoc-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.02);
+        transition: all 0.3s ease;
+    }
+    .course-block .assoc-item:hover {
+        border-color: rgba(226,192,68,0.04);
+        background: rgba(22,33,62,0.2);
+    }
+    .course-block .assoc-item .num {
+        color: #2a3a4a;
+        font-size: 0.5rem;
+        letter-spacing: 1px;
+        min-width: 22px;
+    }
+    .course-block .assoc-item .info {
+        flex: 1;
+    }
+    .course-block .assoc-item .info .title {
+        color: #d4d9e6;
+        font-size: 0.75rem;
+    }
+    .course-block .assoc-item .info .assoc {
+        color: #5a6a7e;
+        font-size: 0.6rem;
+        letter-spacing: 1px;
+    }
+    .course-block .assoc-item .badge {
+        padding: 2px 10px;
+        border-radius: 50px;
+        font-size: 0.45rem;
+        letter-spacing: 1px;
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.04);
+        color: #4a5a6a;
+        white-space: nowrap;
+    }
+
+    /* ===== АДАПТИВ ===== */
+    @media (max-width: 992px) {
+        .observer-layout {
+            grid-template-columns: 1fr 1fr;
+        }
+        .course-block {
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 768px) {
+        .observer-layout {
+            grid-template-columns: 1fr;
+            padding: 20px 15px;
+        }
+        .game-block, .map-block, .course-block {
+            padding: 20px 16px;
+        }
+        .course-block .assoc-item {
+            flex-wrap: wrap;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="observer-layout">
+
+    <!-- ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== -->
+    <div class="game-block">
+        <div class="block-icon">🔦</div>
+        <h2>Игра «Образы»</h2>
+        <div class="preview">
+            <div class="scene-icon">🌫️</div>
+            <div class="scene-desc">Туман · Фонарик · Загадки</div>
+            <div class="scene-sub">Наведи свет на образы — получи ответы</div>
+        </div>
+        <a href="{% url 'observer3d:world' %}" class="btn-enter">🔦 Войти в 3D-мир</a>
+    </div>
+
+    <!-- ===== 2. МЕНТАЛЬНАЯ КАРТА ===== -->
+    <div class="map-block">
+        <div class="block-icon">🧠</div>
+        <h2>Ментальная карта</h2>
+        <div class="map-preview">
+            <div class="row">
+                <span class="node active">👁️ Наблюдение</span>
+                <span class="arrow">→</span>
+                <span class="node">⚡ Стресс</span>
+                <span class="arrow">→</span>
+                <span class="node">🌿 Внимательность</span>
+            </div>
+            <div class="row">
+                <span class="arrow">↕</span>
+                <span class="node">🌀 Эмоции</span>
+                <span class="arrow">↕</span>
+                <span class="node">🌟 Путь</span>
+            </div>
+            <div class="map-label">связи между темами курса</div>
+        </div>
+        <a href="/map/" class="btn-map">🗺️ Открыть карту</a>
+    </div>
+
+    <!-- ===== 3. КУРС-АССОЦИАЦИИ ===== -->
+    <div class="course-block">
+        <div class="block-icon">📚</div>
+        <h2>Курс-ассоциации</h2>
+        <div class="assoc-list">
+            <div class="assoc-item">
+                <span class="num">01</span>
+                <div class="info">
+                    <div class="title">👁️ Введение в наблюдение</div>
+                    <div class="assoc">Ассоциация: «Свидетель»</div>
+                </div>
+                <span class="badge">основа</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">02</span>
+                <div class="info">
+                    <div class="title">⚡ Стресс и его проявления</div>
+                    <div class="assoc">Ассоциация: «Реакция»</div>
+                </div>
+                <span class="badge">распознавание</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">03</span>
+                <div class="info">
+                    <div class="title">🌿 Практика внимательности</div>
+                    <div class="assoc">Ассоциация: «Мост»</div>
+                </div>
+                <span class="badge">практика</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">04</span>
+                <div class="info">
+                    <div class="title">🌀 Эмоциональный интеллект</div>
+                    <div class="assoc">Ассоциация: «Энергия»</div>
+                </div>
+                <span class="badge">управление</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">05</span>
+                <div class="info">
+                    <div class="title">🌟 Путь к себе</div>
+                    <div class="assoc">Ассоциация: «Целое»</div>
+                </div>
+                <span class="badge">интеграция</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🔦 Путь наблюдателя — Фонарик');
+    });
+</script>
+
+{% endblock %}
+
+================================================================================
+ФАЙЛ: templates\home.html
+================================================================================
+
+{% extends 'base.html' %}
+
+{% block title %}Путь наблюдателя{% endblock %}
+
+{% block content %}
+<style>
+    .path-journey {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        position: relative;
+    }
+
+    .fog-layer {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+            radial-gradient(ellipse at 30% 20%, rgba(226,192,68,0.03) 0%, transparent 50%),
+            radial-gradient(ellipse at 70% 60%, rgba(226,192,68,0.04) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(226,192,68,0.02) 0%, transparent 50%);
+        animation: fogDrift 20s ease-in-out infinite;
+    }
+    @keyframes fogDrift {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(-20px, 10px); }
+        50% { transform: translate(10px, -15px); }
+        75% { transform: translate(15px, 5px); }
+    }
+
+    .step-container {
+        position: relative;
+        z-index: 1;
+        display: none;
+        animation: stepAppear 1s ease-out;
+    }
+    .step-container.active {
+        display: block;
+    }
+    @keyframes stepAppear {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .welcome-card {
+        text-align: center;
+        padding: 40px 30px;
+        border: 1px solid rgba(226,192,68,0.2);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(0,0,0,0.3), inset 0 0 30px rgba(226,192,68,0.03);
+    }
+    .welcome-card .lantern-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        animation: lanternGlow 3s ease-in-out infinite;
+        display: inline-block;
+    }
+    @keyframes lanternGlow {
+        0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.3); }
+        50% { text-shadow: 0 0 40px rgba(226,192,68,0.7), 0 0 80px rgba(226,192,68,0.3); }
+    }
+    .welcome-card h1 {
+        color: #e2c044;
+        font-size: 1.8rem;
+        margin-bottom: 25px;
+        font-weight: 300;
+        letter-spacing: 2px;
+    }
+    .welcome-card .philosophy {
+        color: #b0a898;
+        font-size: 1rem;
+        line-height: 2;
+        margin-bottom: 35px;
+    }
+    .welcome-card .philosophy em {
+        color: #e2c044;
+        font-style: normal;
+    }
+
+    .choice-buttons {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+    .btn-choice {
+        width: 100%;
+        max-width: 380px;
+        padding: 16px 28px;
+        border-radius: 50px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.4s ease;
+        text-decoration: none;
+        display: block;
+        text-align: center;
+    }
+    .btn-light {
+        background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
+        border: 2px solid #e2c044;
+        color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.15);
+    }
+    .btn-light:hover {
+        background: linear-gradient(135deg, rgba(226,192,68,0.25), rgba(226,192,68,0.1));
+        box-shadow: 0 0 40px rgba(226,192,68,0.4), 0 0 80px rgba(226,192,68,0.15);
+        transform: translateY(-2px);
+        color: #fff;
+    }
+    .btn-quiet {
+        background: transparent;
+        border: 2px solid rgba(176,168,152,0.4);
+        color: #b0a898;
+    }
+    .btn-quiet:hover {
+        border-color: #b0a898;
+        color: #fff;
+        box-shadow: 0 0 20px rgba(176,168,152,0.2);
+        transform: translateY(-2px);
+    }
+    .btn-custom-row {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        max-width: 380px;
+    }
+    .btn-custom-row input {
+        flex: 1;
+        padding: 14px 20px;
+        background: rgba(22,33,62,0.6);
+        border: 2px solid rgba(226,192,68,0.3);
+        border-radius: 50px;
+        color: #e0d5c1;
+        font-size: 0.95rem;
+        outline: none;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row input:focus {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.2);
+    }
+    .btn-custom-row input::placeholder {
+        color: #5a5550;
+    }
+    .btn-custom-row button {
+        padding: 14px 22px;
+        background: transparent;
+        border: 2px solid rgba(226,192,68,0.4);
+        border-radius: 50px;
+        color: #e2c044;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row button:hover {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.3);
+    }
+
+    .result-card {
+        text-align: center;
+        padding: 35px 25px;
+        border: 1px solid rgba(226,192,68,0.25);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 40px rgba(0,0,0,0.3);
+    }
+    .result-card p {
+        color: #c0b8a8;
+        font-size: 1.05rem;
+        line-height: 2;
+        margin-bottom: 10px;
+    }
+    .result-card em {
+        color: #e2c044;
+        font-style: normal;
+    }
+    .result-card .next-btn {
+        margin-top: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .welcome-card h1 {
+            font-size: 1.4rem;
+        }
+        .welcome-card {
+            padding: 30px 20px;
+        }
+    }
+</style>
+
+<div class="fog-layer"></div>
+
+<div class="path-journey">
+
+    <!-- ===== ШАГ 1: НАЧАЛО ПУТИ ===== -->
+    <div id="stepStart" class="step-container active">
+        <div class="welcome-card">
+            <div class="lantern-icon">🔦</div>
+            <h1>Ты в мире, заполненном туманом</h1>
+            <div class="philosophy">
+                Вокруг темно. В руках у тебя <em>фонарик</em>.<br><br>
+                Фонарик — это твой <em>выбор</em>. А выбор — это <em>направление</em>, а не правильность.<br><br>
+                Часто нас шантажируют выбором, где меньше трёх вариантов — это шантаж.<br>
+                Здесь ты можешь выбрать сам. Без давления. Без «правильно» и «неправильно».<br><br>
+                Я не буду мешать тебе делать твой выбор.<br>
+                Хочу, чтобы ты узнал <em>ответственность</em> и <em>цену выбора</em>.
+            </div>
+            <div class="choice-buttons">
+                <a href="#" class="btn-choice btn-light" onclick="goTo('stepFlashlight')">
+                    🔦 Включить фонарик
+                </a>
+                <a href="#" class="btn-choice btn-quiet" onclick="goTo('stepQuiet')">
+                    🌫️ Не включать. Побыть в тишине
+                </a>
+                <div class="btn-custom-row">
+                    <input type="text" id="customInput" placeholder="Напиши свой вариант...">
+                    <button onclick="goToCustom()">▶</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2: ВКЛЮЧИЛ ФОНАРИК ===== -->
+    <div id="stepFlashlight" class="step-container">
+        <div class="result-card">
+            <p>Ты включил фонарик.</p>
+            <p>Туман отступает, и ты начинаешь идти.</p>
+            <p>Вокруг проявляются <em>предметы, фрукты, машины, животные,</em><br>
+            <em>явления, погода, звуки, запахи.</em></p>
+            <p>Сможешь это всё запомнить?</p>
+            <br>
+            <p>Тогда предлагаю <em>начать создавать карту</em>.</p>
+            <p>Твоя карта не будет пустой.<br>Я расставлю направления и покажу дороги.</p>
+            <a href="{% url 'map' %}" class="btn-choice btn-light next-btn">🗺️ Посмотреть карту</a>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2а: НЕ ВКЛЮЧИЛ ===== -->
+    <div id="stepQuiet" class="step-container">
+        <div class="result-card">
+            <p>Ты выбрал не включать фонарик.</p>
+            <p>Это тоже путь. Иногда тишина говорит громче слов.</p>
+            <p>Побудь здесь столько, сколько нужно.</p>
+            <p>Когда будешь готов — фонарик всё ещё у тебя в руках.</p>
+            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+                🔦 Включить фонарик
+            </a>
+        </div>
+    </div>
+
+    <!-- ===== ШАГ 2б: СВОЙ ВАРИАНТ ===== -->
+    <div id="stepCustom" class="step-container">
+        <div class="result-card">
+            <p>Ты написал свой вариант:</p>
+            <p><em id="customText"></em></p>
+            <p>Это твой выбор. Только твой.<br>И ты несёшь за него ответственность.</p>
+            <p>Готов узнать, куда приведёт тебя этот путь?</p>
+            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+                🔦 Включить фонарик
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function goTo(stepId) {
+        document.querySelectorAll('.step-container').forEach(function(el) {
+            el.classList.remove('active');
+        });
+        var target = document.getElementById(stepId);
+        if (target) {
+            target.classList.add('active');
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function goToCustom() {
+        var input = document.getElementById('customInput');
+        var text = input.value.trim();
+        if (text === '') {
+            text = '(тишина)';
+        }
+        document.getElementById('customText').textContent = text;
+        input.value = '';
+        goTo('stepCustom');
+    }
+</script>
+{% endblock %}
+
+================================================================================
+ФАЙЛ: templates\map.html
+================================================================================
+
+{% extends 'base.html' %}
+
+{% block title %}Твоя карта — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<style>
+    /* Стили специально для страницы Карта */
+    .map-header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+    .map-header h1 {
+        color: #e2c044;
+        font-family: 'Playfair Display', serif;
+        font-size: 2.5rem;
+    }
+    .map-header p {
+        color: #b0a898;
+        font-size: 1.1rem;
+        font-style: italic;
+    }
+    .level-card {
+        background: rgba(22, 33, 62, 0.6);
+        border: 1px solid rgba(226, 192, 68, 0.2);
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 25px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    /* Золотая рамка для активного/первого уровня */
+    .level-card.active {
+        border: 1px solid #e2c044;
+        box-shadow: 0 0 30px rgba(226, 192, 68, 0.15);
+    }
+    .level-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .level-card h3 {
+        color: #e2c044;
+        margin-bottom: 15px;
+    }
+    .level-card p {
+        color: #c0b8a8;
+        line-height: 1.6;
+    }
+    .level-card .badge-level {
+        display: inline-block;
+        background: rgba(226, 192, 68, 0.15);
+        color: #e2c044;
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        margin-top: 10px;
+        border: 1px solid rgba(226, 192, 68, 0.3);
+    }
+    .btn-lock {
+        background: transparent;
+        border: 1px solid #5a5550;
+        color: #5a5550;
+        padding: 10px 25px;
+        border-radius: 50px;
+        cursor: not-allowed;
+        display: inline-block;
+        margin-top: 15px;
+    }
+    .btn-flashlight {
+        display: inline-block;
+        padding: 10px 25px;
+        border-radius: 50px;
+        text-decoration: none;
+        color: #e2c044;
+        border: 1px solid #e2c044;
+        background: transparent;
+        transition: all 0.3s ease;
+    }
+    .btn-flashlight:hover {
+        background: #e2c044;
+        color: #1a1a2e;
+        transform: scale(1.05);
+    }
+    
+    /* Блок с расписанием (как на вашем скриншоте) */
+    .schedule-card {
+        background: rgba(22, 33, 62, 0.6);
+        border: 1px solid rgba(226, 192, 68, 0.15);
+        border-radius: 20px;
+        padding: 25px;
+        height: 100%;
+    }
+    .schedule-card h5 {
+        color: #e2c044;
+        border-bottom: 1px solid rgba(226, 192, 68, 0.1);
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .schedule-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        color: #b0a898;
+        font-size: 0.95rem;
+    }
+    .schedule-item span:last-child {
+        color: #e2c044;
+        font-weight: 600;
+    }
+</style>
+
+<div class="row">
+    <!-- Основной контент: Уровни -->
+    <div class="col-lg-8">
+        <div class="map-header">
+            <h1>📖 Твоя карта</h1>
+            <p>Фонарик освещает путь. Выбери направление.</p>
+        </div>
+
+        <!-- Уровень 1: Новичок -->
+        <div class="level-card active">
+            <h3>🌱 Новичок</h3>
+            <p>Учимся строить карты. Первые шаги, образы, ассоциации. Ты узнаешь, как работает память и как создавать свои первые тропы.</p>
+            <div class="d-flex align-items-center gap-3">
+                <a href="{% url 'flashlight' %}" class="btn-flashlight">🔦 Посветить фонариком</a>
+                <span class="text-muted small">Чтобы попасть, просто посвети фонариком и начни создавать карту.</span>
+            </div>
+        </div>
+
+        <!-- Уровень 2: Опытный -->
+        <div class="level-card">
+            <h3>📚 Опытный</h3>
+            <p>Глубже погружаемся в карты. Сложные маршруты, скрытые связи, мнемотехника, работа с большими объемами информации.</p>
+            <div class="badge-level">🔒 Открывается после завершения уровня «Новичок»</div>
+            <div>
+                <span class="btn-lock">🔒 Пройдите Новичок</span>
+            </div>
+        </div>
+
+        <!-- Уровень 3: Наблюдатель -->
+        <div class="level-card">
+            <h3>🔭 Наблюдатель</h3>
+            <p>Смотрим фильмы через призму изученного, разбираем сцены, участвуем в психоанализе, создаем глубокие карты. Закрытое сообщество.</p>
+            <div class="badge-level">🔒 Открывается после прохождения Новичок и Опытный</div>
+            <div>
+                <span class="btn-lock">🔒 Пройдите Новичок и Опытный</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Правая колонка: Расписание групп -->
+    <div class="col-lg-4">
+        <div class="schedule-card">
+            <h5>📅 Бесплатные группы</h5>
+            <p class="text-muted small">Можно присоединиться в любой момент и выйти когда угодно. Лекции проводятся от трёх участников.</p>
+            
+            <div class="schedule-item">
+                <span>Введение в ментальные карты</span>
+                <span>Вт 19:00</span>
+            </div>
+            <div class="schedule-item">
+                <span>Образы и ассоциации</span>
+                <span>Чт 19:00</span>
+            </div>
+            <div class="schedule-item">
+                <span>Погружение: пробное</span>
+                <span>Сб 12:00</span>
+            </div>
+            <div class="schedule-item">
+                <span>Киноклуб: разбор фильма</span>
+                <span>Вс 18:00</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Кнопка возврата -->
+<div class="text-center mt-5">
+    <a href="/" class="text-muted text-decoration-none" style="transition: all 0.3s;">— Вернуться на Привал</a>
+</div>
+{% endblock %}
+
+================================================================================
+ФАЙЛ: templates\put.html
+================================================================================
+
+{% extends 'base.html' %}
+
+{% block title %}Тропы — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="text-center" style="color: #e2c044;">🗺️ Тропы</h1>
+    <p class="text-center text-muted">Здесь будут твои маршруты и пути</p>
+    
+    <div class="row mt-4">
+        <div class="col-md-6 mx-auto">
+            <div class="card bg-dark text-light border-secondary">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">🚶 В разработке</h5>
+                    <p class="card-text">Страница "Тропы" пока в процессе создания.</p>
+                    <p class="text-muted small">Вернись позже — здесь будут твои маршруты!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+================================================================================
+ФАЙЛ: vk_bot\exercises\__init__.py
+================================================================================
+
+
+
+================================================================================
+ФАЙЛ: vk_bot\exercises\stress_search.py
+================================================================================
+
+# vk_bot/exercises/stress_search.py
+import random
+import logging
+from vk_api.utils import get_random_id
+from keyboards import main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard
+
+logger = logging.getLogger(__name__)
+
+
+class StressSearchExercise:
+    def __init__(self, vk_session, api_client):
+        self.vk = vk_session
+        self.api = api_client
+        self.user_sessions = {}
+
+    def send_message(self, user_id, message, keyboard=None):
+        self.vk.method('messages.send', {
+            'user_id': user_id,
+            'message': message,
+            'random_id': get_random_id(),
+            'keyboard': keyboard
+        })
+
+    def _get_progress_bar(self, count, target=100):
+        percent = min(100, int((count / target) * 100))
+        filled = "▰" * (percent // 5)
+        empty = "▱" * (20 - len(filled))
+        return f"▰{filled}{empty}▱ {percent}%"
+
+    def _get_separator(self):
+        return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
+
+    def _save_progress(self, user_id, session):
+        data = {
+            'items': session.get('items', []),
+            'phase': session.get('phase', 'collecting'),
+            'question_index': session.get('question_index', 0),
+            'question_step': session.get('question_step', 1),
+            'answers': session.get('answers', []),
+            'current_item': session.get('current_item', {})
+        }
+        self.api.save_progress(user_id, 'stress_search', data)
+
+    def _load_progress(self, user_id):
+        progress = self.api.get_progress(user_id, 'stress_search')
+        if progress and progress.get('exists'):
+            data = progress.get('data', {})
+            return {
+                'items': data.get('items', []),
+                'phase': data.get('phase', 'collecting'),
+                'question_index': data.get('question_index', 0),
+                'question_step': data.get('question_step', 1),
+                'answers': data.get('answers', []),
+                'current_item': data.get('current_item', {})
+            }
+        return None
+
+    def _delete_progress(self, user_id):
+        self.api.delete_progress(user_id, 'stress_search')
+
+    def _handle_cancel(self, user_id, session):
+        self._save_progress(user_id, session)
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+        self.send_message(
+            user_id,
+            "🌫️ **Туман сгущается...**\n\n"
+            "· Ты сохранил свой путь\n"
+            "· Фонарик ждёт тебя, чтобы продолжить\n\n"
+            "✨ Возвращайся, когда будешь готов",
+            main_menu()
+        )
+        return True
+
+    def _handle_start_over(self, user_id):
+        self._delete_progress(user_id)
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+        
+        self.user_sessions[user_id] = {
+            'items': [],
+            'phase': 'collecting',
+            'question_index': 0,
+            'question_step': 1,
+            'answers': [],
+            'current_item': {}
+        }
+        
+        self._send_intro(user_id)
+
+    def start(self, user_id):
+        saved = self._load_progress(user_id)
+        if saved and len(saved.get('items', [])) > 0:
+            self.user_sessions[user_id] = saved
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║       🔦 СВЕТ В ТУМАНЕ          ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                f"· Ты уже записал: **{len(saved['items'])}** образов\n"
+                f"· Текущая точка: {self._get_phase_text(saved['phase'])}\n\n"
+                "🕯️ Продолжим путь?",
+                continue_keyboard()
+            )
+            return
+
+        self.user_sessions[user_id] = {
+            'items': [],
+            'phase': 'collecting',
+            'question_index': 0,
+            'question_step': 1,
+            'answers': [],
+            'current_item': {}
+        }
+        self._send_intro(user_id)
+
+    def _get_phase_text(self, phase):
+        if phase == 'collecting':
+            return "🌫️ Собираем образы"
+        elif phase == 'analysis':
+            return "🧠 Вглядываемся в туман"
+        elif phase == 'question':
+            return "🔍 Разбираем путь"
+        return "Неизвестно"
+
+    def _send_intro(self, user_id):
+        self.send_message(
+            user_id,
+            "╔══════════════════════════════════╗\n"
+            "║       🎯 ПОИСК СТРЕССА          ║\n"
+            "║       ПУТЬ НАБЛЮДАТЕЛЯ          ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            "🌫️ *Цель:* найти источники стресса в своей жизни.\n\n"
+            "📖 **Формула стресса:**\n"
+            "`Стресс = Прогноз ≠ Реальность`\n\n"
+            "🕯️ **Часть 1: Собираем образы**\n"
+            "· Что вызывает напряжение?\n"
+            "· Что забирает энергию?\n"
+            "· Запиши это и поставь оценку от 1 до 10\n\n"
+            "📌 **Пример:** `Работа 8`\n\n"
+            f"{self._get_separator()}\n"
+            "⏹️ **«Стоп»** — перейти к разбору\n"
+            "✅ **«Завершить»** — завершить путь",
+            exercise_keyboard()
+        )
+
+    def handle_message(self, user_id, text):
+        session = self.user_sessions.get(user_id)
+        
+        if not session:
+            self.start(user_id)
+            return
+
+        text_lower = text.lower().strip()
+
+        if "продолжи" in text_lower:
+            self._restore_progress(user_id, session)
+            return
+
+        if "заново" in text_lower:
+            self._handle_start_over(user_id)
+            return
+
+        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+            self._handle_cancel(user_id, session)
+            return
+
+        phase = session.get('phase')
+        
+        if phase == 'collecting':
+            self.handle_collect(user_id, text.strip(), session)
+        elif phase == 'analysis':
+            self.handle_analysis(user_id, text.strip(), session)
+        elif phase == 'question':
+            self.handle_question(user_id, text.strip(), session)
+
+    def _restore_progress(self, user_id, session):
+        phase = session.get('phase')
+        if phase == 'collecting':
+            count = len(session.get('items', []))
+            progress = self._get_progress_bar(count, target=100)
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║       🔦 ПРОДОЛЖАЕМ ПУТЬ        ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                f"· Уже записано: {count} образов\n"
+                f"· {progress}\n\n"
+                "🕯️ Продолжай или нажми **«Стоп»**.",
+                exercise_keyboard()
+            )
+        elif phase == 'analysis':
+            session['phase'] = 'question'
+            session['question_index'] = 0
+            session['answers'] = []
+            self._start_analysis(user_id, session)
+        elif phase == 'question':
+            self._show_current_question(user_id, session)
+
+    def handle_collect(self, user_id, text, session):
+        self._save_progress(user_id, session)
+
+        if text.lower() in ["стоп", "⏹️ стоп"]:
+            if len(session['items']) == 0:
+                self.send_message(
+                    user_id,
+                    "╔══════════════════════════════════╗\n"
+                    "║        🌫️ ТУМАН ПУСТ            ║\n"
+                    "╚══════════════════════════════════╝\n\n"
+                    "· Запиши хотя бы один образ\n"
+                    "· 📌 **Формат:** `Причина 9`\n\n"
+                    "❌ **«Отмена»** — сохранить путь",
+                    cancel_keyboard()
+                )
+                return
+            
+            session['phase'] = 'analysis'
+            self._save_progress(user_id, session)
+            self._start_analysis(user_id, session)
+            return
+
+        if text.lower() in ["завершить", "✅ завершить"]:
+            if len(session['items']) == 0:
+                self.send_message(
+                    user_id,
+                    "╔══════════════════════════════════╗\n"
+                    "║        🌫️ ТУМАН ПУСТ            ║\n"
+                    "╚══════════════════════════════════╝\n\n"
+                    "· Запиши хотя бы один образ\n"
+                    "· 📌 **Формат:** `Причина 9`\n\n"
+                    "❌ **«Отмена»** — сохранить путь",
+                    cancel_keyboard()
+                )
+                return
+            self._finish_exercise(user_id, session)
+            return
+
+        parts = text.rsplit(' ', 1)
+        if len(parts) != 2:
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║     🌫️ ОБРАЗ НЕ ПРОЯВИЛСЯ      ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                "· Нужно: `Причина 9` (слово + пробел + оценка)\n"
+                "· 📌 **Пример:** `Работа 8`\n\n"
+                "❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+            return
+
+        if not parts[1].isdigit():
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🌫️ НЕВЕРНАЯ ОЦЕНКА          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"· Оценка должна быть числом от 1 до 10\n"
+                f"· Ты написал: `{parts[1]}`\n\n"
+                f"· 📌 **Пример:** `Работа 8`\n\n"
+                f"❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+            return
+
+        rate = int(parts[1])
+        if not (1 <= rate <= 10):
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🌫️ ОЦЕНКА ВНЕ ДИАПАЗОНА    ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"· Оценка должна быть от 1 до 10\n"
+                f"· Ты поставил: `{rate}`\n\n"
+                f"❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+            return
+
+        item = parts[0].strip()
+        session['items'].append({'text': item, 'rate': rate})
+        count = len(session['items'])
+
+        replies = [
+            "🔦 Ты заметил образ. Он больше не в тумане.",
+            "🕯️ Свет фонарика выхватывает ещё один.",
+            "🌫️ Образ проявился. Ты его видишь.",
+            "✨ Ещё один фрагмент карты прояснился.",
+            "👁️ Ты разглядел. Хорошо.",
+            "📝 Образ записан. Путь становится яснее."
+        ]
+        reply = random.choice(replies)
+
+        progress = self._get_progress_bar(count, target=100)
+
+        self.send_message(
+            user_id,
+            f"╔══════════════════════════════════╗\n"
+            f"║       🔦 ОБРАЗ #{count}            ║\n"
+            f"╚══════════════════════════════════╝\n\n"
+            f"📌 *«{item}»* — {rate}/10\n\n"
+            f"· {progress}\n\n"
+            f"{reply}\n\n"
+            f"{self._get_separator()}\n"
+            f"· Продолжай или нажми **«Стоп»**",
+            exercise_keyboard()
+        )
+
+        self._save_progress(user_id, session)
+
+    def _start_analysis(self, user_id, session):
+        items = session.get('items', [])
+        
+        if len(items) == 0:
+            self.send_message(
+                user_id,
+                "🌫️ **Туман пуст...**\n"
+                "· Запиши хотя бы один образ",
+                exercise_keyboard()
+            )
+            return
+
+        self.send_message(
+            user_id,
+            "╔══════════════════════════════════╗\n"
+            "║       🧠 РАЗБОР ПУТИ            ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            f"· У тебя **{len(items)}** образов\n\n"
+            "· Теперь будем разбирать каждый\n"
+            "· Ты увидишь, где твоя карта расходится с реальностью\n\n"
+            f"{self._get_separator()}\n"
+            "➡️ Нажми **«Далее»**, чтобы начать",
+            analysis_keyboard()
+        )
+
+    def handle_analysis(self, user_id, text, session):
+        if text.lower() in ["завершить", "✅ завершить"]:
+            self._finish_exercise(user_id, session)
+            return
+
+        if text.lower() in ["далее", "➡️ далее"]:
+            self._show_current_question(user_id, session)
+        else:
+            self.send_message(
+                user_id,
+                "➡️ Нажми **«Далее»**\n"
+                "✅ **«Завершить»** — завершить путь",
+                analysis_keyboard()
+            )
+
+    def _show_current_question(self, user_id, session):
+        index = session.get('question_index', 0)
+        items = session.get('items', [])
+
+        if not items or index >= len(items):
+            self._finish_exercise(user_id, session)
+            return
+
+        item = items[index]
+        session['current_item'] = item
+        session['question_step'] = 1
+        
+        if 'answers' not in session:
+            session['answers'] = []
+        session['answers'].append({
+            'text': item['text'], 
+            'rate': item['rate']
+        })
+
+        self.send_message(
+            user_id,
+            f"╔══════════════════════════════════╗\n"
+            f"║    🔦 ОБРАЗ {index + 1}/{len(items)}          ║\n"
+            f"╚══════════════════════════════════╝\n\n"
+            f"📌 *«{item['text']}»* — {item['rate']}/10\n\n"
+            f"❓ **Вопрос 1/4:**\n"
+            f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
+            f"{self._get_separator()}\n"
+            f"❌ **«Отмена»** — сохранить путь",
+            cancel_keyboard()
+        )
+        
+        session['phase'] = 'question'
+        self._save_progress(user_id, session)
+
+    def handle_question(self, user_id, text, session):
+        text_lower = text.lower().strip()
+
+        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+            self._handle_cancel(user_id, session)
+            return
+
+        self._save_progress(user_id, session)
+
+        step = session.get('question_step', 1)
+        answers = session.get('answers', [])
+        current_answer = answers[-1] if answers else {}
+
+        current_item = session.get('current_item', {})
+        item_text = current_item.get('text', '')
+        item_rate = current_item.get('rate', '')
+        total = len(session.get('items', []))
+        index = session.get('question_index', 0)
+
+        if step == 1:
+            current_answer['ideal'] = text
+            session['question_step'] = 2
+
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"❓ **Вопрос 2/4:**\n"
+                f"· На сколько процентов это реально?\n"
+                f"· Напиши число от 0 до 100\n\n"
+                f"❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+
+        elif step == 2:
+            if not text.isdigit():
+                self.send_message(
+                    user_id,
+                    "❌ Напиши число от 0 до 100 (только цифры)",
+                    cancel_keyboard()
+                )
+                return
+
+            percent = int(text)
+            if not (0 <= percent <= 100):
+                self.send_message(
+                    user_id,
+                    "❌ Число должно быть от 0 до 100",
+                    cancel_keyboard()
+                )
+                return
+
+            current_answer['percent'] = percent
+            session['question_step'] = 3
+
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"· 📊 Реалистичность: {percent}%\n\n"
+                f"❓ **Вопрос 3/4:**\n"
+                f"· Почему так должно быть?\n"
+                f"· Объясни\n\n"
+                f"❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+
+        elif step == 3:
+            current_answer['why'] = text
+            session['question_step'] = 4
+
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"❓ **Вопрос 4/4:**\n\n"
+                f"· «Ты — пуп земли и пуп вселенной.\n"
+                f"· И всё должно быть по-твоему?»\n\n"
+                f"· Это нормально так думать 😊\n\n"
+                f"· Важно сформулировать:\n"
+                f"  · **Как** должно быть?\n"
+                f"  · **Почему**?\n"
+                f"  · **На сколько %** это реально?\n\n"
+                f"· Напиши свои размышления\n\n"
+                f"❌ **«Отмена»** — сохранить путь",
+                cancel_keyboard()
+            )
+
+        elif step == 4:
+            current_answer['reflection'] = text
+            session['question_step'] = 0
+
+            self._save_progress(user_id, session)
+
+            session['question_index'] += 1
+            
+            if session['question_index'] >= len(session.get('items', [])):
+                self._finish_exercise(user_id, session)
+            else:
+                self._show_current_question(user_id, session)
+
+    def _finish_exercise(self, user_id, session):
+        result_data = {
+            'type': 'stress_search',
+            'items': session.get('items', []),
+            'analysis': session.get('answers', []),
+            'total_count': len(session.get('items', []))
+        }
+
+        exercise_id = 1
+        self.api.save_result(user_id, exercise_id, result_data)
+
+        self._delete_progress(user_id)
+
+        streak_info = self.api.update_streak(user_id)
+        streak_text = ""
+        if streak_info:
+            streak = streak_info.get('streak', 0)
+            if streak >= 365:
+                streak_text = f"\n· 👑 Серия: **{streak}** дней! Ты легенда!"
+            elif streak >= 100:
+                streak_text = f"\n· 🔥 Серия: **{streak}** дней! Ты монстр!"
+            elif streak >= 30:
+                streak_text = f"\n· 🔥 Серия: **{streak}** дней! Круто!"
+            elif streak >= 7:
+                streak_text = f"\n· 🔥 Серия: **{streak}** дней! Отличная привычка!"
+            elif streak >= 3:
+                streak_text = f"\n· 🔥 Серия: **{streak}** дней! Так держать!"
+            else:
+                streak_text = f"\n· 🔥 Серия: **{streak}** день! Начинаем!"
+
+        total = len(session.get('items', []))
+        top = sorted(session.get('items', []), key=lambda x: x['rate'], reverse=True)[:3]
+        top_text = "\n".join([f"  · {b['text']} ({b['rate']}/10)" for b in top])
+
+        analyzed = len(session.get('answers', []))
+        avg_percent = 0
+        if analyzed > 0:
+            avg_percent = sum(a.get('percent', 0) for a in session.get('answers', [])) // analyzed
+
+        self.send_message(
+            user_id,
+            "╔══════════════════════════════════╗\n"
+            "║        ✨ ПУТЬ ЗАВЕРШЁН         ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            f"· 🔦 Ты осветил **{total}** образов в тумане\n"
+            f"· 🧠 Разобрано: **{analyzed}**\n"
+            f"· 📊 Реалистичность твоей карты: **{avg_percent}%**"
+            f"{streak_text}\n\n"
+            f"{self._get_separator()}\n"
+            f"🔥 **Топ-3 образа:**\n{top_text}\n\n"
+            f"{self._get_separator()}\n"
+            f"📖 **Формула стресса:**\n"
+            f"`Стресс = Прогноз ≠ Реальность`\n\n"
+            f"🌫️ Ты сделал шаг к ясности\n"
+            f"· Карта становится точнее\n"
+            f"· Туман рассеивается\n\n"
+            f"✨ Береги себя ❤️",
+            main_menu()
+        )
+
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+
+================================================================================
+ФАЙЛ: vk_bot\api_client.py
+================================================================================
+
+import requests
+import logging
+from config import API_BASE_URL, API_TOKEN
+
+logger = logging.getLogger(__name__)
+
+class APIClient:
+    def __init__(self):
+        self.base_url = API_BASE_URL
+        self.headers = {
+            "Authorization": f"Token {API_TOKEN}",
+            "Content-Type": "application/json"
+        }
+
+    def get_or_create_user(self, vk_id, first_name, last_name):
+        try:
+            response = requests.get(
+                f"{self.base_url}/users/?vk_id={vk_id}",
+                headers=self.headers,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                users = response.json()
+                if users and len(users) > 0:
+                    return users
+            
+            response = requests.post(
+                f"{self.base_url}/users/",
+                json={
+                    "vk_id": str(vk_id),
+                    "first_name": first_name,
+                    "last_name": last_name
+                },
+                headers=self.headers,
+                timeout=5
+            )
+            
+            if response.status_code in [200, 201]:
+                return response.json()
+            else:
+                logger.warning(f"API Error creating user: {response.status_code}")
+                return {"id": vk_id, "vk_id": vk_id, "first_name": first_name, "last_name": last_name}
+                
+        except Exception as e:
+            logger.error(f"Network error: {e}")
+            return {"id": vk_id, "vk_id": vk_id, "first_name": first_name, "last_name": last_name}
+
+    def get_exercises(self):
+        try:
+            response = requests.get(f"{self.base_url}/exercises/", headers=self.headers, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
+        return [
+            {"id": 1, "title": "Бесюльки", "description": "Исследуй свои раздражители"},
+            {"id": 2, "title": "Дыхание", "description": "Сделай 10 вдохов"},
+            {"id": 3, "title": "Эмоции", "description": "Запиши чувство"},
+            {"id": 4, "title": "Медитация", "description": "Пауза 30 сек"},
+            {"id": 5, "title": "Осознанность", "description": "Назови 3 предмета"}
+        ]
+
+    def save_result(self, user_vk_id, exercise_id, result_data):
+        try:
+            response = requests.post(
+                f"{self.base_url}/results/",
+                json={
+                    "user_vk_id": str(user_vk_id),
+                    "exercise_id": exercise_id,
+                    "result_data": result_data
+                },
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 201:
+                return response.json()
+            logger.warning(f"API Error saving result: {response.status_code}")
+            return {"status": "saved_local"}
+        except Exception as e:
+            logger.error(f"API save error: {e}")
+            return {"status": "saved_local"}
+
+    def get_user_results(self, vk_id):
+        try:
+            response = requests.get(f"{self.base_url}/results/?vk_id={vk_id}", headers=self.headers, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except:
+            pass
+        return []
+
+    def update_streak(self, user_vk_id):
+        try:
+            response = requests.post(
+                f"{self.base_url}/users/update_streak/",
+                json={"vk_id": str(user_vk_id)},
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return response.json()
+            logger.warning(f"API Error updating streak: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Streak update error: {e}")
+        return None
+
+    # ========== НОВЫЕ МЕТОДЫ ДЛЯ ПРОГРЕССА ==========
+
+    def save_progress(self, user_vk_id, exercise_type, data):
+        """Сохраняет прогресс упражнения"""
+        try:
+            response = requests.post(
+                f"{self.base_url}/progress/save/",
+                json={
+                    "vk_id": str(user_vk_id),
+                    "exercise_type": exercise_type,
+                    "data": data
+                },
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return response.json()
+            logger.warning(f"API Error saving progress: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Progress save error: {e}")
+        return None
+
+    def get_progress(self, user_vk_id, exercise_type):
+        """Получает сохранённый прогресс"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/progress/get/?vk_id={user_vk_id}&exercise_type={exercise_type}",
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logger.error(f"Progress get error: {e}")
+        return None
+
+    def delete_progress(self, user_vk_id, exercise_type):
+        """Удаляет прогресс после завершения"""
+        try:
+            response = requests.delete(
+                f"{self.base_url}/progress/delete/",
+                json={
+                    "vk_id": str(user_vk_id),
+                    "exercise_type": exercise_type
+                },
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return True
+        except Exception as e:
+            logger.error(f"Progress delete error: {e}")
+        return False
+
+================================================================================
+ФАЙЛ: vk_bot\config.py
+================================================================================
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Указываем путь к .env файлу в корне проекта
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Настройки VK
+VK_TOKEN = os.getenv("VK_GROUP_TOKEN")
+GROUP_ID = int(os.getenv("VK_GROUP_ID", "232481197"))
+
+# Настройки API Django
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
+API_TOKEN = os.getenv("API_TOKEN")
+
+# Проверка
+print("=" * 50)
+print("📁 .env файл:", env_path)
+print("🔑 VK_TOKEN:", "✅" if VK_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
+print("🆔 GROUP_ID:", GROUP_ID)
+print("🔑 API_TOKEN:", "✅" if API_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
+print("=" * 50)
+
+================================================================================
+ФАЙЛ: vk_bot\handlers.py
+================================================================================
+
+# vk_bot/handlers.py
+from vk_api.utils import get_random_id
+from api_client import APIClient
+from keyboards import main_menu, exercises_menu
+from exercises.stress_search import StressSearchExercise
+from datetime import datetime
+import re
+
+
+class BotHandlers:
+    def __init__(self, vk_session):
+        self.vk = vk_session
+        self.api = APIClient()
+        self.user_states = {}
+        self.stress_search = StressSearchExercise(vk_session, self.api)
+
+    def send_message(self, user_id, message, keyboard=None):
+        self.vk.method('messages.send', {
+            'user_id': user_id,
+            'message': message,
+            'random_id': get_random_id(),
+            'keyboard': keyboard
+        })
+
+    def show_placeholder(self, user_id, exercise_name, emoji):
+        self.send_message(
+            user_id,
+            "╔══════════════════════════════════╗\n"
+            f"║    {emoji} {exercise_name}            ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            "🌫️ Это упражнение пока в тумане.\n"
+            "· Скоро оно появится здесь ✨\n\n"
+            "· А пока попробуй **«Поиск стресса»**\n"
+            "· Свет фонарика уже ждёт тебя 🔥",
+            main_menu()
+        )
+
+    def _normalize_text(self, text):
+        emoji_pattern = re.compile("["
+            u"\U0001F600-\U0001F64F"
+            u"\U0001F300-\U0001F5FF"
+            u"\U0001F680-\U0001F6FF"
+            u"\U0001F700-\U0001F77F"
+            u"\U0001F780-\U0001F7FF"
+            u"\U0001F800-\U0001F8FF"
+            u"\U0001F900-\U0001F9FF"
+            u"\U0001FA00-\U0001FA6F"
+            u"\U0001FA70-\U0001FAFF"
+            u"\U00002702-\U000027B0"
+            u"\U000024C2-\U0001F251"
+            "]+", flags=re.UNICODE)
+        return emoji_pattern.sub('', text).strip().lower()
+
+    def handle_message(self, user_id, text, first_name, last_name):
+        if user_id in self.stress_search.user_sessions:
+            self.stress_search.handle_message(user_id, text)
+            return
+
+        if user_id not in self.user_states:
+            self.api.get_or_create_user(user_id, first_name, last_name)
+            self.user_states[user_id] = 'main'
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║       🔦 ПУТЬ НАБЛЮДАТЕЛЯ      ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                f"· Привет, {first_name}!\n"
+                "· Я провожу тебя через туман\n"
+                "· Выбери, куда направим свет фонарика:",
+                main_menu()
+            )
+            return
+
+        state = self.user_states.get(user_id, 'main')
+        text_clean = self._normalize_text(text)
+
+        if state == 'main':
+            if "упражн" in text_clean:
+                self.show_exercises(user_id)
+            elif "результат" in text_clean or "мои" in text_clean:
+                self.show_results(user_id)
+            else:
+                self.send_message(
+                    user_id,
+                    "🔦 Используй кнопки меню, чтобы выбрать путь.",
+                    main_menu()
+                )
+
+        elif state == 'selecting_exercise':
+            if "назад" in text_clean:
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "🔦 Возвращаемся на перекрёсток.",
+                    main_menu()
+                )
+
+            elif "поиск стресса" in text_clean or "стресс" in text_clean or text_clean == "1":
+                self.user_states[user_id] = 'main'
+                self.stress_search.start(user_id)
+                return
+
+            elif "список счастья" in text_clean or "счасть" in text_clean or text_clean == "2":
+                self.show_placeholder(user_id, "Список счастья", "✨")
+            elif "роли" in text_clean or text_clean == "3":
+                self.show_placeholder(user_id, "Мои роли", "🎭")
+            elif "осознанный выбор" in text_clean or "выбор" in text_clean or text_clean == "4":
+                self.show_placeholder(user_id, "Осознанный выбор", "🧘")
+            elif "дневник" in text_clean or text_clean == "5":
+                self.show_placeholder(user_id, "Дневник", "📖")
+            elif "стоп" in text_clean or text_clean == "6":
+                self.show_placeholder(user_id, "Стоп-техника", "🛑")
+            else:
+                self.send_message(
+                    user_id,
+                    "🔦 Выбери упражнение из списка кнопок.",
+                    exercises_menu()
+                )
+
+    def show_exercises(self, user_id):
+        self.user_states[user_id] = 'selecting_exercise'
+
+        message = (
+            "╔══════════════════════════════════╗\n"
+            "║       📋 ВЫБЕРИ УПРАЖНЕНИЕ      ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            "1️⃣ Поиск стресса — найди источники напряжения 🎯\n"
+            "2️⃣ Список счастья — вспомни, что радует ✨\n"
+            "3️⃣ Мои роли — кто ты в этом мире 🎭\n"
+            "4️⃣ Осознанный выбор — научись выбирать 🧘\n"
+            "5️⃣ Дневник — запиши свои мысли 📖\n"
+            "6️⃣ Стоп-техника — останови момент 🛑\n\n"
+            f"{self._get_separator()}\n"
+            "🔥 Нажми на кнопку, чтобы начать!"
+        )
+
+        self.send_message(user_id, message, exercises_menu())
+
+    def _get_separator(self):
+        return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
+
+    def show_results(self, user_id):
+        results = self.api.get_user_results(user_id)
+        
+        streak_info = self.api.update_streak(user_id)
+        streak_text = ""
+        if streak_info:
+            streak = streak_info.get('streak', 0)
+            if streak >= 365:
+                streak_text = f"👑 **{streak}** дней! Ты легенда!"
+            elif streak >= 100:
+                streak_text = f"🔥 **{streak}** дней! Ты монстр!"
+            elif streak >= 30:
+                streak_text = f"🔥 **{streak}** дней! Круто!"
+            elif streak >= 7:
+                streak_text = f"🔥 **{streak}** дней! Отличная привычка!"
+            elif streak >= 3:
+                streak_text = f"🔥 **{streak}** дней! Так держать!"
+            elif streak == 1:
+                streak_text = f"🔥 **{streak}** день! Начинаем!"
+
+        progress = self.api.get_progress(user_id, 'stress_search')
+        stress_progress = None
+        if progress and progress.get('exists'):
+            data = progress.get('data', {})
+            items = data.get('items', [])
+            if items:
+                stress_progress = {
+                    'count': len(items),
+                    'target': 100,
+                    'phase': data.get('phase', 'collecting')
+                }
+
+        stress_completed = False
+        for res in results:
+            if res.get('exercise_title', '').lower() == 'поиск стресса':
+                stress_completed = True
+                break
+
+        if not results and not stress_progress:
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║        🌫️ ПУТЬ ПУСТ            ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                "· Твой путь ещё пуст\n"
+                "· Начни с **«Поиска стресса»**\n"
+                "· Свет фонарика уже ждёт тебя 🔥",
+                main_menu()
+            )
+            return
+
+        message = "╔══════════════════════════════════╗\n"
+        message += "║        📊 МОЙ ПУТЬ              ║\n"
+        message += "╚══════════════════════════════════╝\n\n"
+        
+        if streak_text:
+            message += f"{streak_text}\n\n"
+
+        message += "📋 **Образы в тумане:**\n\n"
+
+        stress_status = "🔘 Не начат"
+        stress_detail = ""
+        
+        if stress_completed:
+            stress_status = "✅ Путь пройден"
+            for res in results:
+                if res.get('exercise_title', '').lower() == 'поиск стресса':
+                    if res.get('result_data'):
+                        if isinstance(res['result_data'], dict):
+                            if 'total_count' in res['result_data']:
+                                stress_detail = f" ({res['result_data']['total_count']} образов)"
+                            elif 'items' in res['result_data']:
+                                stress_detail = f" ({len(res['result_data']['items'])} образов)"
+                    break
+        elif stress_progress:
+            count = stress_progress['count']
+            phase = stress_progress['phase']
+            stress_detail = f" ({count}/100 образов)"
+            
+            if phase == 'collecting':
+                stress_status = "🔄 Собираем образы"
+            elif phase == 'analysis':
+                stress_status = "🔄 Разбираем путь"
+            elif phase == 'question':
+                stress_status = "🔄 Вглядываемся в туман"
+            else:
+                stress_status = "🔄 В пути"
+
+        message += f"**1. Поиск стресса** {stress_status}{stress_detail}\n"
+
+        exercise_names = [
+            ("2. Список счастья", "✨"),
+            ("3. Мои роли", "🎭"),
+            ("4. Осознанный выбор", "🧘"),
+            ("5. Дневник", "📖"),
+            ("6. Стоп-техника", "🛑")
+        ]
+        
+        for name, emoji in exercise_names:
+            completed = False
+            for res in results:
+                title_lower = res.get('exercise_title', '').lower()
+                clean_name = name.replace("2. ", "").replace("3. ", "").replace("4. ", "").replace("5. ", "").replace("6. ", "")
+                if title_lower == clean_name.lower():
+                    completed = True
+                    break
+            
+            if completed:
+                message += f"{name} ✅ Пройдено\n"
+            else:
+                message += f"{name} 🔘 Не начат\n"
+
+        message += "\n"
+
+        if results:
+            message += "📝 **Разобранные образы:**\n\n"
+            for i, res in enumerate(results[:10], 1):
+                status = "✅ Освещён" if res.get('is_approved') else "⏳ В тумане"
+                title = res.get('exercise_title', 'Упражнение')
+                
+                count_text = ""
+                if res.get('result_data'):
+                    if isinstance(res['result_data'], dict):
+                        if 'items' in res['result_data']:
+                            count = len(res['result_data']['items'])
+                            count_text = f" ({count} образов)"
+                        elif 'total_count' in res['result_data']:
+                            count = res['result_data']['total_count']
+                            count_text = f" ({count} образов)"
+                
+                message += f"{i}. {title}{count_text}\n"
+                message += f"   {status}\n"
+                
+                completed_at = res.get('completed_at')
+                if completed_at:
+                    try:
+                        dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                        message += f"   📅 {dt.strftime('%d.%m.%Y %H:%M')}\n"
+                    except:
+                        pass
+                message += "\n"
+
+        self.send_message(user_id, message, main_menu())
+
+================================================================================
+ФАЙЛ: vk_bot\keyboards.py
+================================================================================
+
+# vk_bot/keyboards.py
+from vk_api.keyboard import VkKeyboard, VkKeyboardColor
+
+def main_menu():
+    keyboard = VkKeyboard(one_time=False)
+    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("📊 Мои результаты", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
+def exercises_menu():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("1. Поиск стресса 🎯", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("2. Список счастья ✨", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("3. Мои роли 🎭", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("4. Осознанный выбор 🧘", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("5. Дневник 📖", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("6. Стоп-техника 🛑", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
+def exercise_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("⏹️ Стоп", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
+    return keyboard.get_keyboard()
+
+def analysis_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("➡️ Далее", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
+    return keyboard.get_keyboard()
+
+def cancel_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("❌ Отмена", color=VkKeyboardColor.NEGATIVE)
+    return keyboard.get_keyboard()
+
+def continue_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("Продолжить ✅", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("Начать заново 🔄", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
+================================================================================
+ФАЙЛ: vk_bot\main.py
+================================================================================
+
+from vk_api import VkApi
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
+from config import VK_TOKEN, GROUP_ID
+from handlers import BotHandlers
+import logging
+
+# Включаем подробное логирование
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def main():
+    print("🤖 Бот запущен!")
+    print("📨 Ожидаю сообщения...")
+    logger.info("Бот запущен")
+
+    vk_session = VkApi(token=VK_TOKEN)
+    longpoll = VkBotLongPoll(vk_session, GROUP_ID)
+    handlers = BotHandlers(vk_session)
+
+    for event in longpoll.listen():
+        logger.debug(f"Событие: {event.type}")
+        print(f"📩 Событие: {event.type}")
+
+        if event.type == VkBotEventType.MESSAGE_NEW:
+            msg = event.message
+            user_id = msg.from_id
+            text = msg.text
+
+            print(f"📩 Получено сообщение от {user_id}: {text}")
+            logger.info(f"Сообщение от {user_id}: {text}")
+
+            user_info = vk_session.method('users.get', {'user_ids': user_id})[0]
+            first_name = user_info.get('first_name', '')
+            last_name = user_info.get('last_name', '')
+
+            handlers.handle_message(user_id, text, first_name, last_name)
+
+
+if __name__ == "__main__":
+    main()
+
+================================================================================
+ФАЙЛ: vk_bot\models.py
+================================================================================
+
+# models.py - упрощённая версия без pydantic
+# Все данные берутся из API сайта
+
+class User:
+    def __init__(self, vk_id, first_name, last_name):
+        self.vk_id = vk_id
+        self.first_name = first_name
+        self.last_name = last_name
+
+class Exercise:
+    def __init__(self, id, title, description, type):
+        self.id = id
+        self.title = title
+        self.description = description
+        self.type = type
+
+class Result:
+    def __init__(self, user_vk_id, exercise_id, result_data,
+                 completed_at=None, is_approved=False,
+                 corrected_data=None, correction_comment=None):
+        self.id = None
+        self.user_vk_id = user_vk_id
+        self.exercise_id = exercise_id
+        self.result_data = result_data
+        self.completed_at = completed_at
+        self.is_approved = is_approved
+        self.corrected_data = corrected_data
+        self.correction_comment = correction_comment
+
+================================================================================
+ФАЙЛ: vk_bot\states.py
+================================================================================
+
+# states.py
+from enum import Enum
+
+class UserState(Enum):
+    MAIN = "main"
+    SELECTING_EXERCISE = "selecting_exercise"
+    VIEWING_EXERCISE = "viewing_exercise"
+    WAITING_RESULT = "waiting_result"  # ждём ответ от пользователя
+    VIEWING_RESULTS = "viewing_results"
+
+================================================================================
+ФАЙЛ: manage.py
+================================================================================
+
+#!/usr/bin/env python
+import os
+import sys
+
+def main():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Не могу импортировать Django. Проверьте, активировано ли виртуальное окружение."
+        ) from exc
+
+    execute_from_command_line(sys.argv)
+
+if __name__ == '__main__':
+    main()
+

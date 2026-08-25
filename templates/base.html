@@ -48,45 +48,233 @@
             border-top: 1px solid #1e2733;
             margin-top: 40px;
         }
+
+        .particles-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(226, 192, 68, 0.3);
+            animation: floatParticle linear infinite;
+            pointer-events: none;
+        }
+        @keyframes floatParticle {
+            0% { transform: translateY(100vh) scale(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-10vh) scale(1) rotate(720deg); opacity: 0; }
+        }
+
+        .page-transition {
+            animation: fadeSlideIn 0.6s ease-out;
+        }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card-glass {
+            background: rgba(22, 33, 62, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 192, 68, 0.06);
+            border-radius: 20px;
+            padding: 28px 24px;
+            transition: all 0.4s ease;
+        }
+        .card-glass:hover {
+            border-color: rgba(226, 192, 68, 0.12);
+            box-shadow: 0 0 40px rgba(226, 192, 68, 0.03);
+            transform: translateY(-3px);
+        }
+
+        .progress-ring {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+        .progress-ring .bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.04);
+            stroke-width: 4;
+        }
+        .progress-ring .fg {
+            fill: none;
+            stroke: #e2c044;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease;
+        }
+        .progress-ring .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e2c044;
+            font-size: 0.9rem;
+            font-weight: 300;
+        }
+
+        .navbar-toggler {
+            border-color: rgba(255,255,255,0.1);
+        }
+        .navbar-toggler-icon {
+            filter: invert(1);
+        }
+        @media (max-width: 992px) {
+            .navbar-collapse {
+                background: #141a24;
+                padding: 16px;
+                border-radius: 12px;
+                margin-top: 10px;
+                border: 1px solid #2a3340;
+            }
+        }
+
+        /* ===== ПОИСК В НАВБАРЕ ===== */
+        .search-nav {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+        .search-nav input {
+            padding: 4px 12px;
+            background: rgba(22,33,62,0.4);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 50px;
+            color: #d4d9e6;
+            font-size: 0.8rem;
+            width: 120px;
+            transition: width 0.3s ease, border-color 0.3s ease;
+        }
+        .search-nav input:focus {
+            outline: none;
+            border-color: rgba(226,192,68,0.3);
+            width: 180px;
+        }
+        .search-nav input::placeholder {
+            color: #4a5a6a;
+        }
+        @media (max-width: 992px) {
+            .search-nav {
+                margin-left: 0;
+                margin-top: 8px;
+                width: 100%;
+            }
+            .search-nav input {
+                width: 100%;
+            }
+            .search-nav input:focus {
+                width: 100%;
+            }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg">
-        <div class="container">
-            <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
-                    <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
-                    <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
-                    <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
+<div class="particles-container" id="particlesContainer"></div>
 
-                    {% if user.is_authenticated %}
-                        <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="#">✏️ Оставить след</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#">Мой фонарик</a></li>
-                    {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{% url 'admin:index' %}">Войти</a></li>
-                    {% endif %}
-                </ul>
-            </div>
+<nav class="navbar navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">🔦 Фонарик</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="{% url 'forum:index' %}">💬 Форум</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
+
+                <li class="nav-item search-nav">
+                    <form method="get" action="{% url 'search_course' %}" style="display:inline;">
+                        <input type="text" name="q" placeholder="🔍 Поиск..." value="{{ request.GET.q }}">
+                    </form>
+                </li>
+
+                {% if user.is_authenticated %}
+                    <li class="nav-item ms-2">
+                        <span class="nav-link text-warning">🕯️ {{ user.first_name|default:user.username }}</span>
+                    </li>
+                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="#">✏️ Оставить след</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'profile' %}">👤 Профиль</a></li>
+                    <li class="nav-item">
+                        <form method="post" action="{% url 'logout' %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="/">
+                            <button type="submit" class="nav-link text-danger btn btn-link p-0" style="border:none; background:none;">Выйти</button>
+                        </form>
+                    </li>
+                {% else %}
+                    <li class="nav-item"><a class="nav-link" href="#">Войти через VK</a></li>
+                {% endif %}
+            </ul>
         </div>
-    </nav>
-
-    <div class="main-content">
-        {% block content %}
-        {% endblock %}
     </div>
+</nav>
 
-    <div class="footer">
-        <small>🔆 Путь наблюдателя — каждый день немного света</small>
-    </div>
+<div class="main-content page-transition">
+    {% block content %}
+    {% endblock %}
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block extra_js %}{% endblock %}
+<div class="footer">
+    <small>🔆 Путь наблюдателя — каждый день немного света</small>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('particlesContainer');
+    const colors = ['rgba(226,192,68,0.15)', 'rgba(74,106,138,0.1)', 'rgba(255,255,255,0.05)'];
+    for (let i = 0; i < 30; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = 2 + Math.random() * 4;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.left = Math.random() * 100 + '%';
+        p.style.animationDuration = 15 + Math.random() * 25 + 's';
+        p.style.animationDelay = Math.random() * 20 + 's';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        container.appendChild(p);
+    }
+});
+
+let touchStartX = 0;
+document.addEventListener('touchstart', function(e) {
+    touchStartX = e.changedTouches[0].screenX;
+});
+document.addEventListener('touchend', function(e) {
+    const diff = touchStartX - e.changedTouches[0].screenX;
+    if (Math.abs(diff) < 50) return;
+    const links = document.querySelectorAll('.nav-link');
+    let currentIndex = -1;
+    links.forEach((link, i) => { if (link.classList.contains('active')) currentIndex = i; });
+    if (currentIndex === -1) return;
+    if (diff > 0 && currentIndex < links.length - 1) {
+        const nextLink = links[currentIndex + 1];
+        if (nextLink && nextLink.href) window.location.href = nextLink.href;
+    } else if (diff < 0 && currentIndex > 0) {
+        const prevLink = links[currentIndex - 1];
+        if (prevLink && prevLink.href) window.location.href = prevLink.href;
+    }
+});
+</script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

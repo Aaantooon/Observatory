@@ -1,9 +1,17 @@
 from django.urls import path
 from . import views
 
-app_name = 'myapp'
-
 urlpatterns = [
-    path('', views.ObservationListView.as_view(), name='observation_list'),
-    path('add/', views.ObservationCreateView.as_view(), name='observation_add'),
+    path('course/', views.course_index, name='course_index'),
+    path('course/module/<int:module_number>/', views.module_detail, name='course_module'),
+    path('course/module/<int:module_number>/complete/', views.complete_module, name='complete_module'),
+    path('course/module/<int:module_number>/comment/', views.add_comment, name='add_comment'),
+    path('course/module/<int:module_number>/bookmark/', views.toggle_bookmark, name='toggle_bookmark'),
+    path('api/course/progress/', views.course_progress_api, name='api_course_progress'),
+    path('api/course/complete/', views.complete_module_api, name='api_course_complete'),
+    path('api/course/association/', views.association_api, name='api_course_association'),
+    path('api/stats/', views.course_progress_api, name='api_stats'),
+    path('search/', views.search_course, name='search_course'),
+    path('export/', views.export_progress, name='export_progress'),
+    path('profile/edit/', views.edit_profile, name='edit_profile'),
 ]

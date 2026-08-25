@@ -1,0 +1,301 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Фонарик — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .observer-layout {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 25px;
+    }
+
+    .game-block, .map-block, .course-block {
+        background: rgba(22, 33, 62, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(226, 192, 68, 0.06);
+        border-radius: 20px;
+        padding: 28px 24px;
+        transition: all 0.4s ease;
+        display: flex;
+        flex-direction: column;
+    }
+    .game-block:hover, .map-block:hover, .course-block:hover {
+        border-color: rgba(226, 192, 68, 0.12);
+        box-shadow: 0 0 40px rgba(226, 192, 68, 0.03);
+        transform: translateY(-3px);
+    }
+
+    .block-icon {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    .block-title {
+        color: #e2c044;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+    .block-preview {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+    }
+    .block-preview .icon {
+        font-size: 2rem;
+        opacity: 0.3;
+        margin-bottom: 4px;
+    }
+    .block-preview .desc {
+        color: #5a6a7e;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+    .block-preview .sub {
+        color: #3a4a5a;
+        font-size: 0.55rem;
+        letter-spacing: 1px;
+        margin-top: 4px;
+    }
+
+    .btn-enter, .btn-map {
+        display: inline-block;
+        padding: 10px 30px;
+        background: rgba(226,192,68,0.08);
+        border: 1px solid rgba(226,192,68,0.15);
+        border-radius: 50px;
+        color: #e2c044;
+        text-decoration: none;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .btn-enter:hover, .btn-map:hover {
+        background: rgba(226,192,68,0.15);
+        border-color: rgba(226,192,68,0.3);
+        box-shadow: 0 0 30px rgba(226,192,68,0.05);
+    }
+
+    .assoc-list {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .assoc-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.02);
+        transition: all 0.3s ease;
+    }
+    .assoc-item:hover {
+        border-color: rgba(226,192,68,0.04);
+        background: rgba(22,33,62,0.2);
+    }
+    .assoc-item .num {
+        color: #2a3a4a;
+        font-size: 0.5rem;
+        letter-spacing: 1px;
+        min-width: 22px;
+    }
+    .assoc-item .info {
+        flex: 1;
+    }
+    .assoc-item .info .title {
+        color: #d4d9e6;
+        font-size: 0.75rem;
+    }
+    .assoc-item .info .assoc {
+        color: #5a6a7e;
+        font-size: 0.6rem;
+        letter-spacing: 1px;
+    }
+    .assoc-item .badge {
+        padding: 2px 10px;
+        border-radius: 50px;
+        font-size: 0.45rem;
+        letter-spacing: 1px;
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.04);
+        color: #4a5a6a;
+        white-space: nowrap;
+    }
+
+    .map-preview {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+    .map-preview .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        align-items: center;
+    }
+    .map-preview .node {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 50px;
+        font-size: 0.55rem;
+        letter-spacing: 1px;
+        border: 1px solid rgba(226,192,68,0.06);
+        color: #8a8a8a;
+        white-space: nowrap;
+    }
+    .map-preview .node.active {
+        border-color: rgba(226,192,68,0.2);
+        background: rgba(226,192,68,0.05);
+        color: #e2c044;
+    }
+    .map-preview .arrow {
+        color: #2a3a4a;
+        font-size: 0.6rem;
+    }
+    .map-preview .label {
+        color: #2a3a4a;
+        font-size: 0.45rem;
+        letter-spacing: 2px;
+        margin-top: 6px;
+    }
+
+    @media (max-width: 992px) {
+        .observer-layout {
+            grid-template-columns: 1fr 1fr;
+        }
+        .course-block {
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 768px) {
+        .observer-layout {
+            grid-template-columns: 1fr;
+            padding: 20px 15px;
+        }
+        .game-block, .map-block, .course-block {
+            padding: 20px 16px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="observer-layout">
+
+    <div class="game-block">
+        <div class="block-icon">🔦</div>
+        <div class="block-title">Игра «Образы»</div>
+        <div class="block-preview">
+            <div class="icon">🌫️</div>
+            <div class="desc">Туман · Фонарик · Загадки</div>
+            <div class="sub">Наведи свет на образы — получи ответы</div>
+        </div>
+        <a href="{% url 'observer3d:world' %}" class="btn-enter">🔦 Войти в 3D-мир</a>
+    </div>
+
+    <div class="map-block">
+        <div class="block-icon">🧠</div>
+        <div class="block-title">Ментальная карта</div>
+        <div class="map-preview">
+            <div class="row">
+                <span class="node active">👁️ Наблюдение</span>
+                <span class="arrow">→</span>
+                <span class="node">⚡ Стресс</span>
+                <span class="arrow">→</span>
+                <span class="node">🌿 Внимательность</span>
+            </div>
+            <div class="row">
+                <span class="arrow">↕</span>
+                <span class="node">🌀 Эмоции</span>
+                <span class="arrow">↕</span>
+                <span class="node">🌟 Путь</span>
+            </div>
+            <div class="label">связи между темами курса</div>
+        </div>
+        <a href="{% url 'map' %}" class="btn-map">🗺️ Открыть карту</a>
+    </div>
+
+    <div class="course-block">
+        <div class="block-icon">📚</div>
+        <div class="block-title">Курс-ассоциации</div>
+        <div class="assoc-list">
+            <div class="assoc-item">
+                <span class="num">01</span>
+                <div class="info">
+                    <div class="title">👁️ Введение в наблюдение</div>
+                    <div class="assoc">Ассоциация: «Свидетель»</div>
+                </div>
+                <span class="badge">основа</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">02</span>
+                <div class="info">
+                    <div class="title">⚡ Стресс и его проявления</div>
+                    <div class="assoc">Ассоциация: «Реакция»</div>
+                </div>
+                <span class="badge">распознавание</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">03</span>
+                <div class="info">
+                    <div class="title">🌿 Практика внимательности</div>
+                    <div class="assoc">Ассоциация: «Мост»</div>
+                </div>
+                <span class="badge">практика</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">04</span>
+                <div class="info">
+                    <div class="title">🌀 Эмоциональный интеллект</div>
+                    <div class="assoc">Ассоциация: «Энергия»</div>
+                </div>
+                <span class="badge">управление</span>
+            </div>
+            <div class="assoc-item">
+                <span class="num">05</span>
+                <div class="info">
+                    <div class="title">🌟 Путь к себе</div>
+                    <div class="assoc">Ассоциация: «Целое»</div>
+                </div>
+                <span class="badge">интеграция</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🔦 Путь наблюдателя — Фонарик');
+    });
+</script>
+
+{% endblock %}

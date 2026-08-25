@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Курс «Путь наблюдателя»{% endblock %}
+
+{% block extra_head %}
+<style>
+    .course-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .course-header {
+        text-align: center;
+        padding: 30px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+    }
+    .course-header h1 {
+        font-size: 2.5rem;
+        font-weight: 300;
+        color: #d4d9e6;
+        letter-spacing: 2px;
+    }
+    .course-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.1rem;
+    }
+    .progress-bar-wrap {
+        background: rgba(255,255,255,0.04);
+        border-radius: 10px;
+        height: 6px;
+        overflow: hidden;
+        margin: 20px 0;
+    }
+    .progress-bar-wrap .fill {
+        height: 100%;
+        background: linear-gradient(90deg, #e2c044, #f0d65a);
+        border-radius: 10px;
+        transition: width 0.8s ease;
+    }
+    .progress-stats {
+        display: flex;
+        justify-content: space-between;
+        color: #5a5a5a;
+        font-size: 0.85rem;
+    }
+    .modules-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 20px;
+    }
+    .module-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        transition: all 0.4s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+    .module-card:hover {
+        background: rgba(22,33,62,0.5);
+        border-color: rgba(226,192,68,0.1);
+        transform: translateX(4px);
+    }
+    .module-card.locked {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .module-card.locked:hover {
+        transform: none;
+        background: rgba(22,33,62,0.3);
+        border-color: rgba(255,255,255,0.04);
+    }
+    .module-card.completed {
+        border-color: rgba(226,192,68,0.1);
+    }
+    .module-card .num {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+        flex-shrink: 0;
+        background: rgba(255,255,255,0.05);
+        color: #5a5a5a;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .module-card.completed .num {
+        background: rgba(226,192,68,0.15);
+        color: #e2c044;
+        border-color: rgba(226,192,68,0.2);
+    }
+    .module-card.current .num {
+        background: #e2c044;
+        color: #0b0e14;
+        border-color: #e2c044;
+    }
+    .module-card .info {
+        flex: 1;
+    }
+    .module-card .info .title {
+        color: #d4d9e6;
+        font-size: 0.95rem;
+    }
+    .module-card .info .desc {
+        color: #5a5a5a;
+        font-size: 0.8rem;
+    }
+    .module-card .status-icon {
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="course-container">
+    <div class="course-header">
+        <h1>🗺️ Путь наблюдателя</h1>
+        <p class="subtitle">Курс по созданию карт реальности</p>
+    </div>
+
+    <div class="progress-bar-wrap">
+        <div class="fill" style="width: {{ progress_percent }}%"></div>
+    </div>
+    <div class="progress-stats">
+        <span>Прогресс</span>
+        <span>{{ progress_percent }}% • {{ completed_count }}/{{ total_count }}</span>
+    </div>
+
+    <div class="modules-grid">
+        {% for item in modules %}
+            {% if item.is_unlocked %}
+                <a href="{% url 'course_module' item.module.number %}" class="module-card {% if item.is_completed %}completed{% endif %} {% if item.is_current %}current{% endif %}">
+                    <span class="num">{{ item.module.number }}</span>
+                    <div class="info">
+                        <div class="title">{{ item.module.title }}</div>
+                        <div class="desc">{{ item.module.subtitle }}</div>
+                    </div>
+                    <span class="status-icon">{% if item.is_completed %}✅{% else %}▶{% endif %}</span>
+                </a>
+            {% else %}
+                <div class="module-card locked">
+                    <span class="num">{{ item.module.number }}</span>
+                    <div class="info">
+                        <div class="title">{{ item.module.title }}</div>
+                        <div class="desc">🔒 Заблокировано</div>
+                    </div>
+                    <span class="status-icon">🔒</span>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
