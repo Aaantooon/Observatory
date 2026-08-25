@@ -1,4 +1,5 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
 from myapp.models import Module, UserCourseProgress, UserStreak
 
 def home(request):
@@ -56,4 +57,20 @@ def put_view(request):
 def flashlight_view(request):
     return render(request, 'flashlight.html', {
         'title': 'Фонарик — Путь наблюдателя'
+    })
+
+@login_required
+def profile_view(request):
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    streak, _ = UserStreak.objects.get_or_create(user=request.user)
+    
+    return render(request, 'profile.html', {
+        'progress_percent': progress.get_progress_percent(),
+        'completed_count': progress.completed_modules.count(),
+        'total_count': Module.objects.filter(is_published=True).count(),
+        'streak': streak.current_streak,
+        'max_streak': streak.max_streak,
     })

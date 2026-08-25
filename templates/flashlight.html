@@ -14,32 +14,34 @@
         gap: 25px;
     }
 
-    /* ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== */
-    .game-block {
-        background: rgba(22,33,62,0.3);
-        border: 1px solid rgba(226,192,68,0.08);
+    .game-block, .map-block, .course-block {
+        background: rgba(22, 33, 62, 0.4);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(226, 192, 68, 0.06);
         border-radius: 20px;
         padding: 28px 24px;
-        transition: all 0.5s ease;
+        transition: all 0.4s ease;
         display: flex;
         flex-direction: column;
     }
-    .game-block:hover {
-        border-color: rgba(226,192,68,0.15);
-        box-shadow: 0 0 40px rgba(226,192,68,0.03);
+    .game-block:hover, .map-block:hover, .course-block:hover {
+        border-color: rgba(226, 192, 68, 0.12);
+        box-shadow: 0 0 40px rgba(226, 192, 68, 0.03);
+        transform: translateY(-3px);
     }
-    .game-block .block-icon {
+
+    .block-icon {
         font-size: 2.5rem;
         margin-bottom: 8px;
     }
-    .game-block h2 {
+    .block-title {
         color: #e2c044;
         font-size: 1.1rem;
         font-weight: 300;
         letter-spacing: 2px;
         margin-bottom: 4px;
     }
-    .game-block .preview {
+    .block-preview {
         background: rgba(0,0,0,0.25);
         border-radius: 12px;
         padding: 16px;
@@ -48,23 +50,24 @@
         border: 1px solid rgba(255,255,255,0.02);
         flex: 1;
     }
-    .game-block .preview .scene-icon {
+    .block-preview .icon {
         font-size: 2rem;
         opacity: 0.3;
         margin-bottom: 4px;
     }
-    .game-block .preview .scene-desc {
+    .block-preview .desc {
         color: #5a6a7e;
         font-size: 0.75rem;
         letter-spacing: 1px;
     }
-    .game-block .preview .scene-sub {
+    .block-preview .sub {
         color: #3a4a5a;
         font-size: 0.55rem;
         letter-spacing: 1px;
         margin-top: 4px;
     }
-    .game-block .btn-enter {
+
+    .btn-enter, .btn-map {
         display: inline-block;
         padding: 10px 30px;
         background: rgba(226,192,68,0.08);
@@ -77,37 +80,67 @@
         transition: all 0.3s ease;
         text-align: center;
     }
-    .game-block .btn-enter:hover {
+    .btn-enter:hover, .btn-map:hover {
         background: rgba(226,192,68,0.15);
         border-color: rgba(226,192,68,0.3);
         box-shadow: 0 0 30px rgba(226,192,68,0.05);
     }
 
-    /* ===== 2. МЕНТАЛЬНАЯ КАРТА ===== */
-    .map-block {
-        background: rgba(22,33,62,0.3);
-        border: 1px solid rgba(226,192,68,0.08);
-        border-radius: 20px;
-        padding: 28px 24px;
-        transition: all 0.5s ease;
+    .assoc-list {
+        background: rgba(0,0,0,0.25);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 12px 0 16px 0;
+        border: 1px solid rgba(255,255,255,0.02);
+        flex: 1;
         display: flex;
         flex-direction: column;
+        gap: 8px;
     }
-    .map-block:hover {
-        border-color: rgba(226,192,68,0.15);
+    .assoc-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        background: rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,255,255,0.02);
+        transition: all 0.3s ease;
     }
-    .map-block .block-icon {
-        font-size: 2.5rem;
-        margin-bottom: 8px;
+    .assoc-item:hover {
+        border-color: rgba(226,192,68,0.04);
+        background: rgba(22,33,62,0.2);
     }
-    .map-block h2 {
-        color: #e2c044;
-        font-size: 1.1rem;
-        font-weight: 300;
-        letter-spacing: 2px;
-        margin-bottom: 4px;
+    .assoc-item .num {
+        color: #2a3a4a;
+        font-size: 0.5rem;
+        letter-spacing: 1px;
+        min-width: 22px;
     }
-    .map-block .map-preview {
+    .assoc-item .info {
+        flex: 1;
+    }
+    .assoc-item .info .title {
+        color: #d4d9e6;
+        font-size: 0.75rem;
+    }
+    .assoc-item .info .assoc {
+        color: #5a6a7e;
+        font-size: 0.6rem;
+        letter-spacing: 1px;
+    }
+    .assoc-item .badge {
+        padding: 2px 10px;
+        border-radius: 50px;
+        font-size: 0.45rem;
+        letter-spacing: 1px;
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.04);
+        color: #4a5a6a;
+        white-space: nowrap;
+    }
+
+    .map-preview {
         background: rgba(0,0,0,0.25);
         border-radius: 12px;
         padding: 16px;
@@ -120,14 +153,14 @@
         justify-content: center;
         gap: 4px;
     }
-    .map-block .map-preview .row {
+    .map-preview .row {
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
         justify-content: center;
         align-items: center;
     }
-    .map-block .map-preview .node {
+    .map-preview .node {
         display: inline-block;
         padding: 4px 12px;
         border-radius: 50px;
@@ -137,118 +170,22 @@
         color: #8a8a8a;
         white-space: nowrap;
     }
-    .map-block .map-preview .node.active {
+    .map-preview .node.active {
         border-color: rgba(226,192,68,0.2);
         background: rgba(226,192,68,0.05);
         color: #e2c044;
     }
-    .map-block .map-preview .arrow {
+    .map-preview .arrow {
         color: #2a3a4a;
         font-size: 0.6rem;
     }
-    .map-block .map-preview .map-label {
+    .map-preview .label {
         color: #2a3a4a;
         font-size: 0.45rem;
         letter-spacing: 2px;
         margin-top: 6px;
     }
-    .map-block .btn-map {
-        display: inline-block;
-        padding: 8px 30px;
-        background: rgba(226,192,68,0.05);
-        border: 1px solid rgba(226,192,68,0.08);
-        border-radius: 50px;
-        color: #5a7a8a;
-        text-decoration: none;
-        font-size: 0.7rem;
-        letter-spacing: 2px;
-        transition: all 0.3s ease;
-        text-align: center;
-    }
-    .map-block .btn-map:hover {
-        border-color: rgba(226,192,68,0.15);
-        color: #8a9aaa;
-    }
 
-    /* ===== 3. КУРС-АССОЦИАЦИИ ===== */
-    .course-block {
-        background: rgba(22,33,62,0.3);
-        border: 1px solid rgba(226,192,68,0.08);
-        border-radius: 20px;
-        padding: 28px 24px;
-        transition: all 0.5s ease;
-        display: flex;
-        flex-direction: column;
-    }
-    .course-block:hover {
-        border-color: rgba(226,192,68,0.15);
-    }
-    .course-block .block-icon {
-        font-size: 2.5rem;
-        margin-bottom: 8px;
-    }
-    .course-block h2 {
-        color: #e2c044;
-        font-size: 1.1rem;
-        font-weight: 300;
-        letter-spacing: 2px;
-        margin-bottom: 4px;
-    }
-    .course-block .assoc-list {
-        background: rgba(0,0,0,0.25);
-        border-radius: 12px;
-        padding: 12px 16px;
-        margin: 12px 0 16px 0;
-        border: 1px solid rgba(255,255,255,0.02);
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .course-block .assoc-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 6px 10px;
-        border-radius: 8px;
-        background: rgba(0,0,0,0.15);
-        border: 1px solid rgba(255,255,255,0.02);
-        transition: all 0.3s ease;
-    }
-    .course-block .assoc-item:hover {
-        border-color: rgba(226,192,68,0.04);
-        background: rgba(22,33,62,0.2);
-    }
-    .course-block .assoc-item .num {
-        color: #2a3a4a;
-        font-size: 0.5rem;
-        letter-spacing: 1px;
-        min-width: 22px;
-    }
-    .course-block .assoc-item .info {
-        flex: 1;
-    }
-    .course-block .assoc-item .info .title {
-        color: #d4d9e6;
-        font-size: 0.75rem;
-    }
-    .course-block .assoc-item .info .assoc {
-        color: #5a6a7e;
-        font-size: 0.6rem;
-        letter-spacing: 1px;
-    }
-    .course-block .assoc-item .badge {
-        padding: 2px 10px;
-        border-radius: 50px;
-        font-size: 0.45rem;
-        letter-spacing: 1px;
-        background: rgba(226,192,68,0.04);
-        border: 1px solid rgba(226,192,68,0.04);
-        color: #4a5a6a;
-        white-space: nowrap;
-    }
-
-    /* ===== АДАПТИВ ===== */
     @media (max-width: 992px) {
         .observer-layout {
             grid-template-columns: 1fr 1fr;
@@ -265,9 +202,6 @@
         .game-block, .map-block, .course-block {
             padding: 20px 16px;
         }
-        .course-block .assoc-item {
-            flex-wrap: wrap;
-        }
     }
 </style>
 {% endblock %}
@@ -276,22 +210,20 @@
 
 <div class="observer-layout">
 
-    <!-- ===== 1. 3D-ИГРА (ОБРАЗЫ) ===== -->
     <div class="game-block">
         <div class="block-icon">🔦</div>
-        <h2>Игра «Образы»</h2>
-        <div class="preview">
-            <div class="scene-icon">🌫️</div>
-            <div class="scene-desc">Туман · Фонарик · Загадки</div>
-            <div class="scene-sub">Наведи свет на образы — получи ответы</div>
+        <div class="block-title">Игра «Образы»</div>
+        <div class="block-preview">
+            <div class="icon">🌫️</div>
+            <div class="desc">Туман · Фонарик · Загадки</div>
+            <div class="sub">Наведи свет на образы — получи ответы</div>
         </div>
         <a href="{% url 'observer3d:world' %}" class="btn-enter">🔦 Войти в 3D-мир</a>
     </div>
 
-    <!-- ===== 2. МЕНТАЛЬНАЯ КАРТА ===== -->
     <div class="map-block">
         <div class="block-icon">🧠</div>
-        <h2>Ментальная карта</h2>
+        <div class="block-title">Ментальная карта</div>
         <div class="map-preview">
             <div class="row">
                 <span class="node active">👁️ Наблюдение</span>
@@ -306,15 +238,14 @@
                 <span class="arrow">↕</span>
                 <span class="node">🌟 Путь</span>
             </div>
-            <div class="map-label">связи между темами курса</div>
+            <div class="label">связи между темами курса</div>
         </div>
-        <a href="/map/" class="btn-map">🗺️ Открыть карту</a>
+        <a href="{% url 'map' %}" class="btn-map">🗺️ Открыть карту</a>
     </div>
 
-    <!-- ===== 3. КУРС-АССОЦИАЦИИ ===== -->
     <div class="course-block">
         <div class="block-icon">📚</div>
-        <h2>Курс-ассоциации</h2>
+        <div class="block-title">Курс-ассоциации</div>
         <div class="assoc-list">
             <div class="assoc-item">
                 <span class="num">01</span>

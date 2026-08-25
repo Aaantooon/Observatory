@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Мой профиль — Путь наблюдателя{% endblock %}
+
+{% block content %}
+<style>
+    .profile-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .profile-header {
+        text-align: center;
+        padding: 30px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+    }
+    .profile-header .avatar {
+        font-size: 4rem;
+        margin-bottom: 12px;
+    }
+    .profile-header h1 {
+        color: #e2c044;
+        font-weight: 300;
+        font-size: 1.8rem;
+    }
+    .profile-header p {
+        color: #5a6a7e;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+    .stat-card {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+    }
+    .stat-card .value {
+        color: #e2c044;
+        font-size: 1.6rem;
+        font-weight: 300;
+    }
+    .stat-card .label {
+        color: #5a5a5a;
+        font-size: 0.65rem;
+        letter-spacing: 1px;
+        margin-top: 2px;
+    }
+    .achievements-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .achievement {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    .achievement.unlocked {
+        border-color: rgba(226,192,68,0.15);
+        background: rgba(226,192,68,0.04);
+    }
+    .achievement.locked {
+        opacity: 0.4;
+    }
+    .achievement .icon {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: 4px;
+    }
+    .achievement .name {
+        color: #d4d9e6;
+        font-size: 0.65rem;
+        letter-spacing: 1px;
+    }
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+</style>
+
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="avatar">🕯️</div>
+        <h1>{{ user.first_name|default:user.username }}</h1>
+        <p>{{ user.email }}</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="value">{{ progress_percent|default:0 }}%</div>
+            <div class="label">Прогресс</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">{{ completed_count|default:0 }}/{{ total_count|default:5 }}</div>
+            <div class="label">Модулей</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">🔥 {{ streak|default:0 }}</div>
+            <div class="label">Дней подряд</div>
+        </div>
+        <div class="stat-card">
+            <div class="value">🏆 {{ max_streak|default:0 }}</div>
+            <div class="label">Макс. серия</div>
+        </div>
+    </div>
+
+    <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:12px;">🏅 Достижения</h3>
+    <div class="achievements-grid">
+        <div class="achievement {% if streak >= 1 %}unlocked{% else %}locked{% endif %}">
+            <span class="icon">🔥</span>
+            <span class="name">Первый день</span>
+        </div>
+        <div class="achievement {% if streak >= 7 %}unlocked{% else %}locked{% endif %}">
+            <span class="icon">⚡</span>
+            <span class="name">7 дней</span>
+        </div>
+        <div class="achievement {% if streak >= 30 %}unlocked{% else %}locked{% endif %}">
+            <span class="icon">🌟</span>
+            <span class="name">30 дней</span>
+        </div>
+        <div class="achievement {% if completed_count >= 1 %}unlocked{% else %}locked{% endif %}">
+            <span class="icon">📖</span>
+            <span class="name">Первый модуль</span>
+        </div>
+        <div class="achievement {% if completed_count >= 5 %}unlocked{% else %}locked{% endif %}">
+            <span class="icon">🏆</span>
+            <span class="name">Курс пройден</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

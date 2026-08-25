@@ -17,9 +17,9 @@ urlpatterns = [
     path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
     path('flashlight/', views.flashlight_view, name='flashlight'),
+    path('profile/', views.profile_view, name='profile'),  # ← НОВЫЙ МАРШРУТ
     
     path('', include('myapp.urls')),
-    
     path('3d/', include('observer3d.urls')),
 ]
 
