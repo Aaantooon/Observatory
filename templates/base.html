@@ -140,44 +140,6 @@
                 border: 1px solid #2a3340;
             }
         }
-
-        /* ===== ПОИСК В НАВБАРЕ ===== */
-        .search-nav {
-            display: inline-flex;
-            align-items: center;
-            margin-left: 10px;
-        }
-        .search-nav input {
-            padding: 4px 12px;
-            background: rgba(22,33,62,0.4);
-            border: 1px solid rgba(255,255,255,0.04);
-            border-radius: 50px;
-            color: #d4d9e6;
-            font-size: 0.8rem;
-            width: 120px;
-            transition: width 0.3s ease, border-color 0.3s ease;
-        }
-        .search-nav input:focus {
-            outline: none;
-            border-color: rgba(226,192,68,0.3);
-            width: 180px;
-        }
-        .search-nav input::placeholder {
-            color: #4a5a6a;
-        }
-        @media (max-width: 992px) {
-            .search-nav {
-                margin-left: 0;
-                margin-top: 8px;
-                width: 100%;
-            }
-            .search-nav input {
-                width: 100%;
-            }
-            .search-nav input:focus {
-                width: 100%;
-            }
-        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -192,19 +154,13 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-center">
+            <ul class="navbar-nav ms-auto">
                 <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">🔦 Фонарик</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="{% url 'forum:index' %}">💬 Форум</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
-
-                <li class="nav-item search-nav">
-                    <form method="get" action="{% url 'search_course' %}" style="display:inline;">
-                        <input type="text" name="q" placeholder="🔍 Поиск..." value="{{ request.GET.q }}">
-                    </form>
-                </li>
 
                 {% if user.is_authenticated %}
                     <li class="nav-item ms-2">
