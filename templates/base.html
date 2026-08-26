@@ -158,7 +158,6 @@
                 <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">🔦 Фонарик</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/map/' in request.path %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="{% url 'forum:index' %}">💬 Форум</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/about/' in request.path %}active{% endif %}" href="{% url 'about' %}">Перекрёсток</a></li>
 
