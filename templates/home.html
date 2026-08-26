@@ -1,8 +1,213 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Путь наблюдателя</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #0b0e14;
+            color: #d4d9e6;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .navbar {
+            background: #141a24 !important;
+            border-bottom: 1px solid #2a3340;
+        }
+        .navbar-brand {
+            color: #e2c044 !important;
+            font-weight: bold;
+            font-size: 1.4rem;
+        }
+        .nav-link {
+            color: #aab3c9 !important;
+            transition: 0.3s;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #e2c044 !important;
+        }
+        .btn-lantern {
+            background: #e2c044;
+            color: #16213e !important;
+            font-weight: 600;
+        }
+        .btn-lantern:hover {
+            background: #f0d65a;
+            color: #0b0e14 !important;
+        }
+        .main-content {
+            padding: 40px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #5a6a7e;
+            border-top: 1px solid #1e2733;
+            margin-top: 40px;
+        }
 
-{% block title %}Путь наблюдателя{% endblock %}
+        .particles-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(226, 192, 68, 0.3);
+            animation: floatParticle linear infinite;
+            pointer-events: none;
+        }
+        @keyframes floatParticle {
+            0% { transform: translateY(100vh) scale(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-10vh) scale(1) rotate(720deg); opacity: 0; }
+        }
 
-{% block content %}
+        .page-transition {
+            animation: fadeSlideIn 0.6s ease-out;
+        }
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card-glass {
+            background: rgba(22, 33, 62, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 192, 68, 0.06);
+            border-radius: 20px;
+            padding: 28px 24px;
+            transition: all 0.4s ease;
+        }
+        .card-glass:hover {
+            border-color: rgba(226, 192, 68, 0.12);
+            box-shadow: 0 0 40px rgba(226, 192, 68, 0.03);
+            transform: translateY(-3px);
+        }
+
+        .progress-ring {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+        .progress-ring .bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.04);
+            stroke-width: 4;
+        }
+        .progress-ring .fg {
+            fill: none;
+            stroke: #e2c044;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease;
+        }
+        .progress-ring .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e2c044;
+            font-size: 0.9rem;
+            font-weight: 300;
+        }
+
+        .navbar-toggler {
+            border-color: rgba(255,255,255,0.1);
+        }
+        .navbar-toggler-icon {
+            filter: invert(1);
+        }
+        @media (max-width: 992px) {
+            .navbar-collapse {
+                background: #141a24;
+                padding: 16px;
+                border-radius: 12px;
+                margin-top: 10px;
+                border: 1px solid #2a3340;
+            }
+        }
+
+        .btn-primary-custom {
+            display: inline-block;
+            padding: 14px 32px;
+            background: rgba(226, 192, 68, 0.1);
+            border: 2px solid rgba(226, 192, 68, 0.3);
+            border-radius: 50px;
+            color: #e2c044;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+        }
+        .btn-primary-custom:hover {
+            background: rgba(226, 192, 68, 0.2);
+            border-color: #e2c044;
+            color: #e2c044;
+            text-decoration: none;
+        }
+
+        .btn-secondary-custom {
+            display: inline-block;
+            padding: 10px 24px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 50px;
+            color: #8a9aaa;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+        }
+        .btn-secondary-custom:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #d4d9e6;
+            text-decoration: none;
+        }
+    </style>
+    
+</head>
+<body>
+
+<div class="particles-container" id="particlesContainer"></div>
+
+<nav class="navbar navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="/">🔆 Путь наблюдателя</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link active" href="/">Привал</a></li>
+                <li class="nav-item"><a class="nav-link" href="/flashlight/">🔦 Фонарик</a></li>
+                <li class="nav-item"><a class="nav-link" href="/flashlight/">Карта</a></li>
+                <li class="nav-item"><a class="nav-link" href="/put/">Тропы</a></li>
+                <li class="nav-item"><a class="nav-link" href="/about/">Перекрёсток</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Войти через VK</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="main-content page-transition">
+    
 <style>
     .path-journey {
         max-width: 700px;
@@ -197,23 +402,6 @@
                 Хочу, чтобы ты узнал <em>ответственность</em> и <em>цену выбора</em>.
             </div>
 
-            {% if user.is_authenticated %}
-            <div class="profile-stats">
-                <div class="stat-item">
-                    <div class="value">{{ progress_percent|default:0 }}%</div>
-                    <div class="label">Прогресс</div>
-                </div>
-                <div class="stat-item">
-                    <div class="value">{{ completed_count|default:0 }}/{{ total_count|default:5 }}</div>
-                    <div class="label">Модулей</div>
-                </div>
-                <div class="stat-item">
-                    <div class="value">🔥 {{ streak|default:0 }}</div>
-                    <div class="label">Дней подряд</div>
-                </div>
-            </div>
-            {% endif %}
-
             <div class="choice-buttons">
                 <a href="#" class="btn-primary-custom" onclick="goTo('stepFlashlight')">
                     🔦 Включить фонарик
@@ -239,7 +427,8 @@
             <br>
             <p>Тогда предлагаю <em>начать создавать карту</em>.</p>
             <p>Твоя карта не будет пустой.<br>Я расставлю направления и покажу дороги.</p>
-            <a href="{% url 'map' %}" class="btn-primary-custom">🗺️ Посмотреть карту</a>
+            <!-- ✅ ССЫЛКА ИСПРАВЛЕНА -->
+            <a href="/flashlight/" class="btn-primary-custom">🗺️ Посмотреть карту</a>
         </div>
     </div>
 
@@ -292,4 +481,52 @@
         goTo('stepCustom');
     }
 </script>
-{% endblock %}
+
+</div>
+
+<div class="footer">
+    <small>🔆 Путь наблюдателя — каждый день немного света</small>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('particlesContainer');
+    const colors = ['rgba(226,192,68,0.15)', 'rgba(74,106,138,0.1)', 'rgba(255,255,255,0.05)'];
+    for (let i = 0; i < 30; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const size = 2 + Math.random() * 4;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        p.style.left = Math.random() * 100 + '%';
+        p.style.animationDuration = 15 + Math.random() * 25 + 's';
+        p.style.animationDelay = Math.random() * 20 + 's';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        container.appendChild(p);
+    }
+});
+
+let touchStartX = 0;
+document.addEventListener('touchstart', function(e) {
+    touchStartX = e.changedTouches[0].screenX;
+});
+document.addEventListener('touchend', function(e) {
+    const diff = touchStartX - e.changedTouches[0].screenX;
+    if (Math.abs(diff) < 50) return;
+    const links = document.querySelectorAll('.nav-link');
+    let currentIndex = -1;
+    links.forEach((link, i) => { if (link.classList.contains('active')) currentIndex = i; });
+    if (currentIndex === -1) return;
+    if (diff > 0 && currentIndex < links.length - 1) {
+        const nextLink = links[currentIndex + 1];
+        if (nextLink && nextLink.href) window.location.href = nextLink.href;
+    } else if (diff < 0 && currentIndex > 0) {
+        const prevLink = links[currentIndex - 1];
+        if (prevLink && prevLink.href) window.location.href = prevLink.href;
+    }
+});
+</script>
+
+</body>
+</html>
