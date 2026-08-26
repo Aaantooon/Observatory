@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'social_django', # <--- ДОБАВЛЕНО ДЛЯ ВХОДА ЧЕРЕЗ VK
+    #'social_django', # <--- ДОБАВЛЕНО ДЛЯ ВХОДА ЧЕРЕЗ VK
     
     # Ваши приложения
     'myapp',
@@ -75,7 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'machina.apps.forum_permission.middleware.ForumPermissionMiddleware',
-    'social_django.middleware.SocialAuthExceptionMiddleware', # <--- ДОБАВЛЕНО
+   # 'social_django.middleware.SocialAuthExceptionMiddleware', # <--- ДОБАВЛЕНО
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -96,8 +96,8 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'machina.core.context_processors.metadata',
                 # ДОБАВЛЕНО ДЛЯ КНОПОК ВХОДА
-                'social_django.context_processors.backends',
-                'social_django.context_processors.login_redirect',
+               # 'social_django.context_processors.backends',
+               # 'social_django.context_processors.login_redirect',
             ],
         },
     },
