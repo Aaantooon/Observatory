@@ -7,17 +7,17 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bot_api.urls')),
-    path('forum/', include('machina.urls')),
+    #path('forum/', include('machina.urls')),
     path('', include('social_django.urls', namespace='social')),
     path('accounts/', include('django.contrib.auth.urls')),
     
     path('', views.home, name='home'),
     path('about/', views.about, name='about'),
-    path('map/', views.map_view, name='map'),
+    path('map/', views.map_reactflow_view, name='map'),
     path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
     path('flashlight/', views.flashlight_view, name='flashlight'),
-    path('profile/', views.profile_view, name='profile'),  # ← НОВЫЙ МАРШРУТ
+    path('profile/', views.profile_view, name='profile'),
     
     path('', include('myapp.urls')),
     path('3d/', include('observer3d.urls')),
