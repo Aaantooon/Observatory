@@ -16,7 +16,7 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1', '5.42.103.203', 'putnabludatel.ru', 'www.putnabludatel.ru']
 
 # ===== INSTALLED_APPS =====
 INSTALLED_APPS = [
