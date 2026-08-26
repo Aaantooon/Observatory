@@ -1,4 +1,3 @@
-from django.contrib.auth.models import User
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -41,6 +40,7 @@ def course_index(request):
         'max_streak': streak.max_streak,
     })
 
+
 @login_required
 def module_detail(request, module_number):
     module = get_object_or_404(Module, number=module_number, is_published=True)
@@ -69,6 +69,7 @@ def module_detail(request, module_number):
         'streak': streak.current_streak,
         'profile': profile,
     })
+
 
 @login_required
 def complete_module(request, module_number):
@@ -106,6 +107,7 @@ def course_progress_api(request):
         'streak': streak.current_streak,
         'max_streak': streak.max_streak,
     })
+
 
 @login_required
 def complete_module_api(request):
@@ -146,6 +148,7 @@ def complete_module_api(request):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
 
 @login_required
 def association_api(request):
@@ -281,3 +284,103 @@ def toggle_bookmark(request, module_number):
         bookmark.delete()
         return JsonResponse({'bookmarked': False})
     return JsonResponse({'bookmarked': True})
+
+
+# ===== МЕНТАЛЬНАЯ КАРТА (React Flow) =====
+
+@login_required
+def mindmap_data(request):
+    """Возвращает данные для ментальной карты"""
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    modules = Module.objects.filter(is_published=True).order_by('number')
+    
+    nodes = []
+    edges = []
+    
+    # Корневой узел
+    nodes.append({
+        'id': 'root',
+        'type': 'mindmap',
+        'position': {'x': 50, 'y': 300},
+        'data': {
+            'label': '🚀 Путь наблюдателя',
+            'type': 'root',
+            'url': '/flashlight/',
+        },
+    })
+    
+    # Модули
+    for i, module in enumerate(modules):
+        is_completed = progress.is_module_completed(module)
+        is_current = progress.current_module and module.id == progress.current_module.id
+        
+        status = 'completed' if is_completed else ('current' if is_current else 'locked')
+        color = '#4ac06a' if is_completed else ('#4a7a9a' if is_current else '#4a4a4a')
+        
+        nodes.append({
+            'id': f'module_{module.id}',
+            'type': 'mindmap',
+            'position': {'x': 280, 'y': 150 + i * 150},
+            'data': {
+                'label': f"{'✅' if is_completed else '📖'} {module.title}",
+                'status': status,
+                'url': f'/course/module/{module.number}/',
+                'game_url': '/3d/',
+                'color': color,
+            },
+        })
+        
+        # Связь от корня
+        edges.append({
+            'id': f'e_root_{module.id}',
+            'source': 'root',
+            'target': f'module_{module.id}',
+            'style': {'stroke': '#2a3a4a', 'strokeWidth': 2},
+        })
+        
+        # Ассоциации как дочерние узлы
+        for j, assoc in enumerate(module.associations):
+            node_id = f'assoc_{module.id}_{j}'
+            nodes.append({
+                'id': node_id,
+                'type': 'mindmap',
+                'position': {
+                    'x': 480,
+                    'y': 150 + i * 150 + (j - (len(module.associations) - 1) / 2) * 60
+                },
+                'data': {
+                    'label': f'🔗 {assoc}',
+                    'type': 'association',
+                },
+            })
+            edges.append({
+                'id': f'e_{module.id}_{j}',
+                'source': f'module_{module.id}',
+                'target': node_id,
+                'style': {'stroke': '#2a3a4a', 'strokeWidth': 1.5},
+            })
+    
+    return JsonResponse({'nodes': nodes, 'edges': edges})
+
+
+@login_required
+def mindmap_save_position(request):
+    """Сохраняет позицию узла"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        node_id = data.get('nodeId')
+        x = data.get('x')
+        y = data.get('y')
+        
+        # TODO: Сохранять позиции в базу данных
+        # Например: UserMindMapNodePosition.objects.update_or_create(...)
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

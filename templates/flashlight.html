@@ -67,25 +67,6 @@
         margin-top: 4px;
     }
 
-    .btn-enter, .btn-map {
-        display: inline-block;
-        padding: 10px 30px;
-        background: rgba(226,192,68,0.08);
-        border: 1px solid rgba(226,192,68,0.15);
-        border-radius: 50px;
-        color: #e2c044;
-        text-decoration: none;
-        font-size: 0.75rem;
-        letter-spacing: 2px;
-        transition: all 0.3s ease;
-        text-align: center;
-    }
-    .btn-enter:hover, .btn-map:hover {
-        background: rgba(226,192,68,0.15);
-        border-color: rgba(226,192,68,0.3);
-        box-shadow: 0 0 30px rgba(226,192,68,0.05);
-    }
-
     .assoc-list {
         background: rgba(0,0,0,0.25);
         border-radius: 12px;
@@ -218,7 +199,7 @@
             <div class="desc">Туман · Фонарик · Загадки</div>
             <div class="sub">Наведи свет на образы — получи ответы</div>
         </div>
-        <a href="{% url 'observer3d:world' %}" class="btn-enter">🔦 Войти в 3D-мир</a>
+        <a href="{% url 'observer3d:world' %}" class="btn-primary-custom" style="text-align:center;">🔦 Войти в 3D-мир</a>
     </div>
 
     <div class="map-block">
@@ -240,7 +221,7 @@
             </div>
             <div class="label">связи между темами курса</div>
         </div>
-        <a href="{% url 'map' %}" class="btn-map">🗺️ Открыть карту</a>
+        <a href="{% url 'map' %}" class="btn-secondary-custom" style="text-align:center;">🗺️ Открыть карту</a>
     </div>
 
     <div class="course-block">

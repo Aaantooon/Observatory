@@ -86,41 +86,6 @@
         align-items: center;
         gap: 15px;
     }
-    .btn-choice {
-        width: 100%;
-        max-width: 380px;
-        padding: 16px 28px;
-        border-radius: 50px;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all 0.4s ease;
-        text-decoration: none;
-        display: block;
-        text-align: center;
-    }
-    .btn-light {
-        background: linear-gradient(135deg, rgba(226,192,68,0.15), rgba(226,192,68,0.05));
-        border: 2px solid #e2c044;
-        color: #e2c044;
-        box-shadow: 0 0 20px rgba(226,192,68,0.15);
-    }
-    .btn-light:hover {
-        background: linear-gradient(135deg, rgba(226,192,68,0.25), rgba(226,192,68,0.1));
-        box-shadow: 0 0 40px rgba(226,192,68,0.4), 0 0 80px rgba(226,192,68,0.15);
-        transform: translateY(-2px);
-        color: #fff;
-    }
-    .btn-quiet {
-        background: transparent;
-        border: 2px solid rgba(176,168,152,0.4);
-        color: #b0a898;
-    }
-    .btn-quiet:hover {
-        border-color: #b0a898;
-        color: #fff;
-        box-shadow: 0 0 20px rgba(176,168,152,0.2);
-        transform: translateY(-2px);
-    }
     .btn-custom-row {
         display: flex;
         gap: 10px;
@@ -178,9 +143,6 @@
     .result-card em {
         color: #e2c044;
         font-style: normal;
-    }
-    .result-card .next-btn {
-        margin-top: 20px;
     }
 
     .profile-stats {
@@ -253,10 +215,10 @@
             {% endif %}
 
             <div class="choice-buttons">
-                <a href="#" class="btn-choice btn-light" onclick="goTo('stepFlashlight')">
+                <a href="#" class="btn-primary-custom" onclick="goTo('stepFlashlight')">
                     🔦 Включить фонарик
                 </a>
-                <a href="#" class="btn-choice btn-quiet" onclick="goTo('stepQuiet')">
+                <a href="#" class="btn-secondary-custom" onclick="goTo('stepQuiet')">
                     🌫️ Не включать. Побыть в тишине
                 </a>
                 <div class="btn-custom-row">
@@ -277,7 +239,7 @@
             <br>
             <p>Тогда предлагаю <em>начать создавать карту</em>.</p>
             <p>Твоя карта не будет пустой.<br>Я расставлю направления и покажу дороги.</p>
-            <a href="{% url 'map' %}" class="btn-choice btn-light next-btn">🗺️ Посмотреть карту</a>
+            <a href="{% url 'map' %}" class="btn-primary-custom">🗺️ Посмотреть карту</a>
         </div>
     </div>
 
@@ -287,7 +249,7 @@
             <p>Это тоже путь. Иногда тишина говорит громче слов.</p>
             <p>Побудь здесь столько, сколько нужно.</p>
             <p>Когда будешь готов — фонарик всё ещё у тебя в руках.</p>
-            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+            <a href="#" class="btn-primary-custom" onclick="goTo('stepFlashlight')">
                 🔦 Включить фонарик
             </a>
         </div>
@@ -299,7 +261,7 @@
             <p><em id="customText"></em></p>
             <p>Это твой выбор. Только твой.<br>И ты несёшь за него ответственность.</p>
             <p>Готов узнать, куда приведёт тебя этот путь?</p>
-            <a href="#" class="btn-choice btn-light next-btn" onclick="goTo('stepFlashlight')">
+            <a href="#" class="btn-primary-custom" onclick="goTo('stepFlashlight')">
                 🔦 Включить фонарик
             </a>
         </div>

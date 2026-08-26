@@ -91,21 +91,6 @@
         display: inline-block;
         margin-top: 15px;
     }
-    .btn-flashlight {
-        display: inline-block;
-        padding: 10px 25px;
-        border-radius: 50px;
-        text-decoration: none;
-        color: #e2c044;
-        border: 1px solid #e2c044;
-        background: transparent;
-        transition: all 0.3s ease;
-    }
-    .btn-flashlight:hover {
-        background: #e2c044;
-        color: #1a1a2e;
-        transform: scale(1.05);
-    }
     
     .schedule-card {
         background: rgba(22, 33, 62, 0.6);
@@ -132,32 +117,18 @@
         color: #e2c044;
         font-weight: 600;
     }
-    
-    .progress-row {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 30px;
-        flex-wrap: wrap;
-    }
-    .progress-row .item {
-        background: rgba(22,33,62,0.3);
-        border: 1px solid rgba(255,255,255,0.04);
-        border-radius: 12px;
-        padding: 12px 24px;
+
+    .back-link {
+        display: inline-block;
+        margin-top: 30px;
+        color: #5a6a7e;
+        text-decoration: none;
+        transition: color 0.3s ease;
         text-align: center;
-        flex: 1;
-        min-width: 100px;
+        width: 100%;
     }
-    .progress-row .item .value {
-        color: #e2c044;
-        font-size: 1.4rem;
-        font-weight: 300;
-    }
-    .progress-row .item .label {
-        color: #5a5a5a;
-        font-size: 0.6rem;
-        letter-spacing: 1px;
-        margin-top: 2px;
+    .back-link:hover {
+        color: #aab3c9;
     }
 </style>
 
@@ -168,64 +139,34 @@
             <p>Фонарик освещает путь. Выбери направление.</p>
         </div>
 
-        {% if user.is_authenticated %}
-        <div class="progress-row">
-            <div class="item">
-                <div class="value">{{ progress_percent|default:0 }}%</div>
-                <div class="label">Прогресс</div>
-            </div>
-            <div class="item">
-                <div class="value">{{ completed_count|default:0 }}/{{ total_count|default:5 }}</div>
-                <div class="label">Модулей</div>
-            </div>
-            <div class="item">
-                <div class="value">🔥 {{ streak|default:0 }}</div>
-                <div class="label">Дней подряд</div>
-            </div>
-        </div>
-        {% endif %}
-
         <div class="level-card active">
             <span class="status-badge active">✅ Доступно</span>
             <h3>🌱 Новичок</h3>
             <p>Учимся строить карты. Первые шаги, образы, ассоциации. Ты узнаешь, как работает память и как создавать свои первые тропы.</p>
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <a href="{% url 'flashlight' %}" class="btn-flashlight">🔦 Посветить фонариком</a>
-                <a href="{% url 'course_module' 1 %}" class="btn-flashlight">📚 Начать курс</a>
+                <a href="{% url 'flashlight' %}" class="btn-primary-custom">🔦 Посветить фонариком</a>
                 <span class="text-muted small">Чтобы попасть, просто посвети фонариком и начни создавать карту.</span>
             </div>
         </div>
 
-        <div class="level-card {% if progress_percent >= 20 %}active{% else %}locked{% endif %}">
-            <span class="status-badge {% if progress_percent >= 20 %}completed{% else %}locked{% endif %}">
-                {% if progress_percent >= 20 %}✅ Пройдено{% else %}🔒 Заблокировано{% endif %}
-            </span>
+        <div class="level-card locked">
+            <span class="status-badge locked">🔒 Заблокировано</span>
             <h3>📚 Опытный</h3>
             <p>Глубже погружаемся в карты. Сложные маршруты, скрытые связи, мнемотехника, работа с большими объемами информации.</p>
-            {% if progress_percent >= 20 %}
-                <a href="{% url 'course_module' 2 %}" class="btn-flashlight">📚 Перейти к модулю</a>
-            {% else %}
-                <div class="badge-level">🔒 Открывается после завершения уровня «Новичок»</div>
-                <div>
-                    <span class="btn-lock">🔒 Пройдите Новичок (20%)</span>
-                </div>
-            {% endif %}
+            <div class="badge-level">🔒 Открывается после завершения уровня «Новичок»</div>
+            <div>
+                <span class="btn-lock">🔒 Пройдите Новичок</span>
+            </div>
         </div>
 
-        <div class="level-card {% if progress_percent >= 60 %}active{% else %}locked{% endif %}">
-            <span class="status-badge {% if progress_percent >= 60 %}completed{% else %}locked{% endif %}">
-                {% if progress_percent >= 60 %}✅ Доступно{% else %}🔒 Заблокировано{% endif %}
-            </span>
+        <div class="level-card locked">
+            <span class="status-badge locked">🔒 Заблокировано</span>
             <h3>🔭 Наблюдатель</h3>
             <p>Смотрим фильмы через призму изученного, разбираем сцены, участвуем в психоанализе, создаем глубокие карты. Закрытое сообщество.</p>
-            {% if progress_percent >= 60 %}
-                <a href="{% url 'course_module' 3 %}" class="btn-flashlight">📚 Перейти к модулю</a>
-            {% else %}
-                <div class="badge-level">🔒 Открывается после прохождения Новичок и Опытный</div>
-                <div>
-                    <span class="btn-lock">🔒 Пройдите 60% курса</span>
-                </div>
-            {% endif %}
+            <div class="badge-level">🔒 Открывается после прохождения Новичок и Опытный</div>
+            <div>
+                <span class="btn-lock">🔒 Пройдите Новичок и Опытный</span>
+            </div>
         </div>
     </div>
 
@@ -254,24 +195,7 @@
     </div>
 </div>
 
-<div class="text-center mt-5">
-    <a href="/" class="text-muted text-decoration-none" style="transition: all 0.3s;">— Вернуться на Привал</a>
+<div class="text-center mt-4">
+    <a href="{% url 'home' %}" class="back-link">— Вернуться на Привал</a>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Автоматическое обновление прогресса
-    fetch('/api/course/progress/')
-        .then(r => r.json())
-        .then(data => {
-            const percent = data.progress_percent || 0;
-            document.querySelectorAll('.progress-row .value').forEach(el => {
-                if (el.textContent.includes('%')) {
-                    el.textContent = percent + '%';
-                }
-            });
-        })
-        .catch(e => console.log('Прогресс загружен позже'));
-});
-</script>
 {% endblock %}

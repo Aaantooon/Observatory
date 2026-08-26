@@ -1,0 +1,406 @@
+{% extends 'base.html' %}
+
+{% block title %}Ментальная карта — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .map-page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        height: calc(100vh - 120px);
+        display: flex;
+        flex-direction: column;
+    }
+    .map-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .map-header h1 {
+        color: #e2c044;
+        font-weight: 300;
+        letter-spacing: 2px;
+        font-size: 1.4rem;
+        margin: 0;
+    }
+    .map-header .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .map-header .actions button {
+        padding: 6px 18px;
+        border-radius: 50px;
+        border: 1px solid rgba(226,192,68,0.08);
+        background: rgba(226,192,68,0.04);
+        color: #8a9aaa;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+    }
+    .map-header .actions button:hover {
+        background: rgba(226,192,68,0.08);
+        border-color: rgba(226,192,68,0.15);
+        color: #e2c044;
+    }
+    .map-header .actions button.primary {
+        background: rgba(226,192,68,0.06);
+        border: 1px solid rgba(226,192,68,0.12);
+        color: #e2c044;
+    }
+    .map-header .actions button.primary:hover {
+        background: rgba(226,192,68,0.12);
+        box-shadow: 0 0 30px rgba(226,192,68,0.03);
+    }
+    #mindmap-container {
+        flex: 1;
+        background: rgba(22,33,62,0.2);
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.02);
+        min-height: 500px;
+        position: relative;
+    }
+    @media (max-width: 768px) {
+        .map-page {
+            height: calc(100vh - 80px);
+            padding: 12px;
+        }
+        .map-header h1 {
+            font-size: 1.1rem;
+        }
+        .map-header .actions button {
+            font-size: 0.65rem;
+            padding: 4px 12px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="map-page">
+    <div class="map-header">
+        <h1>🧠 Ментальная карта</h1>
+        <div class="actions">
+            <button class="primary" onclick="exportPNG()">📥 PNG</button>
+            <button onclick="window.location.reload()">🔄 Сбросить</button>
+        </div>
+    </div>
+
+    <div id="mindmap-container">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#5a6a7e;font-size:1.1rem;letter-spacing:2px;">
+            <span style="margin-right:16px;animation:spin 1s linear infinite;">🔦</span>
+            Загружаем карту...
+        </div>
+    </div>
+
+    <div style="text-align:center;margin-top:12px;">
+        <p style="color:#2a3a4a;font-size:0.6rem;letter-spacing:1px;">
+            ✦ Перетаскивай узлы · Клик по узлу → открыть модуль · 🎮 → запустить игру
+        </p>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/reactflow@11/dist/umd/index.js"></script>
+
+<script>
+// ===== РАСПАКОВКА UMD-МОДУЛЯ =====
+// В UMD-сборке reactflow компоненты лежат внутри объекта
+const ReactFlowModule = window.ReactFlow;
+const ReactFlowComponent = ReactFlowModule.default || ReactFlowModule.ReactFlow || ReactFlowModule;
+const Background = ReactFlowModule.Background;
+const Controls = ReactFlowModule.Controls;
+const MiniMap = ReactFlowModule.MiniMap;
+
+// ===== КОНСТАНТЫ =====
+const nodeStyles = {
+    root: {
+        background: 'linear-gradient(135deg, rgba(226,192,68,0.2), rgba(226,192,68,0.05))',
+        border: '2px solid #e2c044',
+        borderRadius: '12px',
+        padding: '12px 24px',
+        color: '#e2c044',
+        fontSize: '18px',
+        fontWeight: '600',
+        minWidth: '200px',
+        textAlign: 'center',
+        boxShadow: '0 0 30px rgba(226,192,68,0.1)',
+    },
+    completed: {
+        background: 'rgba(74,192,106,0.12)',
+        border: '2px solid #4ac06a',
+        borderRadius: '10px',
+        padding: '10px 20px',
+        color: '#4ac06a',
+        fontSize: '15px',
+        fontWeight: '500',
+        minWidth: '160px',
+        textAlign: 'center',
+    },
+    current: {
+        background: 'rgba(74,122,154,0.15)',
+        border: '2px solid #4a7a9a',
+        borderRadius: '10px',
+        padding: '10px 20px',
+        color: '#7abae0',
+        fontSize: '15px',
+        fontWeight: '500',
+        minWidth: '160px',
+        textAlign: 'center',
+        boxShadow: '0 0 20px rgba(74,122,154,0.15)',
+    },
+    locked: {
+        background: 'rgba(74,74,74,0.15)',
+        border: '2px solid #4a4a4a',
+        borderRadius: '10px',
+        padding: '10px 20px',
+        color: '#6a6a6a',
+        fontSize: '15px',
+        fontWeight: '400',
+        minWidth: '160px',
+        textAlign: 'center',
+        opacity: 0.6,
+    },
+    association: {
+        background: 'rgba(74,154,138,0.08)',
+        border: '1px solid rgba(74,154,138,0.2)',
+        borderRadius: '8px',
+        padding: '6px 16px',
+        color: '#4a9a8a',
+        fontSize: '13px',
+        fontWeight: '400',
+        minWidth: '120px',
+        textAlign: 'center',
+    },
+};
+
+function getNodeStyle(data) {
+    if (data.type === 'root') return nodeStyles.root;
+    if (data.status === 'completed') return nodeStyles.completed;
+    if (data.status === 'current') return nodeStyles.current;
+    if (data.status === 'locked') return nodeStyles.locked;
+    if (data.type === 'association') return nodeStyles.association;
+    return nodeStyles.locked;
+}
+
+// ===== КАСТОМНЫЙ УЗЕЛ =====
+function CustomNode({ data }) {
+    const style = getNodeStyle(data);
+    const handleClick = () => {
+        if (data.url) window.location.href = data.url;
+    };
+    const handleGameOpen = (e) => {
+        e.stopPropagation();
+        if (data.game_url) window.open(data.game_url, '_blank');
+    };
+
+    return React.createElement('div', {
+        style: { cursor: data.url ? 'pointer' : 'default' },
+        onClick: handleClick,
+    },
+        React.createElement('div', { style: style },
+            React.createElement('div', null, data.label),
+            data.status === 'completed' && React.createElement('div', {
+                style: { fontSize: '10px', color: '#4ac06a', marginTop: '4px' }
+            }, '✅ Пройдено'),
+            data.status === 'current' && React.createElement('div', {
+                style: { fontSize: '10px', color: '#4a7a9a', marginTop: '4px' }
+            }, '▶ Текущий'),
+            data.game_url && React.createElement('button', {
+                onClick: handleGameOpen,
+                style: {
+                    marginTop: '6px',
+                    padding: '4px 12px',
+                    background: 'rgba(226,192,68,0.1)',
+                    border: '1px solid rgba(226,192,68,0.2)',
+                    borderRadius: '50px',
+                    color: '#e2c044',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    letterSpacing: '1px',
+                },
+                'data-game-url': data.game_url,
+            }, '🎮 Играть')
+        )
+    );
+}
+
+// ===== ГЛАВНЫЙ КОМПОНЕНТ =====
+function MindMap() {
+    const [nodes, setNodes] = React.useState([]);
+    const [edges, setEdges] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState(null);
+
+    React.useEffect(() => {
+        fetch('/api/mindmap/')
+            .then(r => {
+                if (!r.ok) throw new Error('Ошибка загрузки');
+                return r.json();
+            })
+            .then(data => {
+                setNodes(data.nodes || []);
+                setEdges(data.edges || []);
+                setLoading(false);
+            })
+            .catch(err => {
+                setError(err.message);
+                setLoading(false);
+            });
+    }, []);
+
+    const onConnect = React.useCallback(
+        (connection) => {
+            setEdges((eds) => {
+                const newEdge = { ...connection, id: `e_${connection.source}_${connection.target}` };
+                return [...eds, newEdge];
+            });
+        },
+        []
+    );
+
+    const onNodeDragStop = React.useCallback((event, node) => {
+        fetch('/api/mindmap/save-position/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ nodeId: node.id, x: node.position.x, y: node.position.y }),
+        }).catch(e => console.error('Ошибка сохранения:', e));
+    }, []);
+
+    function getCookie(name) {
+        let value = "; " + document.cookie;
+        let parts = value.split("; " + name + "=");
+        if (parts.length === 2) return parts.pop().split(";").shift();
+    }
+
+    if (loading) {
+        return React.createElement('div', {
+            style: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                color: '#5a6a7e',
+                fontSize: '1.1rem',
+                letterSpacing: '2px',
+            }
+        },
+            React.createElement('span', { style: { marginRight: '16px' } }, '🔦'),
+            'Загружаем карту...'
+        );
+    }
+
+    if (error) {
+        return React.createElement('div', {
+            style: {
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                color: '#c04a4a',
+            }
+        },
+            React.createElement('span', { style: { fontSize: '2rem' } }, '❌'),
+            React.createElement('p', { style: { color: '#5a6a7e' } }, 'Не удалось загрузить карту'),
+            React.createElement('p', { style: { fontSize: '0.8rem', color: '#3a4a5a' } }, error),
+            React.createElement('button', {
+                onClick: () => window.location.reload(),
+                style: {
+                    marginTop: '12px',
+                    padding: '8px 24px',
+                    background: 'rgba(226,192,68,0.08)',
+                    border: '1px solid rgba(226,192,68,0.15)',
+                    borderRadius: '50px',
+                    color: '#e2c044',
+                    cursor: 'pointer',
+                }
+            }, '🔄 Обновить')
+        );
+    }
+
+    const nodeTypes = { mindmap: CustomNode };
+
+    return React.createElement(ReactFlowComponent, {
+        nodes: nodes,
+        edges: edges,
+        onConnect: onConnect,
+        onNodeDragStop: onNodeDragStop,
+        nodeTypes: nodeTypes,
+        fitView: true,
+        minZoom: 0.2,
+        maxZoom: 2,
+        defaultEdgeOptions: {
+            style: { stroke: '#2a3a4a', strokeWidth: 2 },
+        },
+    },
+        React.createElement(Background, { color: '#2a3340', gap: 20 }),
+        React.createElement(Controls, {
+            showZoom: true,
+            showFitView: true,
+            showInteractive: true,
+            style: {
+                button: {
+                    background: 'rgba(22,33,62,0.6)',
+                    color: '#aab3c9',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    borderRadius: '8px',
+                },
+            },
+        }),
+        React.createElement(MiniMap, {
+            style: {
+                background: 'rgba(11,14,20,0.8)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                borderRadius: '12px',
+            },
+            nodeColor: (node) => {
+                if (node.type === 'root') return '#e2c044';
+                if (node.data?.status === 'completed') return '#4ac06a';
+                if (node.data?.status === 'current') return '#4a7a9a';
+                if (node.data?.type === 'association') return '#4a9a8a';
+                return '#4a4a4a';
+            },
+        })
+    );
+}
+
+// ===== ЗАПУСК =====
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('mindmap-container');
+    if (container) {
+        container.innerHTML = '';
+        const root = ReactDOM.createRoot(container);
+        root.render(React.createElement(MindMap));
+    }
+});
+
+// ===== ЭКСПОРТ PNG =====
+function exportPNG() {
+    const container = document.getElementById('mindmap-container');
+    const reactFlow = container?.querySelector('.react-flow');
+    if (reactFlow) {
+        alert('📥 Для экспорта PNG установите html2canvas');
+    }
+}
+</script>
+
+{% endblock %}
