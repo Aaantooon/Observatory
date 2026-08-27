@@ -199,7 +199,26 @@
                 <li class="nav-item"><a class="nav-link" href="/flashlight/">Карта</a></li>
                 <li class="nav-item"><a class="nav-link" href="/put/">Тропы</a></li>
                 <li class="nav-item"><a class="nav-link" href="/about/">Перекрёсток</a></li>
-                <li class="nav-item"><a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
+
+                <!-- ===== АВТОРИЗАЦИЯ ===== -->
+                {% if user.is_authenticated %}
+                    <li class="nav-item ms-2">
+                        <span class="nav-link text-warning">🕯️ {{ user.first_name|default:user.username }}</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'profile' %}">👤 Профиль</a>
+                    </li>
+                    <li class="nav-item">
+                        <form method="post" action="{% url 'logout' %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="nav-link text-danger btn btn-link p-0" style="border:none; background:none;">Выйти</button>
+                        </form>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a>
+                    </li>
+                {% endif %}
             </ul>
         </div>
     </div>
