@@ -12,7 +12,6 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     
     path('', views.home, name='home'),
-    path('about/', views.about, name='about'),
     path('map/', views.map_reactflow_view, name='map'),
     path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
