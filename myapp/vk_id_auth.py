@@ -2,6 +2,7 @@ import base64
 import hashlib
 import os
 import secrets
+from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
@@ -42,7 +43,7 @@ def vk_login_start(request):
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
+    query = urlencode(params)
     return redirect(f"{VK_ID_AUTHORIZE_URL}?{query}")
 
 
