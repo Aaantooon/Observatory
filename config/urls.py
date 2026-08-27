@@ -8,7 +8,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bot_api.urls')),
     #path('forum/', include('machina.urls')),
-    #path('', include('social_django.urls', namespace='social')),
+    path('', include('social_django.urls', namespace='social')),
     path('accounts/', include('django.contrib.auth.urls')),
     
     path('', views.home, name='home'),
