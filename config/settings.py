@@ -182,6 +182,7 @@ AUTHENTICATION_BACKENDS = (
 SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID', '')    # ID приложения
 SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET', '') # Защищенный ключ
 SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email'] # Запрашиваем email
+VK_APP_ID = os.getenv('VK_APP_ID', '')
 
 # Чтобы избежать ошибок связки аккаунтов
 SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = False
