@@ -64,7 +64,7 @@ def vk_login_callback(request):
     if not code_verifier:
         return HttpResponseBadRequest("Missing code_verifier in session")
 
-    redirect_uri = request.build_absolute_uri("/vk/callback/")
+    redirect_uri = request.build_absolute_uri("/")
 
     token_response = requests.post(
         VK_ID_TOKEN_URL,
