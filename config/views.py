@@ -3,6 +3,9 @@ from django.contrib.auth.decorators import login_required
 from myapp.models import Module, UserCourseProgress, UserStreak
 
 def home(request):
+    if request.GET.get('code') and request.GET.get('device_id'):
+        from myapp.vk_id_auth import vk_login_callback
+        return vk_login_callback(request)
     context = {
         'title': 'Главная — Путь наблюдателя',
         'subtitle': 'Фонарь рассеивает туман: шаг за шагом мы видим путь'
