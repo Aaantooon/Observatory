@@ -159,21 +159,28 @@
                 <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">Карта</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
 
+                <!-- ===== АВТОРИЗАЦИЯ ===== -->
                 {% if user.is_authenticated %}
-                    <li class="nav-item ms-2">
-                        <span class="nav-link text-warning">🕯️ {{ user.first_name|default:user.username }}</span>
-                    </li>
-                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="#">✏️ Оставить след</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'profile' %}">👤 Профиль</a></li>
-                    <li class="nav-item">
-                        <form method="post" action="{% url 'logout' %}" style="display:inline;">
-                            {% csrf_token %}
-                            <input type="hidden" name="next" value="/">
-                            <button type="submit" class="nav-link text-danger btn btn-link p-0" style="border:none; background:none;">Выйти</button>
-                        </form>
+                    <li class="nav-item ms-2 dropdown">
+                        <a class="nav-link d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
+                            <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:rgba(226,192,68,0.15);border:1px solid rgba(226,192,68,0.3);color:#e2c044;font-size:0.85rem;font-weight:600;">
+                                {{ user.first_name|default:user.username|first|upper }}
+                            </span>
+                            <span style="font-size:0.9rem;">{{ user.first_name|default:user.username }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" style="background:#141a24;border:1px solid rgba(226,192,68,0.15);">
+                            <li><a class="dropdown-item text-light" href="{% url 'profile' %}" style="background:transparent;">👤 Профиль</a></li>
+                            <li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.06);"></li>
+                            <li>
+                                <form method="post" action="{% url 'logout' %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item text-danger" style="background:transparent;border:none;">Выйти</button>
+                                </form>
+                            </li>
+                        </ul>
                     </li>
                 {% else %}
-                  <li class="nav-item"><a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
+                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
                 {% endif %}
             </ul>
         </div>
