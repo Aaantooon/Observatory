@@ -173,7 +173,7 @@
                         </form>
                     </li>
                 {% else %}
-                    <li class="nav-item"><a class="nav-link" href="#">Войти через VK</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'social:begin' 'vk-oauth2' %}">Войти через VK</a></li>
                 {% endif %}
             </ul>
         </div>
