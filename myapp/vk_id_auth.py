@@ -32,7 +32,7 @@ def vk_login_start(request):
     request.session["vk_code_verifier"] = code_verifier
     request.session["vk_oauth_state"] = state
 
-    request.build_absolute_uri("/")
+    redirect_uri = request.build_absolute_uri("/")
 
     params = {
         "client_id": settings.VK_APP_ID,
