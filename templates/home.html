@@ -199,12 +199,7 @@
                 <li class="nav-item"><a class="nav-link" href="/flashlight/">Карта</a></li>
                 <li class="nav-item"><a class="nav-link" href="/put/">Тропы</a></li>
                 <li class="nav-item"><a class="nav-link" href="/about/">Перекрёсток</a></li>
-                <li class="nav-item">
-                     <form method="post" action="{% url 'social:begin' 'vk-oauth2' %}" style="display: inline;">
-                        {% csrf_token %}
-                         <li class="nav-item"><a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
-                     </form>
-                </li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
             </ul>
         </div>
     </div>

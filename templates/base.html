@@ -173,12 +173,7 @@
                         </form>
                     </li>
                 {% else %}
-                    <li class="nav-item">
-                         <form method="post" action="{% url 'social:begin' 'vk-oauth2' %}" style="display: inline;">
-                             {% csrf_token %}
-                              <button type="submit" class="nav-link" style="background: none; border: none; cursor: pointer; padding: 0;">Войти через VK</button>
-                         </form>
-                    </li>
+                  <li class="nav-item"><a class="nav-link" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
                 {% endif %}
             </ul>
         </div>
