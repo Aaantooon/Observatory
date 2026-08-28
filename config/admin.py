@@ -6,7 +6,7 @@ from django.utils.translation import gettext_lazy as _
 
 # Регистрируем модели из bot_api
 from bot_api.models import User as VKUser, Exercise, Result, ExerciseProgress, Notification
-from bot_api.admin import VKUserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin
+from bot_api.admin import UserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin
 
 # Регистрируем модели из myapp
 try:
@@ -23,10 +23,8 @@ class CustomAdminSite(AdminSite):
     site_url = "/"
 
     def get_app_list(self, request):
-        """Группируем приложения для красивого отображения"""
         app_list = super().get_app_list(request)
         
-        # Переименовываем приложения
         app_names = {
             'bot_api': '📊 Основные данные',
             'myapp': '📚 Курс и прогресс',
@@ -50,17 +48,14 @@ class CustomAdminSite(AdminSite):
         return app_list
 
 
-# Создаём экземпляр кастомной админки
 admin_site = CustomAdminSite(name='observatory_admin')
 
-# Регистрируем модели VK бота
-admin_site.register(VKUser, VKUserAdmin)
+admin_site.register(VKUser, UserAdmin)
 admin_site.register(Exercise, ExerciseAdmin)
 admin_site.register(Result, ResultAdmin)
 admin_site.register(ExerciseProgress, ExerciseProgressAdmin)
 admin_site.register(Notification, NotificationAdmin)
 
-# Регистрируем модели myapp
 try:
     admin_site.register(Module, ModuleAdmin)
     admin_site.register(UserCourseProgress, UserCourseProgressAdmin)
@@ -71,6 +66,5 @@ try:
 except NameError:
     pass
 
-# Регистрируем Django модели
 admin_site.register(User, UserAdmin)
 admin_site.register(Group, GroupAdmin)
