@@ -141,31 +141,6 @@
             }
         }
 
-        .dropdown-menu {
-            background: #141a24 !important;
-            border: 1px solid rgba(226, 192, 68, 0.15) !important;
-        }
-        .dropdown-item {
-            color: #d4d9e6 !important;
-            background: transparent !important;
-        }
-        .dropdown-item:hover {
-            background: rgba(226, 192, 68, 0.08) !important;
-            color: #e2c044 !important;
-        }
-        .dropdown-item.text-warning {
-            color: #e2c044 !important;
-        }
-        .dropdown-item.text-danger {
-            color: #dc3545 !important;
-        }
-        .dropdown-item.text-danger:hover {
-            color: #ff6b7a !important;
-        }
-        .dropdown-divider {
-            border-color: rgba(255,255,255,0.06) !important;
-        }
-
         .btn-primary-custom {
             display: inline-block;
             padding: 14px 32px;
@@ -205,181 +180,6 @@
             color: #d4d9e6;
             text-decoration: none;
         }
-
-        .path-journey {
-            max-width: 700px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            position: relative;
-        }
-
-        .fog-layer {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            z-index: 0;
-            background:
-                radial-gradient(ellipse at 30% 20%, rgba(226,192,68,0.03) 0%, transparent 50%),
-                radial-gradient(ellipse at 70% 60%, rgba(226,192,68,0.04) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 80%, rgba(226,192,68,0.02) 0%, transparent 50%);
-            animation: fogDrift 20s ease-in-out infinite;
-        }
-        @keyframes fogDrift {
-            0%, 100% { transform: translate(0, 0); }
-            25% { transform: translate(-20px, 10px); }
-            50% { transform: translate(10px, -15px); }
-            75% { transform: translate(15px, 5px); }
-        }
-
-        .step-container {
-            position: relative;
-            z-index: 1;
-            display: none;
-            animation: stepAppear 1s ease-out;
-        }
-        .step-container.active {
-            display: block;
-        }
-        @keyframes stepAppear {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .welcome-card {
-            text-align: center;
-            padding: 40px 30px;
-            border: 1px solid rgba(226,192,68,0.2);
-            border-radius: 20px;
-            background: rgba(22,33,62,0.5);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 0 60px rgba(0,0,0,0.3), inset 0 0 30px rgba(226,192,68,0.03);
-        }
-        .welcome-card .lantern-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            animation: lanternGlow 3s ease-in-out infinite;
-            display: inline-block;
-        }
-        @keyframes lanternGlow {
-            0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.3); }
-            50% { text-shadow: 0 0 40px rgba(226,192,68,0.7), 0 0 80px rgba(226,192,68,0.3); }
-        }
-        .welcome-card h1 {
-            color: #e2c044;
-            font-size: 1.8rem;
-            margin-bottom: 25px;
-            font-weight: 300;
-            letter-spacing: 2px;
-        }
-        .welcome-card .philosophy {
-            color: #b0a898;
-            font-size: 1rem;
-            line-height: 2;
-            margin-bottom: 35px;
-        }
-        .welcome-card .philosophy em {
-            color: #e2c044;
-            font-style: normal;
-        }
-
-        .choice-buttons {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-        }
-        .btn-custom-row {
-            display: flex;
-            gap: 10px;
-            width: 100%;
-            max-width: 380px;
-        }
-        .btn-custom-row input {
-            flex: 1;
-            padding: 14px 20px;
-            background: rgba(22,33,62,0.6);
-            border: 2px solid rgba(226,192,68,0.3);
-            border-radius: 50px;
-            color: #e0d5c1;
-            font-size: 0.95rem;
-            outline: none;
-            transition: all 0.3s ease;
-        }
-        .btn-custom-row input:focus {
-            border-color: #e2c044;
-            box-shadow: 0 0 20px rgba(226,192,68,0.2);
-        }
-        .btn-custom-row input::placeholder {
-            color: #5a5550;
-        }
-        .btn-custom-row button {
-            padding: 14px 22px;
-            background: transparent;
-            border: 2px solid rgba(226,192,68,0.4);
-            border-radius: 50px;
-            color: #e2c044;
-            cursor: pointer;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-        }
-        .btn-custom-row button:hover {
-            border-color: #e2c044;
-            box-shadow: 0 0 20px rgba(226,192,68,0.3);
-        }
-
-        .result-card {
-            text-align: center;
-            padding: 35px 25px;
-            border: 1px solid rgba(226,192,68,0.25);
-            border-radius: 20px;
-            background: rgba(22,33,62,0.5);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 0 40px rgba(0,0,0,0.3);
-        }
-        .result-card p {
-            color: #c0b8a8;
-            font-size: 1.05rem;
-            line-height: 2;
-            margin-bottom: 10px;
-        }
-        .result-card em {
-            color: #e2c044;
-            font-style: normal;
-        }
-
-        .profile-stats {
-            display: flex;
-            justify-content: center;
-            gap: 30px;
-            margin: 20px 0 30px 0;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .profile-stats .stat-item {
-            text-align: center;
-        }
-        .profile-stats .stat-item .value {
-            color: #e2c044;
-            font-size: 1.4rem;
-            font-weight: 300;
-        }
-        .profile-stats .stat-item .label {
-            color: #5a6a7e;
-            font-size: 0.65rem;
-            letter-spacing: 1px;
-        }
-
-        @media (max-width: 768px) {
-            .welcome-card h1 {
-                font-size: 1.4rem;
-            }
-            .welcome-card {
-                padding: 30px 20px;
-            }
-            .profile-stats {
-                gap: 15px;
-            }
-        }
     </style>
     
 </head>
@@ -410,9 +210,6 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" style="background:#141a24;border:1px solid rgba(226,192,68,0.15);">
                             <li><a class="dropdown-item text-light" href="{% url 'profile' %}" style="background:transparent;">👤 Профиль</a></li>
-                            {% if user.is_superuser or user.is_staff %}
-                                <li><a class="dropdown-item text-warning" href="{% url 'admin:index' %}" style="background:transparent;">⚙️ Админка</a></li>
-                            {% endif %}
                             <li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.06);"></li>
                             <li>
                                 <form method="post" action="{% url 'logout' %}">
@@ -423,7 +220,7 @@
                         </ul>
                     </li>
                 {% else %}
-                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'social:begin' 'vk' %}">Войти через VK</a></li>
+                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
                 {% endif %}
             </ul>
         </div>
@@ -432,6 +229,183 @@
 
 <div class="main-content page-transition">
     
+<style>
+    .path-journey {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        position: relative;
+    }
+
+    .fog-layer {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+            radial-gradient(ellipse at 30% 20%, rgba(226,192,68,0.03) 0%, transparent 50%),
+            radial-gradient(ellipse at 70% 60%, rgba(226,192,68,0.04) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(226,192,68,0.02) 0%, transparent 50%);
+        animation: fogDrift 20s ease-in-out infinite;
+    }
+    @keyframes fogDrift {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(-20px, 10px); }
+        50% { transform: translate(10px, -15px); }
+        75% { transform: translate(15px, 5px); }
+    }
+
+    .step-container {
+        position: relative;
+        z-index: 1;
+        display: none;
+        animation: stepAppear 1s ease-out;
+    }
+    .step-container.active {
+        display: block;
+    }
+    @keyframes stepAppear {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .welcome-card {
+        text-align: center;
+        padding: 40px 30px;
+        border: 1px solid rgba(226,192,68,0.2);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(0,0,0,0.3), inset 0 0 30px rgba(226,192,68,0.03);
+    }
+    .welcome-card .lantern-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        animation: lanternGlow 3s ease-in-out infinite;
+        display: inline-block;
+    }
+    @keyframes lanternGlow {
+        0%, 100% { text-shadow: 0 0 20px rgba(226,192,68,0.3); }
+        50% { text-shadow: 0 0 40px rgba(226,192,68,0.7), 0 0 80px rgba(226,192,68,0.3); }
+    }
+    .welcome-card h1 {
+        color: #e2c044;
+        font-size: 1.8rem;
+        margin-bottom: 25px;
+        font-weight: 300;
+        letter-spacing: 2px;
+    }
+    .welcome-card .philosophy {
+        color: #b0a898;
+        font-size: 1rem;
+        line-height: 2;
+        margin-bottom: 35px;
+    }
+    .welcome-card .philosophy em {
+        color: #e2c044;
+        font-style: normal;
+    }
+
+    .choice-buttons {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+    .btn-custom-row {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        max-width: 380px;
+    }
+    .btn-custom-row input {
+        flex: 1;
+        padding: 14px 20px;
+        background: rgba(22,33,62,0.6);
+        border: 2px solid rgba(226,192,68,0.3);
+        border-radius: 50px;
+        color: #e0d5c1;
+        font-size: 0.95rem;
+        outline: none;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row input:focus {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.2);
+    }
+    .btn-custom-row input::placeholder {
+        color: #5a5550;
+    }
+    .btn-custom-row button {
+        padding: 14px 22px;
+        background: transparent;
+        border: 2px solid rgba(226,192,68,0.4);
+        border-radius: 50px;
+        color: #e2c044;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+    }
+    .btn-custom-row button:hover {
+        border-color: #e2c044;
+        box-shadow: 0 0 20px rgba(226,192,68,0.3);
+    }
+
+    .result-card {
+        text-align: center;
+        padding: 35px 25px;
+        border: 1px solid rgba(226,192,68,0.25);
+        border-radius: 20px;
+        background: rgba(22,33,62,0.5);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 0 40px rgba(0,0,0,0.3);
+    }
+    .result-card p {
+        color: #c0b8a8;
+        font-size: 1.05rem;
+        line-height: 2;
+        margin-bottom: 10px;
+    }
+    .result-card em {
+        color: #e2c044;
+        font-style: normal;
+    }
+
+    .profile-stats {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin: 20px 0 30px 0;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .profile-stats .stat-item {
+        text-align: center;
+    }
+    .profile-stats .stat-item .value {
+        color: #e2c044;
+        font-size: 1.4rem;
+        font-weight: 300;
+    }
+    .profile-stats .stat-item .label {
+        color: #5a6a7e;
+        font-size: 0.65rem;
+        letter-spacing: 1px;
+    }
+
+    @media (max-width: 768px) {
+        .welcome-card h1 {
+            font-size: 1.4rem;
+        }
+        .welcome-card {
+            padding: 30px 20px;
+        }
+        .profile-stats {
+            gap: 15px;
+        }
+    }
+</style>
+
 <div class="fog-layer"></div>
 
 <div class="path-journey">
