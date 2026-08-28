@@ -112,8 +112,6 @@ class BotHandlers:
         # Проверка сессий упражнений
         if user_id in self.stress_search.user_sessions:
             self.stress_search.handle_message(user_id, text)
-        elif state == 'sending_review':
-            self.handle_send_review(user_id, text_clean)
             return
         if user_id in self.happiness_list.user_sessions:
             self.happiness_list.handle_message(user_id, text)
@@ -198,6 +196,9 @@ class BotHandlers:
                     exercises_menu()
                 )
 
+        elif state == 'sending_review':
+            self.handle_send_review(user_id, text_clean)
+
         elif state == 'reminders':
             if "назад" in text_clean:
                 self.user_states[user_id] = 'main'
@@ -208,38 +209,17 @@ class BotHandlers:
                 )
             elif "1 час" in text_clean:
                 self.notifications.setup_reminder_to_continue(user_id, 'general', hours=1)
-                self.send_message(
-                    user_id,
-                    "✅ Напомню через 1 час.",
-                    get_reminder_keyboard()
-                )
+                self.send_message(user_id, "✅ Напомню через 1 час.", get_reminder_keyboard())
             elif "3 часа" in text_clean:
                 self.notifications.setup_reminder_to_continue(user_id, 'general', hours=3)
-                self.send_message(
-                    user_id,
-                    "✅ Напомню через 3 часа.",
-                    get_reminder_keyboard()
-                )
+                self.send_message(user_id, "✅ Напомню через 3 часа.", get_reminder_keyboard())
             elif "завтра утром" in text_clean:
                 self.notifications.setup_diary_reminder(user_id, "08:00")
-                self.send_message(
-                    user_id,
-                    "✅ Напомню завтра утром в 08:00.",
-                    get_reminder_keyboard()
-                )
+                self.send_message(user_id, "✅ Напомню завтра утром в 08:00.", get_reminder_keyboard())
             elif "отключить" in text_clean:
-                self.send_message(
-                    user_id,
-                    "🔕 Напоминания отключены.",
-                    get_reminder_keyboard()
-                )
+                self.send_message(user_id, "🔕 Напоминания отключены.", get_reminder_keyboard())
             else:
-                self.send_message(
-                    user_id,
-                    "⏰ Выбери настройку из кнопок.",
-                    get_reminder_keyboard()
-                )
-
+                self.send_message(user_id, "⏰ Выбери настройку из кнопок.", get_reminder_keyboard())
     def show_exercises(self, user_id):
         self.user_states[user_id] = 'selecting_exercise'
 
