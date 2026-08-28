@@ -45,9 +45,36 @@ class NotificationSystem:
             time.sleep(60)
     
     def _check_notifications(self):
-        # В реальном проекте здесь будет запрос к API
-        # для получения всех активных уведомлений
-        pass
+        due = self.api.get_due_notifications()
+        for notif in due:
+            # Используем user_vk_id из сериализатора
+            user_vk_id = notif.get('user_vk_id')
+            
+            if not user_vk_id:
+                logger.warning(f"Не найден user_vk_id в уведомлении: {notif}")
+                continue
+            
+            text = self._get_reminder_text(notif.get('exercise_type'))
+            try:
+                self.send_message(int(user_vk_id), text)
+                logger.info(f"Отправлено уведомление пользователю {user_vk_id}: {notif.get('exercise_type')}")
+            except Exception as e:
+                logger.error(f"Send reminder error to {user_vk_id}: {e}")
+                continue
+            
+            self.api.mark_notification_sent(notif.get('id'))
+
+    def _get_reminder_text(self, exercise_type):
+        texts = {
+            'diary': "📖 Доброе утро! Пора вспомнить сон и записать его в дневник.",
+            'stop_technique': "🛑 Пауза. Здесь и сейчас: о чём думаешь, что чувствуешь, чего хочешь?",
+            'stress_search': "🎯 Поиск стресса — продолжим искать источники напряжения?",
+            'happiness_list': "✨ Список счастья — что приносит тебе радость сегодня?",
+            'my_roles': "🎭 Мои роли — какие роли ты играешь сегодня?",
+            'conscious_choice': "🧘 Осознанный выбор — время сделать выбор.",
+            'general': "🔦 Пора продолжить свой путь наблюдателя.",
+        }
+        return texts.get(exercise_type, texts['general'])
     
     def setup_diary_reminder(self, user_id, time_str="08:00"):
         schedule_data = {"time": time_str, "type": "morning"}
@@ -59,7 +86,6 @@ class NotificationSystem:
         )
     
     def setup_stop_technique_reminder(self, user_id, times):
-        # times: ["10:00", "15:00", "20:00"]
         results = []
         for t in times:
             schedule_data = {"time": t, "type": "stop_technique"}

@@ -151,7 +151,7 @@ class APIClient:
     def send_for_review(self, user_vk_id, exercise_type, data):
         try:
             response = requests.post(
-                f"{self.base_url}/admin/review/",
+                f"{self.base_url}/reviews/",
                 json={
                     "vk_id": str(user_vk_id),
                     "exercise_type": exercise_type,
@@ -169,7 +169,7 @@ class APIClient:
     def get_review_status(self, user_vk_id, exercise_type):
         try:
             response = requests.get(
-                f"{self.base_url}/admin/review/status/?vk_id={user_vk_id}&exercise_type={exercise_type}",
+                f"{self.base_url}/reviews/?vk_id={user_vk_id}&exercise_type={exercise_type}",
                 headers=self.headers,
                 timeout=5
             )
@@ -182,7 +182,7 @@ class APIClient:
     def add_comment(self, review_id, comment, is_admin=False):
         try:
             response = requests.post(
-                f"{self.base_url}/admin/review/{review_id}/comment/",
+                f"{self.base_url}/reviews/{review_id}/comment/",
                 json={
                     "comment": comment,
                     "is_admin": is_admin
@@ -199,7 +199,7 @@ class APIClient:
     def complete_review(self, review_id, approved):
         try:
             response = requests.post(
-                f"{self.base_url}/admin/review/{review_id}/complete/",
+                f"{self.base_url}/reviews/{review_id}/complete/",
                 json={"approved": approved},
                 headers=self.headers,
                 timeout=5
@@ -267,3 +267,29 @@ class APIClient:
         except Exception as e:
             logger.error(f"Get stats error: {e}")
         return None
+
+    def get_due_notifications(self):
+        try:
+            response = requests.get(
+                f"{self.base_url}/notifications/due/",
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logger.error(f"Get due notifications error: {e}")
+        return []
+
+    def mark_notification_sent(self, notification_id):
+        try:
+            response = requests.post(
+                f"{self.base_url}/notifications/{notification_id}/mark_sent/",
+                headers=self.headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return True
+        except Exception as e:
+            logger.error(f"Mark notification sent error: {e}")
+        return False

@@ -2,10 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import date, timedelta
-from .models import User, Exercise, Result, ExerciseProgress
-from .serializers import UserSerializer, ExerciseSerializer, ResultSerializer
-from .models import Notification
-from .serializers import NotificationSerializer
+from django.utils import timezone
+from .models import User, Exercise, Result, ExerciseProgress, Notification
+from .serializers import (
+    UserSerializer, ExerciseSerializer, ResultSerializer,
+    NotificationSerializer
+)
+
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
@@ -32,6 +35,36 @@ class NotificationViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def due(self, request):
+        """Получить уведомления, которые пора отправить"""
+        now = timezone.now()
+        result = []
+        for n in Notification.objects.filter(is_active=True):
+            if n.schedule_type == 'once':
+                delay = n.schedule_data.get('delay_hours', 0)
+                if n.last_sent is None and now >= n.created_at + timedelta(hours=delay):
+                    result.append(n)
+            elif n.schedule_type == 'daily':
+                target_time = n.schedule_data.get('time', '')
+                current_time = now.strftime('%H:%M')
+                already_today = n.last_sent and n.last_sent.date() == now.date()
+                if current_time == target_time and not already_today:
+                    result.append(n)
+        serializer = self.get_serializer(result, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def mark_sent(self, request, pk=None):
+        """Отметить уведомление как отправленное"""
+        notif = self.get_object()
+        notif.last_sent = timezone.now()
+        if notif.schedule_type == 'once':
+            notif.is_active = False
+        notif.save()
+        return Response({'status': 'ok'})
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -93,11 +126,16 @@ class ResultViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         user_vk_id = request.data.get('user_vk_id')
-        exercise_id = request.data.get('exercise_id')
+        exercise_type = request.data.get('exercise_type')  # Изменено с exercise_id
         
         try:
             user = User.objects.get(vk_id=str(user_vk_id))
-            exercise = Exercise.objects.get(id=exercise_id)
+            
+            # Ищем упражнение по типу
+            exercise = Exercise.objects.filter(title=exercise_type).first()
+            if not exercise:
+                # Если упражнение не найдено, создаём его
+                exercise = Exercise.objects.create(title=exercise_type)
             
             result = Result.objects.create(
                 user=user,
@@ -110,11 +148,6 @@ class ResultViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response(
                 {'error': 'User not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exercise.DoesNotExist:
-            return Response(
-                {'error': 'Exercise not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
