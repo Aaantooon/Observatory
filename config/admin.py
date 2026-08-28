@@ -1,0 +1,76 @@
+from django.contrib import admin
+from django.contrib.admin import AdminSite
+from django.contrib.auth.models import User, Group
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from django.utils.translation import gettext_lazy as _
+
+# Регистрируем модели из bot_api
+from bot_api.models import User as VKUser, Exercise, Result, ExerciseProgress, Notification
+from bot_api.admin import VKUserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin
+
+# Регистрируем модели из myapp
+try:
+    from myapp.models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile
+    from myapp.admin import ModuleAdmin, UserCourseProgressAdmin, GameAssociationAdmin, UserStreakAdmin, ModuleCommentAdmin, UserProfileAdmin
+except ImportError:
+    pass
+
+
+class CustomAdminSite(AdminSite):
+    site_header = "🔦 Путь наблюдателя"
+    site_title = "Путь наблюдателя"
+    index_title = "📋 Панель управления"
+    site_url = "/"
+
+    def get_app_list(self, request):
+        """Группируем приложения для красивого отображения"""
+        app_list = super().get_app_list(request)
+        
+        # Переименовываем приложения
+        app_names = {
+            'bot_api': '📊 Основные данные',
+            'myapp': '📚 Курс и прогресс',
+            'auth': '👤 Пользователи',
+            'authtoken': '🔑 Токены',
+            'social_django': '🔗 Социальные сети',
+            'machina': '💬 Форум',
+            'machina_forum_conversation': '💬 Форум',
+            'machina_forum_attachments': '💬 Форум',
+            'machina_forum_polls': '💬 Форум',
+            'machina_forum_tracking': '💬 Форум',
+            'machina_forum_permission': '💬 Форум',
+            'machina_forum_member': '💬 Форум',
+        }
+        
+        for app in app_list:
+            app_name = app.get('app_label', '')
+            if app_name in app_names:
+                app['name'] = app_names[app_name]
+        
+        return app_list
+
+
+# Создаём экземпляр кастомной админки
+admin_site = CustomAdminSite(name='observatory_admin')
+
+# Регистрируем модели VK бота
+admin_site.register(VKUser, VKUserAdmin)
+admin_site.register(Exercise, ExerciseAdmin)
+admin_site.register(Result, ResultAdmin)
+admin_site.register(ExerciseProgress, ExerciseProgressAdmin)
+admin_site.register(Notification, NotificationAdmin)
+
+# Регистрируем модели myapp
+try:
+    admin_site.register(Module, ModuleAdmin)
+    admin_site.register(UserCourseProgress, UserCourseProgressAdmin)
+    admin_site.register(GameAssociation, GameAssociationAdmin)
+    admin_site.register(UserStreak, UserStreakAdmin)
+    admin_site.register(ModuleComment, ModuleCommentAdmin)
+    admin_site.register(UserProfile, UserProfileAdmin)
+except NameError:
+    pass
+
+# Регистрируем Django модели
+admin_site.register(User, UserAdmin)
+admin_site.register(Group, GroupAdmin)

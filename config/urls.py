@@ -3,9 +3,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views
+from .admin import admin_site  # Импортируем кастомную админку
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin/', admin_site.urls),  # Используем кастомную админку
     path('api/', include('bot_api.urls')),
     #path('forum/', include('machina.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
