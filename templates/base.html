@@ -140,6 +140,31 @@
                 border: 1px solid #2a3340;
             }
         }
+
+        .dropdown-menu {
+            background: #141a24 !important;
+            border: 1px solid rgba(226, 192, 68, 0.15) !important;
+        }
+        .dropdown-item {
+            color: #d4d9e6 !important;
+            background: transparent !important;
+        }
+        .dropdown-item:hover {
+            background: rgba(226, 192, 68, 0.08) !important;
+            color: #e2c044 !important;
+        }
+        .dropdown-item.text-warning {
+            color: #e2c044 !important;
+        }
+        .dropdown-item.text-danger {
+            color: #dc3545 !important;
+        }
+        .dropdown-item.text-danger:hover {
+            color: #ff6b7a !important;
+        }
+        .dropdown-divider {
+            border-color: rgba(255,255,255,0.06) !important;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -159,7 +184,7 @@
                 <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">Карта</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
 
-                <!-- ===== АВТОРИЗАЦИЯ ===== -->
+                <!-- ===== АВТОРИЗАЦИЯ ЧЕРЕЗ VK ===== -->
                 {% if user.is_authenticated %}
                     <li class="nav-item ms-2 dropdown">
                         <a class="nav-link d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown">
@@ -168,19 +193,25 @@
                             </span>
                             <span style="font-size:0.9rem;">{{ user.first_name|default:user.username }}</span>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end" style="background:#141a24;border:1px solid rgba(226,192,68,0.15);">
-                            <li><a class="dropdown-item text-light" href="{% url 'profile' %}" style="background:transparent;">👤 Профиль</a></li>
-                            <li><hr class="dropdown-divider" style="border-color:rgba(255,255,255,0.06);"></li>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'profile' %}">👤 Профиль</a></li>
+                            <!-- Админка — только для админов -->
+                            {% if user.is_superuser or user.is_staff %}
+                                <li><a class="dropdown-item text-warning" href="{% url 'admin:index' %}">⚙️ Админка</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="post" action="{% url 'logout' %}">
                                     {% csrf_token %}
-                                    <button type="submit" class="dropdown-item text-danger" style="background:transparent;border:none;">Выйти</button>
+                                    <button type="submit" class="dropdown-item text-danger" style="border:none;background:none;width:100%;text-align:left;">Выйти</button>
                                 </form>
                             </li>
                         </ul>
                     </li>
                 {% else %}
-                    <li class="nav-item ms-2"><a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'vk_login_start' %}">Войти через VK</a></li>
+                    <li class="nav-item ms-2">
+                        <a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'social:begin' 'vk' %}">Войти через VK</a>
+                    </li>
                 {% endif %}
             </ul>
         </div>
