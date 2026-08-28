@@ -26,7 +26,6 @@ class BotHandlers:
         self.diary = DiaryExercise(vk_session, self.api)
         self.stop_technique = StopTechniqueExercise(vk_session, self.api)
         
-        # Укажи здесь ID админов
         self.admin_check = AdminCheck(vk_session, self.api)
         self.notifications = NotificationSystem(vk_session, self.api)
         self.notifications.start()
@@ -139,6 +138,48 @@ class BotHandlers:
                     user_id,
                     "🔦 Выбери упражнение из списка кнопок.",
                     exercises_menu()
+                )
+
+        elif state == 'reminders':
+            if "назад" in text_clean:
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "🔦 Возвращаемся на перекрёсток.",
+                    main_menu()
+                )
+            elif "1 час" in text_clean:
+                self.notifications.setup_reminder_to_continue(user_id, 'general', hours=1)
+                self.send_message(
+                    user_id,
+                    "✅ Напомню через 1 час.",
+                    get_reminder_keyboard()
+                )
+            elif "3 часа" in text_clean:
+                self.notifications.setup_reminder_to_continue(user_id, 'general', hours=3)
+                self.send_message(
+                    user_id,
+                    "✅ Напомню через 3 часа.",
+                    get_reminder_keyboard()
+                )
+            elif "завтра утром" in text_clean:
+                self.notifications.setup_diary_reminder(user_id, "08:00")
+                self.send_message(
+                    user_id,
+                    "✅ Напомню завтра утром в 08:00.",
+                    get_reminder_keyboard()
+                )
+            elif "отключить" in text_clean:
+                self.send_message(
+                    user_id,
+                    "🔕 Напоминания отключены.",
+                    get_reminder_keyboard()
+                )
+            else:
+                self.send_message(
+                    user_id,
+                    "⏰ Выбери настройку из кнопок.",
+                    get_reminder_keyboard()
                 )
 
     def show_exercises(self, user_id):
