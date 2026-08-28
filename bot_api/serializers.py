@@ -1,5 +1,12 @@
 from rest_framework import serializers
 from .models import User, Exercise, Result
+from .models import Notification
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'user', 'exercise_type', 'schedule_type', 'schedule_data', 'is_active', 'created_at']
+        read_only_fields = ['created_at']
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:

@@ -4,7 +4,34 @@ from rest_framework.response import Response
 from datetime import date, timedelta
 from .models import User, Exercise, Result, ExerciseProgress
 from .serializers import UserSerializer, ExerciseSerializer, ResultSerializer
+from .models import Notification
+from .serializers import NotificationSerializer
 
+class NotificationViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all()
+    serializer_class = NotificationSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        vk_id = self.request.query_params.get('vk_id')
+        if vk_id:
+            queryset = queryset.filter(user__vk_id=str(vk_id))
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        vk_id = request.data.get('vk_id')
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            notif = Notification.objects.create(
+                user=user,
+                exercise_type=request.data.get('exercise_type'),
+                schedule_type=request.data.get('schedule_type'),
+                schedule_data=request.data.get('schedule_data', {})
+            )
+            serializer = self.get_serializer(notif)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()

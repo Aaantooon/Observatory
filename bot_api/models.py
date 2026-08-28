@@ -56,3 +56,11 @@ class ExerciseProgress(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.exercise_type}"
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    exercise_type = models.CharField(max_length=50)
+    schedule_type = models.CharField(max_length=20)  # 'daily' или 'once'
+    schedule_data = models.JSONField(default=dict)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
