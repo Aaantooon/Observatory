@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from .models import User, Exercise, Result, Notification
+from .models import Review
 
+class ReviewSerializer(serializers.ModelSerializer):
+    user_vk_id = serializers.ReadOnlyField(source='user.vk_id')
+    class Meta:
+        model = Review
+        fields = ['id', 'user', 'user_vk_id', 'exercise_type', 'data', 'status', 'comments', 'created_at']
 
 class NotificationSerializer(serializers.ModelSerializer):
     # Добавляем поле для VK ID пользователя

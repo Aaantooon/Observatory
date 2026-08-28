@@ -65,3 +65,11 @@ class Notification(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_sent = models.DateTimeField(null=True, blank=True)
+
+class Review(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
+    exercise_type = models.CharField(max_length=50)
+    data = models.JSONField()
+    status = models.CharField(max_length=20, default='pending')  # pending / in_review / closed
+    comments = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)    

@@ -36,3 +36,9 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ['user', 'exercise_type', 'schedule_type', 'is_active', 'last_sent']
     list_filter = ['is_active', 'schedule_type', 'exercise_type']
     search_fields = ['user__vk_id', 'exercise_type']
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ['user', 'exercise_type', 'status', 'created_at']
+    list_filter = ['status', 'exercise_type']
+    readonly_fields = ['data', 'comments']

@@ -8,7 +8,58 @@ from .serializers import (
     UserSerializer, ExerciseSerializer, ResultSerializer,
     NotificationSerializer
 )
+from .models import Review
+from .serializers import ReviewSerializer
+from django.utils import timezone
 
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+
+    def create(self, request, *args, **kwargs):
+        vk_id = request.data.get('vk_id')
+        try:
+            user = User.objects.get(vk_id=str(vk_id))
+            review = Review.objects.create(
+                user=user,
+                exercise_type=request.data.get('exercise_type'),
+                data=request.data.get('data', {}),
+                status='pending'
+            )
+            return Response(self.get_serializer(review).data, status=status.HTTP_201_CREATED)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        vk_id = request.query_params.get('vk_id')
+        exercise_type = request.query_params.get('exercise_type')
+        review = Review.objects.filter(
+            user__vk_id=str(vk_id), exercise_type=exercise_type
+        ).exclude(status='closed').order_by('-created_at').first()
+        if review:
+            return Response(self.get_serializer(review).data)
+        return Response({'exists': False})
+
+    @action(detail=True, methods=['post'])
+    def comment(self, request, pk=None):
+        review = self.get_object()
+        review.comments.append({
+            'text': request.data.get('comment'),
+            'is_admin': request.data.get('is_admin', False),
+            'created_at': timezone.now().isoformat()
+        })
+        if review.status == 'pending':
+            review.status = 'in_review'
+        review.save()
+        return Response(self.get_serializer(review).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        review = self.get_object()
+        review.status = 'closed'
+        review.save()
+        return Response(self.get_serializer(review).data)
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
