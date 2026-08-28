@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'social_django', # <--- ДОБАВЛЕНО ДЛЯ ВХОДА ЧЕРЕЗ VK
+    'social_django',  # Вход через VK
     
     # Ваши приложения
     'myapp',
@@ -75,7 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'machina.apps.forum_permission.middleware.ForumPermissionMiddleware',
-    'social_django.middleware.SocialAuthExceptionMiddleware', # <--- ДОБАВЛЕНО
+    'social_django.middleware.SocialAuthExceptionMiddleware',  # Вход через VK
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -95,7 +95,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'machina.core.context_processors.metadata',
-                # ДОБАВЛЕНО ДЛЯ КНОПОК ВХОДА
+                # Вход через VK
                 'social_django.context_processors.backends',
                 'social_django.context_processors.login_redirect',
             ],
@@ -167,27 +167,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'auth.User'
 
-# ===== НАСТРОЙКИ ВХОДА (ИЗМЕНЕНО) =====
-#LOGIN_URL = '/login/'
+# ===== НАСТРОЙКИ ВХОДА =====
+LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
-
-# ===== НАСТРОЙКИ АВТОРИЗАЦИИ VK =====
-AUTHENTICATION_BACKENDS = (
-    'social_core.backends.vk.VKOAuth2',  # Вход через ВК
-    'django.contrib.auth.backends.ModelBackend', # Обычный вход по паролю
-)
-
-# Вставьте сюда ваши данные из приложения ВКонтакте
-SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID', '')    # ID приложения
-SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET', '') # Защищенный ключ
-SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email'] # Запрашиваем email
-VK_APP_ID = os.getenv('VK_APP_ID', '')
-
-# Чтобы избежать ошибок связки аккаунтов
-SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = False
-SOCIAL_AUTH_RAISE_EXCEPTIONS = False
-# =======================================
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -215,7 +198,41 @@ ADMIN_INDEX_TITLE = "Добро пожаловать в панель управ�
 
 VK_TOKEN = os.getenv('VK_TOKEN')
 VK_GROUP_ID = os.getenv('VK_GROUP_ID')
-VK_APP_ID = os.getenv('VK_APP_ID', '54728530')
 
 MACHINA_FORUM_NAME = 'Путь наблюдателя'
 MACHINA_MAIN_CRISPY_TEMPLATE_PACK = 'bootstrap5'
+
+# ================================================================
+# ===== АВТОРИЗАЦИЯ ЧЕРЕЗ VK (social_django) =====
+# ================================================================
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.vk.VKOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID')
+SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET')
+SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email']
+SOCIAL_AUTH_VK_OAUTH2_EXTRA_DATA = ['email', 'photo_max_orig']
+
+SOCIAL_AUTH_CREATE_USERS = True
+SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = False
+SOCIAL_AUTH_RAISE_EXCEPTIONS = False
+
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+    'myapp.pipeline.save_vk_avatar',  # Сохранение аватара
+)
+
+# VK APP ID (также используется для бота)
+VK_APP_ID = os.getenv('VK_APP_ID', '')
+VK_APP_SECRET = os.getenv('VK_APP_SECRET', '')
