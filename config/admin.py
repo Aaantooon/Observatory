@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.contrib.auth.models import User, Group
-from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin, GroupAdmin
 from django.utils.translation import gettext_lazy as _
 
 # Регистрируем модели из bot_api
@@ -66,5 +66,5 @@ try:
 except NameError:
     pass
 
-admin_site.register(User, UserAdmin)
+admin_site.register(User, DjangoUserAdmin)
 admin_site.register(Group, GroupAdmin)
