@@ -211,8 +211,9 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
 )
 
-SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_APP_ID')
-SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_APP_SECRET')
+# Используем переменные из .env
+SOCIAL_AUTH_VK_OAUTH2_KEY = os.getenv('VK_CLIENT_ID')      # ID приложения
+SOCIAL_AUTH_VK_OAUTH2_SECRET = os.getenv('VK_CLIENT_SECRET') # Защищённый ключ
 SOCIAL_AUTH_VK_OAUTH2_SCOPE = ['email']
 SOCIAL_AUTH_VK_OAUTH2_EXTRA_DATA = ['email', 'photo_max_orig']
 
@@ -233,6 +234,6 @@ SOCIAL_AUTH_PIPELINE = (
     'myapp.pipeline.save_vk_avatar',  # Сохранение аватара
 )
 
-# VK APP ID (также используется для бота)
-VK_APP_ID = os.getenv('VK_APP_ID', '')
-VK_APP_SECRET = os.getenv('VK_APP_SECRET', '')
+# Для совместимости с другими частями проекта
+VK_APP_ID = os.getenv('VK_CLIENT_ID', '')
+VK_APP_SECRET = os.getenv('VK_CLIENT_SECRET', '')
