@@ -1,3 +1,4 @@
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
 from vk_api.utils import get_random_id
 from api_client import APIClient
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard
@@ -14,6 +15,59 @@ import re
 
 
 class BotHandlers:
+
+    def show_review_menu(self, user_id):
+        results = self.api.get_user_results(user_id)
+        if not results:
+            self.send_message(user_id, "🌫️ У тебя пока нет пройденных упражнений.", main_menu())
+            return
+
+        self.user_states[user_id] = 'sending_review'
+        exercises_map = {
+            'stress_search': '1. Поиск стресса',
+            'happiness_list': '2. Список счастья',
+            'my_roles': '3. Мои роли',
+            'conscious_choice': '4. Осознанный выбор',
+            'diary': '5. Дневник',
+            'stop_technique': '6. Стоп-техника'
+        }
+        done = set(r.get('exercise_type') for r in results)
+        message = "📨 **Отправить на проверку:**\n\n"
+        for ex_type, name in exercises_map.items():
+            if ex_type in done:
+                message += f"{name}\n"
+        message += "\nНапиши номер упражнения, чтобы отправить."
+        self.send_message(user_id, message, back_keyboard())
+
+    def handle_send_review(self, user_id, text_clean):
+        results = self.api.get_user_results(user_id)
+        exercises_map = {
+            '1': 'stress_search', '2': 'happiness_list', '3': 'my_roles',
+            '4': 'conscious_choice', '5': 'diary', '6': 'stop_technique'
+        }
+        if "назад" in text_clean:
+            self.user_states[user_id] = 'main'
+            self.send_message(user_id, "🔦 Возвращаемся.", main_menu())
+            return
+
+        ex_type = exercises_map.get(text_clean[0]) if text_clean and text_clean[0].isdigit() else None
+        if not ex_type:
+            self.send_message(user_id, "Напиши номер упражнения из списка.", back_keyboard())
+            return
+
+        result = next((r for r in results if r.get('exercise_type') == ex_type), None)
+        if not result:
+            self.send_message(user_id, "Это упражнение ещё не пройдено.", back_keyboard())
+            return
+
+        self.api.send_for_review(user_id, ex_type, result.get('result_data', {}))
+        self.user_states[user_id] = 'main'
+        self.send_message(
+            user_id,
+            "✅ Отправлено на проверку! Ожидай комментарий от наблюдателя.",
+            main_menu()
+        )
+        
     def __init__(self, vk_session):
         self.vk = vk_session
         self.api = APIClient()
@@ -58,6 +112,8 @@ class BotHandlers:
         # Проверка сессий упражнений
         if user_id in self.stress_search.user_sessions:
             self.stress_search.handle_message(user_id, text)
+        elif state == 'sending_review':
+            self.handle_send_review(user_id, text_clean)
             return
         if user_id in self.happiness_list.user_sessions:
             self.happiness_list.handle_message(user_id, text)
@@ -94,10 +150,12 @@ class BotHandlers:
         text_clean = self._normalize_text(text)
 
         if state == 'main':
-            if "упражн" in text_clean:
+            if "упражнение" in text_clean:
                 self.show_exercises(user_id)
             elif "результат" in text_clean or "мои" in text_clean:
                 self.show_results(user_id)
+            elif "проверк" in text_clean:
+                self.show_review_menu(user_id)
             elif "напомина" in text_clean:
                 self.show_reminders(user_id)
             else:

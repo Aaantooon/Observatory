@@ -79,3 +79,12 @@ def finish_keyboard():
     keyboard.add_line()
     keyboard.add_button("❌ Отмена", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
+
+def main_menu():
+    keyboard = VkKeyboard(one_time=False)
+    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("📊 Мои результаты", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_line()
+    keyboard.add_button("⏰ Напоминания", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("📨 Проверка", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
