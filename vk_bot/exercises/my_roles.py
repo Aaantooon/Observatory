@@ -1,0 +1,275 @@
+from .base import BaseExercise
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu
+
+
+class MyRolesExercise(BaseExercise):
+    def get_exercise_type(self):
+        return "my_roles"
+
+    def get_exercise_title(self):
+        return "Мои роли"
+
+    def start(self, user_id):
+        progress = self.get_progress(user_id)
+        
+        if progress and progress.get('is_completed'):
+            self.send_message(
+                user_id,
+                "✅ Это упражнение уже пройдено\n"
+                "Хочешь пройти заново?",
+                finish_keyboard()
+            )
+            self.user_sessions[user_id] = {'phase': 'complete_or_view'}
+            return
+
+        session = {
+            'phase': 'social',
+            'social_roles': [],
+            'interpersonal_roles': [],
+            'intrapersonal_roles': [],
+            'current_type': 'social',
+            'step': 1
+        }
+        
+        if progress and progress.get('data'):
+            session.update(progress.get('data', {}))
+
+        self.user_sessions[user_id] = session
+        self._show_instruction(user_id, session)
+
+    def _show_instruction(self, user_id, session):
+        phase = session.get('phase', 'social')
+        
+        if phase == 'social':
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║        🎭 МОИ РОЛИ             ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                "**Часть 1: Социальные роли**\n"
+                "Роли, которые мы играем для общества.\n\n"
+                "Примеры:\n"
+                "· Повар, прохожий, пешеход\n"
+                "· Продавец, гуляющий в парке\n"
+                "· Смотрящий на деревья\n\n"
+                "📝 Напиши свои социальные роли\n"
+                "Одну за раз. Нажми «Завершить» когда закончишь.",
+                exercise_keyboard()
+            )
+        elif phase == 'interpersonal':
+            self.send_message(
+                user_id,
+                "**Часть 2: Межличностные роли**\n"
+                "Роли, которые мы играем для конкретных людей.\n\n"
+                "Примеры:\n"
+                "· Друг для Серёжи\n"
+                "· Отец для Алины\n"
+                "· Рабочий для начальника Александра\n\n"
+                "📝 Напиши свои межличностные роли:",
+                exercise_keyboard()
+            )
+        elif phase == 'intrapersonal':
+            self.send_message(
+                user_id,
+                "**Часть 3: Внутриличностные роли**\n"
+                "Роли внутри себя.\n\n"
+                "Примеры:\n"
+                "· Злой, Ленивый, Застенчивый\n"
+                "· Щедрый, Тревожный, Смелый\n\n"
+                "📝 Напиши свои внутриличностные роли:",
+                exercise_keyboard()
+            )
+        elif phase == 'analyze':
+            self._analyze_roles(user_id, session)
+
+    def handle_message(self, user_id, text):
+        session = self.user_sessions.get(user_id)
+        if not session:
+            self.start(user_id)
+            return
+
+        text_lower = text.lower().strip()
+
+        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+            self._handle_cancel(user_id, session)
+            return
+
+        if text_lower in ["завершить", "✅ завершить"]:
+            self._handle_phase_complete(user_id, session)
+            return
+
+        phase = session.get('phase')
+        
+        if phase == 'social':
+            session['social_roles'].append(text)
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                f"✅ Добавлено: {text}\n\n"
+                "Продолжай или нажми «Завершить»",
+                exercise_keyboard()
+            )
+        
+        elif phase == 'interpersonal':
+            session['interpersonal_roles'].append(text)
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                f"✅ Добавлено: {text}\n\n"
+                "Продолжай или нажми «Завершить»",
+                exercise_keyboard()
+            )
+        
+        elif phase == 'intrapersonal':
+            session['intrapersonal_roles'].append(text)
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                f"✅ Добавлено: {text}\n\n"
+                "Продолжай или нажми «Завершить»",
+                exercise_keyboard()
+            )
+        
+        elif phase == 'analyze':
+            self._handle_analysis(user_id, text, session)
+
+    def _handle_phase_complete(self, user_id, session):
+        phase = session.get('phase')
+        
+        if phase == 'social':
+            if not session.get('social_roles'):
+                self.send_message(
+                    user_id,
+                    "❌ Добавь хотя бы одну социальную роль",
+                    exercise_keyboard()
+                )
+                return
+            
+            session['phase'] = 'interpersonal'
+            self.save_progress(user_id, session)
+            self._show_instruction(user_id, session)
+        
+        elif phase == 'interpersonal':
+            if not session.get('interpersonal_roles'):
+                self.send_message(
+                    user_id,
+                    "❌ Добавь хотя бы одну межличностную роль",
+                    exercise_keyboard()
+                )
+                return
+            
+            session['phase'] = 'intrapersonal'
+            self.save_progress(user_id, session)
+            self._show_instruction(user_id, session)
+        
+        elif phase == 'intrapersonal':
+            if not session.get('intrapersonal_roles'):
+                self.send_message(
+                    user_id,
+                    "❌ Добавь хотя бы одну внутриличностную роль",
+                    exercise_keyboard()
+                )
+                return
+            
+            session['phase'] = 'analyze'
+            session['analysis_index'] = 0
+            session['analysis_results'] = []
+            self.save_progress(user_id, session)
+            self._analyze_roles(user_id, session)
+
+    def _analyze_roles(self, user_id, session):
+        all_roles = (session.get('social_roles', []) + 
+                     session.get('interpersonal_roles', []) + 
+                     session.get('intrapersonal_roles', []))
+        
+        index = session.get('analysis_index', 0)
+        
+        if index >= len(all_roles):
+            self._finish(user_id, session)
+            return
+        
+        role = all_roles[index]
+        
+        self.send_message(
+            user_id,
+            f"╔══════════════════════════════════╗\n"
+            f"║     🎭 АНАЛИЗ РОЛИ {index+1}/{len(all_roles)}    ║\n"
+            f"╚══════════════════════════════════╝\n\n"
+            f"📌 Роль: **{role}**\n\n"
+            f"Представь, что тебе заплатят $100,000,000\n"
+            f"за то, что ты сыграешь её:\n\n"
+            f"✨ **Идеально** — как это будет выглядеть?\n"
+            f"👹 **Ужасно** — как это будет выглядеть?\n\n"
+            f"Напиши через запятую:\n"
+            f"`Идеально: ..., Ужасно: ...`",
+            finish_keyboard()
+        )
+
+    def _handle_analysis(self, user_id, text, session):
+        parts = text.split('Ужасно:')
+        ideal = parts[0].replace('Идеально:', '').strip()
+        terrible = parts[1].strip() if len(parts) > 1 else ''
+        
+        if not ideal or not terrible:
+            self.send_message(
+                user_id,
+                "❌ Формат: `Идеально: ..., Ужасно: ...`",
+                finish_keyboard()
+            )
+            return
+
+        all_roles = (session.get('social_roles', []) + 
+                     session.get('interpersonal_roles', []) + 
+                     session.get('intrapersonal_roles', []))
+        
+        index = session.get('analysis_index', 0)
+        role = all_roles[index]
+        
+        session['analysis_results'].append({
+            'role': role,
+            'ideal': ideal,
+            'terrible': terrible
+        })
+        
+        session['analysis_index'] = index + 1
+        self.save_progress(user_id, session)
+        self._analyze_roles(user_id, session)
+
+    def _finish(self, user_id, session):
+        result = {
+            'social_roles': session.get('social_roles', []),
+            'interpersonal_roles': session.get('interpersonal_roles', []),
+            'intrapersonal_roles': session.get('intrapersonal_roles', []),
+            'analysis': session.get('analysis_results', [])
+        }
+        
+        self.save_result(user_id, result)
+        self.delete_progress(user_id)
+        self.end_session(user_id)
+
+        message = (
+            "╔══════════════════════════════════╗\n"
+            "║        ✨ ПУТЬ ЗАВЕРШЁН         ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            "🎭 **Итог по ролям:**\n\n"
+            f"Социальных: {len(result['social_roles'])}\n"
+            f"Межличностных: {len(result['interpersonal_roles'])}\n"
+            f"Внутриличностных: {len(result['intrapersonal_roles'])}\n\n"
+            "💡 **Важно:**\n"
+            "· Нет идеальных ролей\n"
+            "· Ты стараешься дарить добро\n"
+            "· Ты не делаешь зла\n"
+            "· Это уже хорошо ✨"
+        )
+        
+        self.send_message(user_id, message, main_menu())
+
+    def _handle_cancel(self, user_id, session):
+        self.save_progress(user_id, session)
+        self.end_session(user_id)
+        self.send_message(
+            user_id,
+            "🌫️ Прогресс сохранён\n"
+            "Возвращайся, чтобы продолжить ✨",
+            main_menu()
+        )

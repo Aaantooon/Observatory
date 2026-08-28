@@ -1,8 +1,14 @@
-# vk_bot/handlers.py
 from vk_api.utils import get_random_id
 from api_client import APIClient
-from keyboards import main_menu, exercises_menu
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard
 from exercises.stress_search import StressSearchExercise
+from exercises.happiness_list import HappinessListExercise
+from exercises.my_roles import MyRolesExercise
+from exercises.conscious_choice import ConsciousChoiceExercise
+from exercises.diary import DiaryExercise
+from exercises.stop_technique import StopTechniqueExercise
+from admin_check import AdminCheck
+from notifications import NotificationSystem
 from datetime import datetime
 import re
 
@@ -12,7 +18,18 @@ class BotHandlers:
         self.vk = vk_session
         self.api = APIClient()
         self.user_states = {}
+        
         self.stress_search = StressSearchExercise(vk_session, self.api)
+        self.happiness_list = HappinessListExercise(vk_session, self.api)
+        self.my_roles = MyRolesExercise(vk_session, self.api)
+        self.conscious_choice = ConsciousChoiceExercise(vk_session, self.api)
+        self.diary = DiaryExercise(vk_session, self.api)
+        self.stop_technique = StopTechniqueExercise(vk_session, self.api)
+        
+        # Укажи здесь ID админов
+        self.admin_check = AdminCheck(vk_session, self.api)
+        self.notifications = NotificationSystem(vk_session, self.api)
+        self.notifications.start()
 
     def send_message(self, user_id, message, keyboard=None):
         self.vk.method('messages.send', {
@@ -21,19 +38,6 @@ class BotHandlers:
             'random_id': get_random_id(),
             'keyboard': keyboard
         })
-
-    def show_placeholder(self, user_id, exercise_name, emoji):
-        self.send_message(
-            user_id,
-            "╔══════════════════════════════════╗\n"
-            f"║    {emoji} {exercise_name}            ║\n"
-            "╚══════════════════════════════════╝\n\n"
-            "🌫️ Это упражнение пока в тумане.\n"
-            "· Скоро оно появится здесь ✨\n\n"
-            "· А пока попробуй **«Поиск стресса»**\n"
-            "· Свет фонарика уже ждёт тебя 🔥",
-            main_menu()
-        )
 
     def _normalize_text(self, text):
         emoji_pattern = re.compile("["
@@ -52,8 +56,24 @@ class BotHandlers:
         return emoji_pattern.sub('', text).strip().lower()
 
     def handle_message(self, user_id, text, first_name, last_name):
+        # Проверка сессий упражнений
         if user_id in self.stress_search.user_sessions:
             self.stress_search.handle_message(user_id, text)
+            return
+        if user_id in self.happiness_list.user_sessions:
+            self.happiness_list.handle_message(user_id, text)
+            return
+        if user_id in self.my_roles.user_sessions:
+            self.my_roles.handle_message(user_id, text)
+            return
+        if user_id in self.conscious_choice.user_sessions:
+            self.conscious_choice.handle_message(user_id, text)
+            return
+        if user_id in self.diary.user_sessions:
+            self.diary.handle_message(user_id, text)
+            return
+        if user_id in self.stop_technique.user_sessions:
+            self.stop_technique.handle_message(user_id, text)
             return
 
         if user_id not in self.user_states:
@@ -79,6 +99,8 @@ class BotHandlers:
                 self.show_exercises(user_id)
             elif "результат" in text_clean or "мои" in text_clean:
                 self.show_results(user_id)
+            elif "напомина" in text_clean:
+                self.show_reminders(user_id)
             else:
                 self.send_message(
                     user_id,
@@ -94,22 +116,24 @@ class BotHandlers:
                     "🔦 Возвращаемся на перекрёсток.",
                     main_menu()
                 )
-
             elif "поиск стресса" in text_clean or "стресс" in text_clean or text_clean == "1":
                 self.user_states[user_id] = 'main'
                 self.stress_search.start(user_id)
-                return
-
             elif "список счастья" in text_clean or "счасть" in text_clean or text_clean == "2":
-                self.show_placeholder(user_id, "Список счастья", "✨")
+                self.user_states[user_id] = 'main'
+                self.happiness_list.start(user_id)
             elif "роли" in text_clean or text_clean == "3":
-                self.show_placeholder(user_id, "Мои роли", "🎭")
+                self.user_states[user_id] = 'main'
+                self.my_roles.start(user_id)
             elif "осознанный выбор" in text_clean or "выбор" in text_clean or text_clean == "4":
-                self.show_placeholder(user_id, "Осознанный выбор", "🧘")
+                self.user_states[user_id] = 'main'
+                self.conscious_choice.start(user_id)
             elif "дневник" in text_clean or text_clean == "5":
-                self.show_placeholder(user_id, "Дневник", "📖")
+                self.user_states[user_id] = 'main'
+                self.diary.start(user_id)
             elif "стоп" in text_clean or text_clean == "6":
-                self.show_placeholder(user_id, "Стоп-техника", "🛑")
+                self.user_states[user_id] = 'main'
+                self.stop_technique.start(user_id)
             else:
                 self.send_message(
                     user_id,
@@ -130,14 +154,10 @@ class BotHandlers:
             "4️⃣ Осознанный выбор — научись выбирать 🧘\n"
             "5️⃣ Дневник — запиши свои мысли 📖\n"
             "6️⃣ Стоп-техника — останови момент 🛑\n\n"
-            f"{self._get_separator()}\n"
             "🔥 Нажми на кнопку, чтобы начать!"
         )
 
         self.send_message(user_id, message, exercises_menu())
-
-    def _get_separator(self):
-        return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
     def show_results(self, user_id):
         results = self.api.get_user_results(user_id)
@@ -159,32 +179,14 @@ class BotHandlers:
             elif streak == 1:
                 streak_text = f"🔥 **{streak}** день! Начинаем!"
 
-        progress = self.api.get_progress(user_id, 'stress_search')
-        stress_progress = None
-        if progress and progress.get('exists'):
-            data = progress.get('data', {})
-            items = data.get('items', [])
-            if items:
-                stress_progress = {
-                    'count': len(items),
-                    'target': 100,
-                    'phase': data.get('phase', 'collecting')
-                }
-
-        stress_completed = False
-        for res in results:
-            if res.get('exercise_title', '').lower() == 'поиск стресса':
-                stress_completed = True
-                break
-
-        if not results and not stress_progress:
+        if not results:
             self.send_message(
                 user_id,
                 "╔══════════════════════════════════╗\n"
                 "║        🌫️ ПУТЬ ПУСТ            ║\n"
                 "╚══════════════════════════════════╝\n\n"
                 "· Твой путь ещё пуст\n"
-                "· Начни с **«Поиска стресса»**\n"
+                "· Начни с любого упражнения\n"
                 "· Свет фонарика уже ждёт тебя 🔥",
                 main_menu()
             )
@@ -197,88 +199,63 @@ class BotHandlers:
         if streak_text:
             message += f"{streak_text}\n\n"
 
-        message += "📋 **Образы в тумане:**\n\n"
+        message += "📋 **Пройденные упражнения:**\n\n"
 
-        stress_status = "🔘 Не начат"
-        stress_detail = ""
-        
-        if stress_completed:
-            stress_status = "✅ Путь пройден"
-            for res in results:
-                if res.get('exercise_title', '').lower() == 'поиск стресса':
-                    if res.get('result_data'):
-                        if isinstance(res['result_data'], dict):
-                            if 'total_count' in res['result_data']:
-                                stress_detail = f" ({res['result_data']['total_count']} образов)"
-                            elif 'items' in res['result_data']:
-                                stress_detail = f" ({len(res['result_data']['items'])} образов)"
-                    break
-        elif stress_progress:
-            count = stress_progress['count']
-            phase = stress_progress['phase']
-            stress_detail = f" ({count}/100 образов)"
-            
-            if phase == 'collecting':
-                stress_status = "🔄 Собираем образы"
-            elif phase == 'analysis':
-                stress_status = "🔄 Разбираем путь"
-            elif phase == 'question':
-                stress_status = "🔄 Вглядываемся в туман"
-            else:
-                stress_status = "🔄 В пути"
+        exercises_map = {
+            'stress_search': '1️⃣ Поиск стресса',
+            'happiness_list': '2️⃣ Список счастья',
+            'my_roles': '3️⃣ Мои роли',
+            'conscious_choice': '4️⃣ Осознанный выбор',
+            'diary': '5️⃣ Дневник',
+            'stop_technique': '6️⃣ Стоп-техника'
+        }
 
-        message += f"**1. Поиск стресса** {stress_status}{stress_detail}\n"
+        completed = set()
+        for res in results:
+            ex_type = res.get('exercise_type')
+            if ex_type in exercises_map:
+                completed.add(ex_type)
 
-        exercise_names = [
-            ("2. Список счастья", "✨"),
-            ("3. Мои роли", "🎭"),
-            ("4. Осознанный выбор", "🧘"),
-            ("5. Дневник", "📖"),
-            ("6. Стоп-техника", "🛑")
-        ]
-        
-        for name, emoji in exercise_names:
-            completed = False
-            for res in results:
-                title_lower = res.get('exercise_title', '').lower()
-                clean_name = name.replace("2. ", "").replace("3. ", "").replace("4. ", "").replace("5. ", "").replace("6. ", "")
-                if title_lower == clean_name.lower():
-                    completed = True
-                    break
-            
-            if completed:
+        for ex_type, name in exercises_map.items():
+            if ex_type in completed:
                 message += f"{name} ✅ Пройдено\n"
             else:
                 message += f"{name} 🔘 Не начат\n"
 
-        message += "\n"
-
-        if results:
-            message += "📝 **Разобранные образы:**\n\n"
-            for i, res in enumerate(results[:10], 1):
-                status = "✅ Освещён" if res.get('is_approved') else "⏳ В тумане"
-                title = res.get('exercise_title', 'Упражнение')
-                
-                count_text = ""
-                if res.get('result_data'):
-                    if isinstance(res['result_data'], dict):
-                        if 'items' in res['result_data']:
-                            count = len(res['result_data']['items'])
-                            count_text = f" ({count} образов)"
-                        elif 'total_count' in res['result_data']:
-                            count = res['result_data']['total_count']
-                            count_text = f" ({count} образов)"
-                
-                message += f"{i}. {title}{count_text}\n"
-                message += f"   {status}\n"
-                
-                completed_at = res.get('completed_at')
-                if completed_at:
-                    try:
-                        dt = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
-                        message += f"   📅 {dt.strftime('%d.%m.%Y %H:%M')}\n"
-                    except:
-                        pass
-                message += "\n"
+        message += "\n📝 **Последние записи:**\n\n"
+        
+        for res in results[:5]:
+            ex_type = res.get('exercise_type')
+            name = exercises_map.get(ex_type, ex_type)
+            data = res.get('result_data', {})
+            
+            if ex_type == 'stress_search':
+                count = len(data.get('items', []))
+                message += f"· {name}: {count} образов\n"
+            elif ex_type == 'happiness_list':
+                count = len(data.get('items', []))
+                message += f"· {name}: {count} пунктов\n"
+            elif ex_type == 'diary':
+                if data.get('mood'):
+                    message += f"· {name}: {data.get('mood')[:30]}\n"
+            elif ex_type == 'stop_technique':
+                message += f"· {name}: #{data.get('count', 1)}\n"
+            else:
+                message += f"· {name}: ✅\n"
 
         self.send_message(user_id, message, main_menu())
+
+    def show_reminders(self, user_id):
+        self.user_states[user_id] = 'reminders'
+        self.send_message(
+            user_id,
+            "╔══════════════════════════════════╗\n"
+            "║        ⏰ НАПОМИНАНИЯ           ║\n"
+            "╚══════════════════════════════════╝\n\n"
+            "Ты можешь настроить напоминания:\n\n"
+            "📖 **Дневник** — утреннее напоминание\n"
+            "🛑 **Стоп-техника** — в течение дня\n"
+            "📋 **Любое упражнение** — продолжить позже\n\n"
+            "Выбери настройку:",
+            get_reminder_keyboard()
+        )

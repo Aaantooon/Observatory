@@ -8,7 +8,7 @@ from myapp.vk_id_auth import vk_login_start, vk_login_callback
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('bot_api.urls')),
-    path('forum/', include('machina.urls')),
+    #path('forum/', include('machina.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('vk/login/', vk_login_start, name='vk_login_start'),
     path('vk/callback/', vk_login_callback, name='vk_login_callback'),
