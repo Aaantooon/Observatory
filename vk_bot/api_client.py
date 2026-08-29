@@ -296,7 +296,7 @@ class APIClient:
     def get_review_status_by_type(self, vk_id, exercise_type):
         return self.get_review_status(vk_id, exercise_type)
 
-        def get_pending_admin_comments(self):
+    def get_pending_admin_comments(self):
             try:
                 response = requests.get(f"{self.base_url}/admin/review/pending_admin_comments/", headers=self.headers, timeout=5)
                 if response.status_code == 200:
@@ -305,13 +305,15 @@ class APIClient:
                 logger.error(f"Get pending comments error: {e}")
             return []
 
-    def mark_comment_sent(self, review_id, comment_index):
+    def get_review_status_by_type(self, vk_id, exercise_type):
+        return self.get_review_status(vk_id, exercise_type)
+
+    def get_pending_admin_comments(self):
         try:
-            requests.post(
-                f"{self.base_url}/admin/review/{review_id}/mark_comment_sent/",
-                json={"comment_index": comment_index},
-                headers=self.headers, timeout=5
-            )
+            response = requests.get(f"{self.base_url}/admin/review/pending_admin_comments/", headers=self.headers, timeout=5)
+            if response.status_code == 200:
+                return response.json()
         except Exception as e:
-            logger.error(f"Mark comment sent error: {e}")
+            logger.error(f"Get pending comments error: {e}")
+        return []
     
