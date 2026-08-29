@@ -151,7 +151,7 @@ class APIClient:
     def send_for_review(self, user_vk_id, exercise_type, data):
         try:
             response = requests.post(
-                f"{self.base_url}/reviews/",
+                f"{self.base_url}/admin/review/",
                 json={
                     "vk_id": str(user_vk_id),
                     "exercise_type": exercise_type,
@@ -293,3 +293,5 @@ class APIClient:
         except Exception as e:
             logger.error(f"Mark notification sent error: {e}")
         return False
+    def get_review_status_by_type(self, vk_id, exercise_type):
+        return self.get_review_status(vk_id, exercise_type)
