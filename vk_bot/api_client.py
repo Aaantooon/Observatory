@@ -182,7 +182,7 @@ class APIClient:
     def add_comment(self, review_id, comment, is_admin=False):
         try:
             response = requests.post(
-                f"{self.base_url}/reviews/{review_id}/comment/",
+                f"{self.base_url}/admin/review/{review_id}/comment/",
                 json={
                     "comment": comment,
                     "is_admin": is_admin
