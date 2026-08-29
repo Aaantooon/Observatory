@@ -148,7 +148,7 @@ class BotHandlers:
         text_clean = self._normalize_text(text)
 
         if state == 'main':
-            if "упражнение" in text_clean:
+            if "упражнен" in text_clean:
                 self.show_exercises(user_id)
             elif "результат" in text_clean or "мои" in text_clean:
                 self.show_results(user_id)
