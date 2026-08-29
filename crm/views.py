@@ -2,6 +2,25 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from bot_api.models import Review
+from bot_api.models import User, Result, Review
+
+
+@staff_member_required
+def client_list(request):
+    clients = User.objects.all().order_by('-registered_at')
+    return render(request, 'crm/client_list.html', {'clients': clients})
+
+
+@staff_member_required
+def client_detail(request, user_id):
+    client = get_object_or_404(User, id=user_id)
+    results = Result.objects.filter(user=client).order_by('-completed_at')
+    reviews = Review.objects.filter(user=client).order_by('-created_at')
+    return render(request, 'crm/client_detail.html', {
+        'client': client,
+        'results': results,
+        'reviews': reviews,
+    })
 
 
 @staff_member_required

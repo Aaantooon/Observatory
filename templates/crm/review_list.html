@@ -3,6 +3,9 @@
 {% block content %}
 <div style="max-width: 900px; margin: 0 auto;">
     <h1 style="color: #e2c044; font-weight: 300;">📋 Проверки упражнений</h1>
+    <div style="margin: 10px 0 20px;">
+        <a href="{% url 'crm_client_list' %}" style="color: #8a9aaa;">👥 Все клиенты →</a>
+    </div>
     {% if reviews %}
         <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
         {% for r in reviews %}

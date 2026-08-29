@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}CRM — Клиенты{% endblock %}
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <h1 style="color: #e2c044; font-weight: 300;">👥 Клиенты</h1>
+    <div style="margin: 10px 0 20px;">
+        <a href="{% url 'crm_review_list' %}" style="color: #8a9aaa;">← К проверкам</a>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+    {% for c in clients %}
+        <a href="{% url 'crm_client_detail' c.id %}" style="text-decoration: none;">
+            <div class="card-glass">
+                <strong style="color: #e2c044;">{{ c.first_name }} {{ c.last_name }}</strong>
+                <span style="color: #8a9aaa;"> · Стрик: {{ c.streak }}</span>
+                <div style="color: #5a6a7e; font-size: 0.85rem;">VK ID: {{ c.vk_id }}</div>
+            </div>
+        </a>
+    {% endfor %}
+    </div>
+</div>
+{% endblock %}

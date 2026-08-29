@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ client.first_name }} — CRM{% endblock %}
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <h1 style="color: #e2c044; font-weight: 300;">{{ client.first_name }} {{ client.last_name }}</h1>
+    <p style="color: #8a9aaa;">VK ID: {{ client.vk_id }} · Стрик: {{ client.streak }} дней</p>
+    <div style="margin: 10px 0 20px;">
+        <a href="{% url 'crm_client_list' %}" style="color: #8a9aaa;">← Все клиенты</a>
+    </div>
+
+    <div class="card-glass" style="margin-bottom: 20px;">
+        <h3 style="color: #e2c044;">📋 Упражнения ({{ results|length }})</h3>
+        {% for r in results %}
+            <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <strong style="color: #d4d9e6;">{{ r.exercise_type }}</strong>
+                <span style="color: #5a6a7e; font-size: 0.85rem;"> · {{ r.completed_at|date:"d.m.Y H:i" }}</span>
+                {% if r.is_approved %}<span style="color: #4ac06a;"> ✅</span>{% endif %}
+            </div>
+        {% empty %}
+            <p style="color: #5a6a7e;">Пока нет пройденных упражнений.</p>
+        {% endfor %}
+    </div>
+
+    <div class="card-glass">
+        <h3 style="color: #e2c044;">📨 История проверок</h3>
+        {% for rev in reviews %}
+            <a href="{% url 'crm_review_detail' rev.id %}" style="text-decoration: none;">
+                <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <strong style="color: #d4d9e6;">{{ rev.exercise_type }}</strong>
+                    <span style="color: #8a9aaa;"> · {{ rev.status }}</span>
+                    <span style="color: #5a6a7e; font-size: 0.85rem;"> · {{ rev.created_at|date:"d.m.Y H:i" }}</span>
+                </div>
+            </a>
+        {% empty %}
+            <p style="color: #5a6a7e;">Проверок ещё не было.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
