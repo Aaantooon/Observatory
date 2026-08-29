@@ -5,9 +5,9 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin, GroupAdmin
 from django.utils.translation import gettext_lazy as _
 
 # Регистрируем модели из bot_api
-from bot_api.models import User as VKUser, Exercise, Result, ExerciseProgress, Notification
-from bot_api.admin import UserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin
+from bot_api.models import User as VKUser, Exercise, Result, ExerciseProgress, Notification, Review
 
+from bot_api.admin import UserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin, ReviewAdmin
 # Регистрируем модели из myapp
 try:
     from myapp.models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile
@@ -55,6 +55,7 @@ admin_site.register(Exercise, ExerciseAdmin)
 admin_site.register(Result, ResultAdmin)
 admin_site.register(ExerciseProgress, ExerciseProgressAdmin)
 admin_site.register(Notification, NotificationAdmin)
+admin_site.register(Review, ReviewAdmin)
 
 try:
     admin_site.register(Module, ModuleAdmin)
