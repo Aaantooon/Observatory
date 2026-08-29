@@ -326,4 +326,16 @@ class APIClient:
             )
         except Exception as e:
             logger.error(f"Mark comment sent error: {e}")
+
+    def get_active_review(self, vk_id):
+        try:
+            response = requests.get(f"{self.base_url}/admin/review/active_for_user/?vk_id={vk_id}", headers=self.headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('exists') is False:
+                    return None
+                return data
+        except Exception as e:
+            logger.error(f"Get active review error: {e}")
+        return None
     
