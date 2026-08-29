@@ -12,6 +12,8 @@ from .models import Review
 from .serializers import ReviewSerializer
 from django.utils import timezone
 
+
+
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
@@ -60,6 +62,31 @@ class ReviewViewSet(viewsets.ModelViewSet):
         review.status = 'closed'
         review.save()
         return Response(self.get_serializer(review).data)
+
+    @action(detail=False, methods=['get'])
+    def pending_admin_comments(self, request):
+        """Комментарии админа, ещё не отправленные пользователю в боте"""
+        result = []
+        for review in Review.objects.exclude(status='closed'):
+            for i, c in enumerate(review.comments):
+                if c.get('is_admin') and not c.get('sent_to_bot'):
+                    result.append({
+                        'review_id': review.id,
+                        'comment_index': i,
+                        'user_vk_id': review.user.vk_id,
+                        'exercise_type': review.exercise_type,
+                        'text': c.get('text')
+                    })
+        return Response(result)
+
+    @action(detail=True, methods=['post'])
+    def mark_comment_sent(self, request, pk=None):
+        review = self.get_object()
+        idx = request.data.get('comment_index')
+        if idx is not None and 0 <= idx < len(review.comments):
+            review.comments[idx]['sent_to_bot'] = True
+            review.save()
+        return Response({'status': 'ok'})
 
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
@@ -255,27 +282,3 @@ class ProgressViewSet(viewsets.ViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=['get'])
-    def pending_admin_comments(self, request):
-        """Комментарии админа, ещё не отправленные пользователю в боте"""
-        result = []
-        for review in Review.objects.exclude(status='closed'):
-            for i, c in enumerate(review.comments):
-                if c.get('is_admin') and not c.get('sent_to_bot'):
-                    result.append({
-                        'review_id': review.id,
-                        'comment_index': i,
-                        'user_vk_id': review.user.vk_id,
-                        'exercise_type': review.exercise_type,
-                        'text': c.get('text')
-                    })
-        return Response(result)
-
-    @action(detail=True, methods=['post'])
-    def mark_comment_sent(self, request, pk=None):
-        review = self.get_object()
-        idx = request.data.get('comment_index')
-        if idx is not None and 0 <= idx < len(review.comments):
-            review.comments[idx]['sent_to_bot'] = True
-            review.save()
-        return Response({'status': 'ok'})
