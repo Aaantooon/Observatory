@@ -254,3 +254,28 @@ class ProgressViewSet(viewsets.ViewSet):
             return Response({'status': 'deleted'})
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'])
+    def pending_admin_comments(self, request):
+        """Комментарии админа, ещё не отправленные пользователю в боте"""
+        result = []
+        for review in Review.objects.exclude(status='closed'):
+            for i, c in enumerate(review.comments):
+                if c.get('is_admin') and not c.get('sent_to_bot'):
+                    result.append({
+                        'review_id': review.id,
+                        'comment_index': i,
+                        'user_vk_id': review.user.vk_id,
+                        'exercise_type': review.exercise_type,
+                        'text': c.get('text')
+                    })
+        return Response(result)
+
+    @action(detail=True, methods=['post'])
+    def mark_comment_sent(self, request, pk=None):
+        review = self.get_object()
+        idx = request.data.get('comment_index')
+        if idx is not None and 0 <= idx < len(review.comments):
+            review.comments[idx]['sent_to_bot'] = True
+            review.save()
+        return Response({'status': 'ok'})

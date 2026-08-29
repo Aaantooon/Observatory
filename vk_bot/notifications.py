@@ -63,6 +63,17 @@ class NotificationSystem:
                 continue
             
             self.api.mark_notification_sent(notif.get('id'))
+            pending_comments = self.api.get_pending_admin_comments()
+            for c in pending_comments:
+                try:
+                    self.send_message(
+                        int(c['user_vk_id']),
+                        f"💬 Комментарий наблюдателя по упражнению «{c['exercise_type']}»:\n\n{c['text']}"
+                )
+                except Exception as e:
+                    logger.error(f"Send admin comment error: {e}")
+                self.api.mark_comment_sent(c['review_id'], c['comment_index'])
+        
 
     def _get_reminder_text(self, exercise_type):
         texts = {
