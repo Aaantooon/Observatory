@@ -317,15 +317,13 @@ class APIClient:
             logger.error(f"Get pending comments error: {e}")
         return []
 
-    def get_active_review(self, vk_id):
+    def mark_comment_sent(self, review_id, comment_index):
         try:
-            response = requests.get(f"{self.base_url}/admin/review/active_for_user/?vk_id={vk_id}", headers=self.headers, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('exists') is False:
-                    return None
-                return data
+            requests.post(
+                f"{self.base_url}/admin/review/{review_id}/mark_comment_sent/",
+                json={"comment_index": comment_index},
+                headers=self.headers, timeout=5
+            )
         except Exception as e:
-            logger.error(f"Get active review error: {e}")
-        return None
+            logger.error(f"Mark comment sent error: {e}")
     
