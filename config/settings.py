@@ -29,7 +29,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     'jazzmin',
-    'django.contrib.admin',
     
     # Зависимости Machina
     'mptt',
@@ -58,6 +57,7 @@ INSTALLED_APPS = [
     # Ваши приложения
     'myapp',
     'bot_api',
+    'crm',
     'observer3d',
     
     # Авторизация вк

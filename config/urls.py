@@ -27,6 +27,7 @@ urlpatterns = [
     
     path('', include('myapp.urls')),
     path('3d/', include('observer3d.urls')),
+    path('crm/', include('crm.urls')),
 ]
 
 if settings.DEBUG:

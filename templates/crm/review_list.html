@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}CRM — Проверки{% endblock %}
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <h1 style="color: #e2c044; font-weight: 300;">📋 Проверки упражнений</h1>
+    {% if reviews %}
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+        {% for r in reviews %}
+            <a href="{% url 'crm_review_detail' r.id %}" style="text-decoration: none;">
+                <div class="card-glass">
+                    <strong style="color: #e2c044;">{{ r.user.first_name }} {{ r.user.last_name }}</strong>
+                    <span style="color: #8a9aaa;"> — {{ r.exercise_type }}</span>
+                    <div style="color: #5a6a7e; font-size: 0.85rem; margin-top: 4px;">
+                        Статус: {{ r.status }} · {{ r.created_at|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+            </a>
+        {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: #5a6a7e;">Нет активных проверок.</p>
+    {% endif %}
+</div>
+{% endblock %}

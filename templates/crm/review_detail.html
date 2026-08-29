@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Проверка — {{ review.user.first_name }}{% endblock %}
+{% block content %}
+<div style="max-width: 700px; margin: 0 auto;">
+    <h1 style="color: #e2c044; font-weight: 300;">{{ review.user.first_name }} {{ review.user.last_name }}</h1>
+    <p style="color: #8a9aaa;">{{ review.exercise_type }} · Статус: {{ review.status }}</p>
+
+    <div class="card-glass" style="margin: 20px 0;">
+        <h3 style="color: #e2c044;">Данные упражнения</h3>
+        <pre style="color: #c0b8a8; white-space: pre-wrap;">{{ review.data }}</pre>
+    </div>
+
+    <div class="card-glass">
+        <h3 style="color: #e2c044;">Переписка</h3>
+        {% for c in review.comments %}
+            <div style="margin: 10px 0; padding: 10px; border-radius: 8px; background: {% if c.is_admin %}rgba(226,192,68,0.08){% else %}rgba(255,255,255,0.04){% endif %};">
+                <strong style="color: {% if c.is_admin %}#e2c044{% else %}#8a9aaa{% endif %};">
+                    {% if c.is_admin %}Психолог{% else %}Клиент{% endif %}
+                </strong>
+                <p style="color: #d4d9e6; margin: 4px 0 0 0;">{{ c.text }}</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <form method="post" style="margin-top: 20px;">
+        {% csrf_token %}
+        <textarea name="comment" rows="3" placeholder="Написать комментарий..."
+            style="width: 100%; padding: 12px; background: rgba(22,33,62,0.6); border: 1px solid rgba(226,192,68,0.3); border-radius: 12px; color: #e0d5c1;"></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="submit" name="action" value="comment" class="btn-primary-custom">Отправить</button>
+            <button type="submit" name="action" value="close" class="btn-secondary-custom">Завершить проверку</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
