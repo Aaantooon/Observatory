@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'jazzmin',
+    'django.contrib.admin',
     
     # Зависимости Machina
     'mptt',
