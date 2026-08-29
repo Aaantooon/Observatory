@@ -88,6 +88,17 @@ class ReviewViewSet(viewsets.ModelViewSet):
             review.save()
         return Response({'status': 'ok'})
 
+    @action(detail=False, methods=['get'])
+    def active_for_user(self, request):
+        """Активная проверка пользователя (для ответа)"""
+        vk_id = request.query_params.get('vk_id')
+        review = Review.objects.filter(
+            user__vk_id=str(vk_id)
+        ).exclude(status='closed').order_by('-created_at').first()
+        if review:
+            return Response(self.get_serializer(review).data)
+        return Response({'exists': False})
+
 class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
