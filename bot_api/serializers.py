@@ -36,11 +36,12 @@ class ExerciseSerializer(serializers.ModelSerializer):
 
 class ResultSerializer(serializers.ModelSerializer):
     exercise_title = serializers.ReadOnlyField(source='exercise.title')
+    exercise_type = serializers.ReadOnlyField(source='exercise.type')
     
     class Meta:
         model = Result
         fields = [
-            'id', 'user', 'exercise', 'exercise_title',
+            'id', 'user', 'exercise', 'exercise_title', 'exercise_type',
             'result_data', 'is_approved', 'corrected_data',
             'correction_comment', 'completed_at'
         ]
