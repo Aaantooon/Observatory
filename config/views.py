@@ -38,7 +38,7 @@ def map_reactflow_view(request):
     })
 
 def observer_view(request):
-    return render(request, 'observer_map.html')
+    return render(request, 'observer3d/world_babylon.html')
 
 def put_view(request):
     return render(request, 'put.html')

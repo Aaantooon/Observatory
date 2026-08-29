@@ -1,11 +1,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Count, Q
-from django.db import models
-from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile
+from django.db.models import Q
+from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark
 import json
 import csv
 from datetime import date
@@ -260,18 +258,6 @@ def edit_profile(request):
     return render(request, 'edit_profile.html', {
         'profile': profile,
     })
-
-
-class Bookmark(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookmarks')
-    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='bookmarked_by')
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['user', 'module']
-    
-    def __str__(self):
-        return f"{self.user.username} → {self.module.title}"
 
 
 @login_required

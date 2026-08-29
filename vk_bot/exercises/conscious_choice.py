@@ -135,6 +135,24 @@ class ConsciousChoiceExercise(BaseExercise):
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
+        elif step == 4:
+            session['choice_analysis'] = text
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                "✅ Записано!\n\nНажми «Завершить», чтобы перейти дальше",
+                finish_keyboard()
+            )
+
+        elif step == 5:
+            session['alternatives'] = text
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                "✅ Записано!\n\nНажми «Завершить», чтобы закончить упражнение",
+                finish_keyboard()
+            )
+
     def _handle_next(self, user_id, session):
         step = session.get('step', 1)
         
@@ -179,11 +197,25 @@ class ConsciousChoiceExercise(BaseExercise):
             )
         
         elif step == 4:
+            if not session.get('choice_analysis'):
+                self.send_message(
+                    user_id,
+                    "❌ Напиши свои минусы и плюсы перед тем, как продолжить",
+                    finish_keyboard()
+                )
+                return
             session['step'] = 5
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
-        
+
         elif step == 5:
+            if not session.get('alternatives'):
+                self.send_message(
+                    user_id,
+                    "❌ Напиши свои минусы и плюсы перед тем, как продолжить",
+                    finish_keyboard()
+                )
+                return
             session['step'] = 6
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
@@ -236,7 +268,9 @@ class ConsciousChoiceExercise(BaseExercise):
             'answers': {
                 'who_took': session.get('current_answer'),
                 'who_greater': session.get('who_greater')
-            }
+            },
+            'choice_analysis': session.get('choice_analysis', ''),
+            'alternatives': session.get('alternatives', '')
         }
         
         self.save_result(user_id, result)

@@ -1,5 +1,5 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard
 
 
 class MyRolesExercise(BaseExercise):
@@ -202,7 +202,7 @@ class MyRolesExercise(BaseExercise):
             f"👹 **Ужасно** — как это будет выглядеть?\n\n"
             f"Напиши через запятую:\n"
             f"`Идеально: ..., Ужасно: ...`",
-            finish_keyboard()
+            cancel_keyboard()
         )
 
     def _handle_analysis(self, user_id, text, session):
@@ -214,7 +214,7 @@ class MyRolesExercise(BaseExercise):
             self.send_message(
                 user_id,
                 "❌ Формат: `Идеально: ..., Ужасно: ...`",
-                finish_keyboard()
+                cancel_keyboard()
             )
             return
 

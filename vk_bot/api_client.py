@@ -169,7 +169,7 @@ class APIClient:
     def get_review_status(self, user_vk_id, exercise_type):
         try:
             response = requests.get(
-                f"{self.base_url}/reviews/?vk_id={user_vk_id}&exercise_type={exercise_type}",
+                f"{self.base_url}/admin/review/status/?vk_id={user_vk_id}&exercise_type={exercise_type}",
                 headers=self.headers,
                 timeout=5
             )
@@ -199,7 +199,7 @@ class APIClient:
     def complete_review(self, review_id, approved):
         try:
             response = requests.post(
-                f"{self.base_url}/reviews/{review_id}/complete/",
+                f"{self.base_url}/admin/review/{review_id}/complete/",
                 json={"approved": approved},
                 headers=self.headers,
                 timeout=5
@@ -293,18 +293,6 @@ class APIClient:
         except Exception as e:
             logger.error(f"Mark notification sent error: {e}")
         return False
-    def get_review_status_by_type(self, vk_id, exercise_type):
-        return self.get_review_status(vk_id, exercise_type)
-
-    def get_pending_admin_comments(self):
-            try:
-                response = requests.get(f"{self.base_url}/admin/review/pending_admin_comments/", headers=self.headers, timeout=5)
-                if response.status_code == 200:
-                    return response.json()
-            except Exception as e:
-                logger.error(f"Get pending comments error: {e}")
-            return []
-
     def get_review_status_by_type(self, vk_id, exercise_type):
         return self.get_review_status(vk_id, exercise_type)
 

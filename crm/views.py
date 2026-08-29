@@ -1,12 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
-from bot_api.models import Review
-from bot_api.models import User, Result, Review
+from bot_api.models import User, Result, Review, Post
 from myapp.models import UserCourseProgress
-from bot_api.models import Post
-from bot_api.models import Post
-from django.utils import timezone
 
 
 @staff_member_required
@@ -63,24 +59,6 @@ def review_detail(request, review_id):
 
     return render(request, 'crm/review_detail.html', {'review': review})
 
-
-@staff_member_required
-def post_list(request):
-    posts = Post.objects.all()
-    return render(request, 'crm/post_list.html', {'posts': posts})
-
-
-@staff_member_required
-def post_create(request):
-    if request.method == 'POST':
-        Post.objects.create(
-            platform=request.POST.get('platform'),
-            text=request.POST.get('text'),
-            publish_date=request.POST.get('publish_date'),
-            status='scheduled'
-        )
-        return redirect('crm_post_list')
-    return render(request, 'crm/post_form.html')
 
 @staff_member_required
 def post_list(request):

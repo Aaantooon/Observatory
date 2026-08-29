@@ -6,6 +6,7 @@ class AdminCheck:
         self.vk = vk_session
         self.api = api_client
         self.admin_ids = ADMIN_IDS
+        self.user_sessions = {}
 
     def send_message(self, user_id, message, keyboard=None):
         self.vk.method('messages.send', {

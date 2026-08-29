@@ -20,17 +20,19 @@ class StopTechniqueExercise(BaseExercise):
             'completed': False,
             'count': 0
         }
-        
-        if progress and progress.get('data'):
+
+        is_resuming = bool(progress and progress.get('data'))
+        if is_resuming:
             session.update(progress.get('data', {}))
-        
+        else:
+            session['count'] = session.get('count', 0) + 1
+
         self.user_sessions[user_id] = session
         self._show_phase(user_id, session)
 
     def _show_phase(self, user_id, session):
-        count = session.get('count', 0) + 1
-        session['count'] = count
-        
+        count = session.get('count', 0)
+
         phase = session.get('phase')
         
         if phase == 'thoughts':

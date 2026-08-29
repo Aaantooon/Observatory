@@ -111,7 +111,7 @@ class BotHandlers:
     def handle_message(self, user_id, text, first_name, last_name):
         active_review = self.api.get_active_review(user_id)
         if active_review and active_review.get('status') == 'in_review':
-            text_lower = text.strip().lower()
+            text_lower = self._normalize_text(text)
             if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка']:
                 self.api.add_comment(active_review['id'], text, is_admin=False)
                 self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())

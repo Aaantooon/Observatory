@@ -1,13 +1,5 @@
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 
-def main_menu():
-    keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("📊 Мои результаты", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_line()
-    keyboard.add_button("⏰ Напоминания", color=VkKeyboardColor.PRIMARY)
-    return keyboard.get_keyboard()
-
 def exercises_menu():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("1. Поиск стресса 🎯", color=VkKeyboardColor.POSITIVE)
