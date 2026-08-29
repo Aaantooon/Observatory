@@ -183,10 +183,9 @@ class ResultViewSet(viewsets.ModelViewSet):
             user = User.objects.get(vk_id=str(user_vk_id))
             
             # Ищем упражнение по типу
-            exercise = Exercise.objects.filter(title=exercise_type).first()
+            exercise = Exercise.objects.filter(type=exercise_type).first()
             if not exercise:
-                # Если упражнение не найдено, создаём его
-                exercise = Exercise.objects.create(title=exercise_type)
+                exercise = Exercise.objects.create(title=exercise_type, type=exercise_type)
             
             result = Result.objects.create(
                 user=user,
