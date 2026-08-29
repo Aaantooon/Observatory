@@ -1,0 +1,17 @@
+[0;1;32m●[0m gunicorn.service - Gunicorn daemon for Observatory Django project
+     Loaded: loaded (]8;;file://8807935-ku230610.twc1.net/etc/systemd/system/gunicorn.service\/etc/systemd/system/gunicorn.service]8;;\; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Thu 2026-08-27 01:33:28 UTC; 2s ago
+ Invocation: ef71a8a24469421b8fcfcb09f41f28db
+   Main PID: 188344 (gunicorn)
+      Tasks: 1[0;38:5:245m (limit: 1648)[0m
+     Memory: 14.5M (peak: 14.5M)
+        CPU: 118ms
+     CGroup: /system.slice/gunicorn.service
+             └─[0;38:5:245m188344 /root/Observatory/venv/bin/python3.14 /root/Observatory/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8000 config.wsgi:application[0m
+
+Aug 27 01:33:28 8807935-ku230610.twc1.net systemd[1]: Started gunicorn.service - Gunicorn daemon for Observatory Django project.
+Aug 27 01:33:28 8807935-ku230610.twc1.net gunicorn[188344]: [2026-08-27 01:33:28 +0000] [188344] [INFO] Starting gunicorn 26.2.0
+Aug 27 01:33:28 8807935-ku230610.twc1.net gunicorn[188344]: [2026-08-27 01:33:28 +0000] [188344] [ERROR] Connection in use: ('0.0.0.0', 8000)
+Aug 27 01:33:28 8807935-ku230610.twc1.net gunicorn[188344]: [2026-08-27 01:33:28 +0000] [188344] [ERROR] connection to ('0.0.0.0', 8000) failed: [Errno 98] Address already in use
+Aug 27 01:33:29 8807935-ku230610.twc1.net gunicorn[188344]: [2026-08-27 01:33:29 +0000] [188344] [ERROR] Connection in use: ('0.0.0.0', 8000)
+Aug 27 01:33:29 8807935-ku230610.twc1.net gunicorn[188344]: [2026-08-27 01:33:29 +0000] [188344] [ERROR] connection to ('0.0.0.0', 8000) failed: [Errno 98] Address already in use
