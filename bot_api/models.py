@@ -73,3 +73,15 @@ class Review(models.Model):
     status = models.CharField(max_length=20, default='pending')  # pending / in_review / closed
     comments = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)    
+
+class Post(models.Model):
+    PLATFORM_CHOICES = [('vk', 'VK'), ('telegram', 'Telegram'), ('site', 'Сайт')]
+    STATUS_CHOICES = [('draft', 'Черновик'), ('scheduled', 'Запланирован'), ('published', 'Опубликован')]
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    text = models.TextField()
+    publish_date = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['publish_date']

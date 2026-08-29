@@ -3,6 +3,10 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from bot_api.models import Review
 from bot_api.models import User, Result, Review
+from myapp.models import UserCourseProgress
+from bot_api.models import Post
+from bot_api.models import Post
+from django.utils import timezone
 
 
 @staff_member_required
@@ -16,10 +20,16 @@ def client_detail(request, user_id):
     client = get_object_or_404(User, id=user_id)
     results = Result.objects.filter(user=client).order_by('-completed_at')
     reviews = Review.objects.filter(user=client).order_by('-created_at')
+    course_progress = None
+    try:
+        course_progress = UserCourseProgress.objects.filter(user__vk_id=client.vk_id).first()
+    except Exception:
+        pass
     return render(request, 'crm/client_detail.html', {
         'client': client,
         'results': results,
         'reviews': reviews,
+        'course_progress': course_progress,
     })
 
 
@@ -52,3 +62,40 @@ def review_detail(request, review_id):
         return redirect('crm_review_detail', review_id=review.id)
 
     return render(request, 'crm/review_detail.html', {'review': review})
+
+
+@staff_member_required
+def post_list(request):
+    posts = Post.objects.all()
+    return render(request, 'crm/post_list.html', {'posts': posts})
+
+
+@staff_member_required
+def post_create(request):
+    if request.method == 'POST':
+        Post.objects.create(
+            platform=request.POST.get('platform'),
+            text=request.POST.get('text'),
+            publish_date=request.POST.get('publish_date'),
+            status='scheduled'
+        )
+        return redirect('crm_post_list')
+    return render(request, 'crm/post_form.html')
+
+@staff_member_required
+def post_list(request):
+    posts = Post.objects.all()
+    return render(request, 'crm/post_list.html', {'posts': posts})
+
+
+@staff_member_required
+def post_create(request):
+    if request.method == 'POST':
+        Post.objects.create(
+            platform=request.POST.get('platform'),
+            text=request.POST.get('text'),
+            publish_date=request.POST.get('publish_date'),
+            status='scheduled'
+        )
+        return redirect('crm_post_list')
+    return render(request, 'crm/post_form.html')

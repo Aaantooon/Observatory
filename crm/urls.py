@@ -6,4 +6,6 @@ urlpatterns = [
     path('review/<int:review_id>/', views.review_detail, name='crm_review_detail'),
     path('clients/', views.client_list, name='crm_client_list'),
     path('clients/<int:user_id>/', views.client_detail, name='crm_client_detail'),
+    path('posts/', views.post_list, name='crm_post_list'),
+    path('posts/new/', views.post_create, name='crm_post_create'),
 ]

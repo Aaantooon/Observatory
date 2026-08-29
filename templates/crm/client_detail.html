@@ -21,6 +21,16 @@
         {% endfor %}
     </div>
 
+    <div class="card-glass" style="margin-bottom: 20px;">
+        <h3 style="color: #e2c044;">📚 Курс «Путь наблюдателя»</h3>
+        {% if course_progress %}
+            <p style="color: #d4d9e6;">Прогресс: {{ course_progress.get_progress_percent }}%</p>
+            <p style="color: #8a9aaa;">Пройдено модулей: {{ course_progress.completed_modules.count }}</p>
+        {% else %}
+            <p style="color: #5a6a7e;">Курс ещё не начат.</p>
+        {% endif %}
+    </div>
+
     <div class="card-glass">
         <h3 style="color: #e2c044;">📨 История проверок</h3>
         {% for rev in reviews %}
