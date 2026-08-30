@@ -1,99 +1,343 @@
-<!-- ===== ВИДЕО ===== -->
-{% if module.video_url %}
-<div style="margin:20px 0;border-radius:16px;overflow:hidden;background:rgba(0,0,0,0.3);">
-    <video controls style="width:100%;max-height:400px;">
-        <source src="{{ module.video_url }}" type="video/mp4">
-        Ваш браузер не поддерживает видео.
-    </video>
-</div>
-{% endif %}
+{% extends 'base.html' %}
+{% load static %}
 
-<!-- ===== PDF ===== -->
-{% if module.pdf_file %}
-<div style="margin:20px 0;text-align:center;padding:16px;background:rgba(22,33,62,0.3);border-radius:12px;border:1px solid rgba(226,192,68,0.05);">
-    <a href="{{ module.pdf_file.url }}" download style="color:#e2c044;text-decoration:none;font-size:0.9rem;letter-spacing:1px;">
-        📄 Скачать конспект (PDF)
-    </a>
-</div>
-{% endif %}
+{% block title %}Модуль {{ module.number }}: {{ module.title }}{% endblock %}
 
-<!-- ===== ТЕСТ ===== -->
-{% if module.test_questions %}
-<div style="margin:20px 0;padding:20px;background:rgba(22,33,62,0.3);border-radius:16px;border:1px solid rgba(226,192,68,0.05);">
-    <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:16px;">📝 Тест: {{ module.title }}</h3>
-    <form id="testForm">
-        {% for q in module.test_questions %}
-        <div style="margin-bottom:16px;padding:12px;background:rgba(0,0,0,0.15);border-radius:10px;">
-            <p style="color:#d4d9e6;margin-bottom:6px;"><strong>Вопрос {{ forloop.counter }}:</strong> {{ q.question }}</p>
-            <div style="display:flex;flex-direction:column;gap:4px;">
-                {% for option in q.options %}
-                <label style="color:#aab3c9;font-size:0.9rem;">
-                    <input type="radio" name="q{{ forloop.parentloop.counter }}" value="{{ option }}" style="margin-right:8px;">
-                    {{ option }}
-                </label>
-                {% endfor %}
-            </div>
+{% block extra_head %}
+<style>
+    .module-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .module-nav {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .module-nav a {
+        color: #8a8a8a;
+        text-decoration: none;
+        font-size: 0.85rem;
+        transition: color 0.3s ease;
+    }
+    .module-nav a:hover {
+        color: #e2c044;
+    }
+    .module-header .module-badge {
+        display: inline-block;
+        background: rgba(226,192,68,0.1);
+        color: #e2c044;
+        padding: 4px 16px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+        border: 1px solid rgba(226,192,68,0.1);
+    }
+    .module-header h1 {
+        color: #d4d9e6;
+        font-size: 2.2rem;
+        font-weight: 300;
+        margin: 0 0 6px 0;
+    }
+    .module-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.1rem;
+    }
+    .module-header .duration {
+        color: #5a5a5a;
+        font-size: 0.85rem;
+        margin-top: 8px;
+    }
+    .module-content {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 16px;
+        padding: 30px;
+        margin: 20px 0;
+    }
+    .module-content .content-body {
+        color: #b0b8c8;
+        font-size: 1rem;
+        line-height: 1.8;
+    }
+    .module-content .content-body h2 {
+        color: #d4d9e6;
+        font-size: 1.4rem;
+        font-weight: 300;
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }
+    .module-content .content-body p {
+        margin-bottom: 12px;
+    }
+    .key-concepts {
+        background: rgba(226,192,68,0.04);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin: 20px 0;
+    }
+    .key-concepts h3 {
+        color: #e2c044;
+        font-size: 0.9rem;
+        font-weight: 400;
+        letter-spacing: 1px;
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+    }
+    .key-concepts ul {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .key-concepts li {
+        background: rgba(226,192,68,0.05);
+        color: #c0c8d8;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        border: 1px solid rgba(226,192,68,0.05);
+    }
+    .game-integration {
+        background: linear-gradient(135deg, rgba(22,33,62,0.5), rgba(226,192,68,0.05));
+        border: 1px solid rgba(226,192,68,0.1);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .game-integration h3 {
+        color: #e2c044;
+        font-size: 1rem;
+        font-weight: 400;
+        margin: 0 0 4px 0;
+    }
+    .game-integration p {
+        color: #8a8a8a;
+        font-size: 0.9rem;
+        margin: 0 0 16px 0;
+    }
+    .game-integration .btn-game {
+        display: inline-block;
+        padding: 10px 32px;
+        background: rgba(226,192,68,0.1);
+        border: 1px solid rgba(226,192,68,0.2);
+        border-radius: 50px;
+        color: #e2c044;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+    .game-integration .btn-game:hover {
+        background: rgba(226,192,68,0.18);
+        border-color: rgba(226,192,68,0.4);
+    }
+    .module-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255,255,255,0.04);
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-actions .btn {
+        padding: 10px 28px;
+        border-radius: 50px;
+        border: none;
+        font-size: 0.9rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        font-weight: 400;
+        letter-spacing: 1px;
+    }
+    .module-actions .btn-complete {
+        background: linear-gradient(135deg, #e2c044, #c9a830);
+        color: #0b0e14;
+    }
+    .module-actions .btn-complete:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(226,192,68,0.25);
+    }
+    .module-actions .btn-secondary {
+        background: rgba(255,255,255,0.05);
+        color: #8a8a8a;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .module-actions .btn-secondary:hover {
+        background: rgba(255,255,255,0.08);
+    }
+    .module-actions .completed-badge {
+        color: #e2c044;
+        font-size: 0.9rem;
+    }
+    @media (max-width: 768px) {
+        .module-container { padding: 20px 15px; }
+        .module-header h1 { font-size: 1.6rem; }
+        .module-content { padding: 20px; }
+        .module-actions { flex-direction: column; align-items: stretch; }
+        .module-actions .btn { text-align: center; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="module-container">
+    <nav class="module-nav">
+        <a href="{% url 'course_index' %}">← К списку модулей</a>
+        <div>
+            {% if prev_module %}<a href="{% url 'course_module' prev_module.number %}">← {{ prev_module.title }}</a>{% endif %}
+            {% if next_module and is_completed %}<a href="{% url 'course_module' next_module.number %}">{{ next_module.title }} →</a>{% endif %}
         </div>
-        {% endfor %}
-        <button type="submit" class="btn-choice btn-light" style="max-width:200px;margin-top:10px;">✅ Проверить</button>
-    </form>
-    <div id="testResult" style="margin-top:16px;display:none;padding:16px;border-radius:10px;text-align:center;"></div>
-</div>
+    </nav>
 
-<script>
-document.getElementById('testForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const questions = {{ module.test_questions|safe }};
-    let correct = 0;
-    const total = questions.length;
-    
-    questions.forEach((q, i) => {
-        const selected = document.querySelector(`input[name="q${i+1}"]:checked`);
-        if (selected && selected.value === q.correct) {
-            correct++;
+    <header class="module-header">
+        <span class="module-badge">Модуль {{ module.number }}</span>
+        <h1>{{ module.title }}</h1>
+        <p class="subtitle">{{ module.subtitle }}</p>
+        <p class="duration">⏱️ {{ module.duration }} минут</p>
+    </header>
+
+    <div class="module-content">
+        <div class="content-body">{{ module.content|safe }}</div>
+    </div>
+
+    {% if module.key_concepts %}
+    <div class="key-concepts">
+        <h3>🔑 Ключевые понятия</h3>
+        <ul>{% for concept in module.key_concepts %}<li>{{ concept }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <!-- ===== ВИДЕО ===== -->
+    {% if module.video_url %}
+    <div style="margin:20px 0;border-radius:16px;overflow:hidden;background:rgba(0,0,0,0.3);">
+        <video controls style="width:100%;max-height:400px;">
+            <source src="{{ module.video_url }}" type="video/mp4">
+            Ваш браузер не поддерживает видео.
+        </video>
+    </div>
+    {% endif %}
+
+    <!-- ===== PDF ===== -->
+    {% if module.pdf_file %}
+    <div style="margin:20px 0;text-align:center;padding:16px;background:rgba(22,33,62,0.3);border-radius:12px;border:1px solid rgba(226,192,68,0.05);">
+        <a href="{{ module.pdf_file.url }}" download style="color:#e2c044;text-decoration:none;font-size:0.9rem;letter-spacing:1px;">
+            📄 Скачать конспект (PDF)
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- ===== ТЕСТ ===== -->
+    {% if module.test_questions %}
+    <div style="margin:20px 0;padding:20px;background:rgba(22,33,62,0.3);border-radius:16px;border:1px solid rgba(226,192,68,0.05);">
+        <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:16px;">📝 Тест: {{ module.title }}</h3>
+        <form id="testForm">
+            {% for q in module.test_questions %}
+            <div style="margin-bottom:16px;padding:12px;background:rgba(0,0,0,0.15);border-radius:10px;">
+                <p style="color:#d4d9e6;margin-bottom:6px;"><strong>Вопрос {{ forloop.counter }}:</strong> {{ q.question }}</p>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    {% for option in q.options %}
+                    <label style="color:#aab3c9;font-size:0.9rem;">
+                        <input type="radio" name="q{{ forloop.parentloop.counter }}" value="{{ option }}" style="margin-right:8px;">
+                        {{ option }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn-choice btn-light" style="max-width:200px;margin-top:10px;">✅ Проверить</button>
+        </form>
+        <div id="testResult" style="margin-top:16px;display:none;padding:16px;border-radius:10px;text-align:center;"></div>
+    </div>
+
+    <script>
+    document.getElementById('testForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const questions = {{ module.test_questions|safe }};
+        let correct = 0;
+        const total = questions.length;
+
+        questions.forEach((q, i) => {
+            const selected = document.querySelector(`input[name="q${i+1}"]:checked`);
+            if (selected && selected.value === q.correct) {
+                correct++;
+            }
+        });
+
+        const result = document.getElementById('testResult');
+        result.style.display = 'block';
+        const percent = Math.round((correct / total) * 100);
+        if (percent >= 80) {
+            result.innerHTML = `🎉 <span style="color:#4ac06a;">${percent}%</span> — Отлично! Ты готов к следующему модулю.`;
+            result.style.border = '1px solid rgba(74,192,106,0.2)';
+        } else if (percent >= 50) {
+            result.innerHTML = `📖 <span style="color:#c08a4a;">${percent}%</span> — Хорошо! Перечитай материал и попробуй снова.`;
+            result.style.border = '1px solid rgba(192,138,74,0.2)';
+        } else {
+            result.innerHTML = `🔄 <span style="color:#c04a4a;">${percent}%</span> — Рекомендую вернуться к модулю.`;
+            result.style.border = '1px solid rgba(192,74,74,0.2)';
         }
     });
-    
-    const result = document.getElementById('testResult');
-    result.style.display = 'block';
-    const percent = Math.round((correct / total) * 100);
-    if (percent >= 80) {
-        result.innerHTML = `🎉 <span style="color:#4ac06a;">${percent}%</span> — Отлично! Ты готов к следующему модулю.`;
-        result.style.border = '1px solid rgba(74,192,106,0.2)';
-    } else if (percent >= 50) {
-        result.innerHTML = `📖 <span style="color:#c08a4a;">${percent}%</span> — Хорошо! Перечитай материал и попробуй снова.`;
-        result.style.border = '1px solid rgba(192,138,74,0.2)';
-    } else {
-        result.innerHTML = `🔄 <span style="color:#c04a4a;">${percent}%</span> — Рекомендую вернуться к модулю.`;
-        result.style.border = '1px solid rgba(192,74,74,0.2)';
-    }
-});
-</script>
-{% endif %}
+    </script>
+    {% endif %}
 
-<!-- ===== КОММЕНТАРИИ ===== -->
-{% if module.allow_comments %}
-<div style="margin:20px 0;padding:20px;background:rgba(22,33,62,0.2);border-radius:16px;border:1px solid rgba(255,255,255,0.03);">
-    <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:16px;">💬 Комментарии ({{ comments|length }})</h3>
-    
-    <form method="post" action="{% url 'add_comment' module.number %}" style="margin-bottom:20px;">
-        {% csrf_token %}
-        <div style="display:flex;gap:10px;">
-            <input type="text" name="text" placeholder="Напиши комментарий..." style="flex:1;padding:10px 16px;background:rgba(22,33,62,0.4);border:1px solid rgba(255,255,255,0.04);border-radius:12px;color:#d4d9e6;">
-            <button type="submit" style="padding:10px 24px;background:rgba(226,192,68,0.08);border:1px solid rgba(226,192,68,0.15);border-radius:50px;color:#e2c044;cursor:pointer;">Отправить</button>
-        </div>
-    </form>
-    
-    {% for comment in comments|slice:":10" %}
-    <div style="padding:12px 16px;background:rgba(0,0,0,0.15);border-radius:10px;margin-bottom:8px;border-left:2px solid rgba(226,192,68,0.1);">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-            <span style="color:#e2c044;font-size:0.8rem;">{{ comment.user.username }}</span>
-            <span style="color:#5a5a5a;font-size:0.6rem;">{{ comment.created_at|date:"d.m.Y H:i" }}</span>
-        </div>
-        <p style="color:#aab3c9;font-size:0.9rem;margin-top:4px;">{{ comment.text }}</p>
+    <div class="game-integration">
+        <h3>🎮 Практика в игре</h3>
+        <p>Закрепи материал в трёхмерном пространстве</p>
+        <a href="/3d/" class="btn-game">🔦 Перейти в 3D-мир</a>
     </div>
-    {% empty %}
-    <p style="color:#5a6a7e;text-align:center;padding:20px;">Пока нет комментариев. Будь первым!</p>
-    {% endfor %}
+
+    <!-- ===== КОММЕНТАРИИ ===== -->
+    {% if module.allow_comments %}
+    <div style="margin:20px 0;padding:20px;background:rgba(22,33,62,0.2);border-radius:16px;border:1px solid rgba(255,255,255,0.03);">
+        <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:16px;">💬 Комментарии ({{ comments|length }})</h3>
+
+        <form method="post" action="{% url 'add_comment' module.number %}" style="margin-bottom:20px;">
+            {% csrf_token %}
+            <div style="display:flex;gap:10px;">
+                <input type="text" name="text" placeholder="Напиши комментарий..." style="flex:1;padding:10px 16px;background:rgba(22,33,62,0.4);border:1px solid rgba(255,255,255,0.04);border-radius:12px;color:#d4d9e6;">
+                <button type="submit" style="padding:10px 24px;background:rgba(226,192,68,0.08);border:1px solid rgba(226,192,68,0.15);border-radius:50px;color:#e2c044;cursor:pointer;">Отправить</button>
+            </div>
+        </form>
+
+        {% for comment in comments|slice:":10" %}
+        <div style="padding:12px 16px;background:rgba(0,0,0,0.15);border-radius:10px;margin-bottom:8px;border-left:2px solid rgba(226,192,68,0.1);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+                <span style="color:#e2c044;font-size:0.8rem;">{{ comment.user.username }}</span>
+                <span style="color:#5a5a5a;font-size:0.6rem;">{{ comment.created_at|date:"d.m.Y H:i" }}</span>
+            </div>
+            <p style="color:#aab3c9;font-size:0.9rem;margin-top:4px;">{{ comment.text }}</p>
+        </div>
+        {% empty %}
+        <p style="color:#5a6a7e;text-align:center;padding:20px;">Пока нет комментариев. Будь первым!</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="module-actions">
+        {% if is_completed %}
+            <div class="completed-badge">✅ Модуль пройден</div>
+            <a href="{% url 'course_index' %}" class="btn btn-secondary">📚 К списку модулей</a>
+        {% else %}
+            <form method="post" action="{% url 'complete_module' module.number %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-complete">✅ Завершить модуль</button>
+            </form>
+            <a href="{% url 'course_index' %}" class="btn btn-secondary">📚 К списку модулей</a>
+        {% endif %}
+    </div>
 </div>
-{% endif %}
+{% endblock %}
