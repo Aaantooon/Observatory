@@ -170,7 +170,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'auth.User'
 
 # ===== НАСТРОЙКИ ВХОДА =====
-LOGIN_URL = '/login/'
+# ВАЖНО: раньше здесь было '/login/' — такой страницы на сайте не существует
+# (реальный вход только через VK ID, роут '/vk/login/'). Из-за этого любая
+# защищённая страница (@login_required) при разлогине кидала на 404 вместо
+# входа. Обнаружено и исправлено 30.08.2026.
+LOGIN_URL = '/vk/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
 
