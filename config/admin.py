@@ -10,8 +10,8 @@ from bot_api.models import User as VKUser, Exercise, Result, ExerciseProgress, N
 from bot_api.admin import UserAdmin, ExerciseAdmin, ResultAdmin, ExerciseProgressAdmin, NotificationAdmin, ReviewAdmin
 # Регистрируем модели из myapp
 try:
-    from myapp.models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile
-    from myapp.admin import ModuleAdmin, UserCourseProgressAdmin, GameAssociationAdmin, UserStreakAdmin, ModuleCommentAdmin, UserProfileAdmin
+    from myapp.models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, MindMapNodePosition
+    from myapp.admin import ModuleAdmin, UserCourseProgressAdmin, GameAssociationAdmin, UserStreakAdmin, ModuleCommentAdmin, UserProfileAdmin, MindMapNodePositionAdmin
 except ImportError:
     pass
 
@@ -64,6 +64,7 @@ try:
     admin_site.register(UserStreak, UserStreakAdmin)
     admin_site.register(ModuleComment, ModuleCommentAdmin)
     admin_site.register(UserProfile, UserProfileAdmin)
+    admin_site.register(MindMapNodePosition, MindMapNodePositionAdmin)
 except NameError:
     pass
 
