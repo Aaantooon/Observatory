@@ -62,8 +62,8 @@ class Module(models.Model):
     position_z = models.FloatField(default=0, verbose_name="Позиция Z в 3D")
     color = models.CharField(max_length=7, default="#6cbfff", verbose_name="Цвет в 3D")
     
-    key_concepts = models.JSONField(default=list, verbose_name="Ключевые понятия")
-    associations = models.JSONField(default=list, verbose_name="Ассоциации")
+    key_concepts = models.JSONField(default=list, blank=True, verbose_name="Ключевые понятия")
+    associations = models.JSONField(default=list, blank=True, verbose_name="Ассоциации")
     duration = models.PositiveIntegerField(default=30, verbose_name="Длительность (мин)")
     is_published = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
