@@ -37,6 +37,7 @@ def map_reactflow_view(request):
         'title': 'Ментальная карта — Путь наблюдателя'
     })
 
+@login_required
 def observer_view(request):
     return render(request, 'observer3d/world_babylon.html')
 

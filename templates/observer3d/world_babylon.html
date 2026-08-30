@@ -116,17 +116,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/6.37.0/babylon.js"></script>
 <script>
 // ============================================================
-// ДАННЫЕ КУРСА — каждый образ = ответ на вопрос
+// ДАННЫЕ КУРСА — грузятся из реального прогресса пользователя
+// (см. fetchCourseData() и buildCourseObjects() ниже)
 // ============================================================
-const SLIDES = [
-    { title:'Введение в наблюдение', color:'#4a7a9a', icon:'👁️', lesson:'Просто наблюдай. Не оценивай. Будь свидетелем.', riddle:'Что видит всё, но молчит?', answer:'Наблюдатель' },
-    { title:'Стресс и его проявления', color:'#6a3a3a', icon:'⚡', lesson:'Стресс — реакция. Научись видеть его до того, как он захватит тебя.', riddle:'Что приходит без зова?', answer:'Тревога' },
-    { title:'Практика внимательности', color:'#3a6a4a', icon:'🌿', lesson:'Дыхание — мост между телом и умом. Просто дыши.', riddle:'Что есть у каждого, но никто не держит?', answer:'Мгновение' },
-    { title:'Эмоциональный интеллект', color:'#6a5a3a', icon:'🌀', lesson:'Эмоции — энергия. Направь её в созидание.', riddle:'Что меняет форму, но остаётся собой?', answer:'Чувство' },
-    { title:'Путь к себе', color:'#5a3a6a', icon:'🌟', lesson:'Ты — целое. Все части уже внутри тебя.', riddle:'Что ищут все, но находят только внутри?', answer:'Истина' }
-];
+let SLIDES = [];
 
 let completed = 0;
+let totalModules = 0;
 let breathTime = 0;
 let fogTarget = 0.015;
 let riddleVisible = false;
@@ -367,51 +363,65 @@ for (let i = 0; i < 180; i++) {
 }
 
 // ============================================================
-// ОБЪЕКТЫ КУРСА (образы)
+// ОБЪЕКТЫ КУРСА (образы) — строятся из реальных модулей
 // ============================================================
 const objects = [];
-const objPositions = [
-    { z: -6, x: -1.5 },
-    { z: -13, x: 2.0 },
-    { z: -20, x: -1.8 },
-    { z: -27, x: 1.5 },
-    { z: -34, x: 0.0 }
-];
 
 const label = document.getElementById('label3d');
 const riddleBox = document.getElementById('riddle-box');
 const riddleQ = document.getElementById('riddleQuestion');
 const riddleA = document.getElementById('riddleAnswer');
 
-SLIDES.forEach((data, i) => {
-    const pos = objPositions[i];
-    const color = new BABYLON.Color3(
-        parseInt(data.color.slice(1,3),16)/255,
-        parseInt(data.color.slice(3,5),16)/255,
-        parseInt(data.color.slice(5,7),16)/255
-    );
+// Запасные позиции вдоль дороги — используются только для модулей,
+// у которых в админке не заданы position_x/position_z (обе = 0)
+const fallbackPositions = [
+    { z: -6, x: -1.5 }, { z: -13, x: 2.0 }, { z: -20, x: -1.8 },
+    { z: -27, x: 1.5 }, { z: -34, x: 0.0 }, { z: -41, x: -2.2 },
+    { z: -48, x: 1.8 }, { z: -55, x: -0.5 }, { z: -62, x: 2.3 },
+    { z: -69, x: -1.2 }
+];
+let fallbackIndex = 0;
 
-    const group = new BABYLON.TransformNode('group');
-    group.position = new BABYLON.Vector3(pos.x, 0, pos.z);
-    group.userData = { 
-        slide: i, 
-        completed: false, 
-        title: data.title, 
-        lesson: data.lesson,
-        icon: data.icon,
-        riddle: data.riddle,
-        answer: data.answer,
-        appearProgress: 0
-    };
+function buildCourseObjects(modules) {
+    SLIDES = modules;
+    totalModules = modules.length;
+
+    modules.forEach((data, i) => {
+        let pos;
+        if (data.x || data.z) {
+            pos = { x: data.x, z: -Math.abs(data.z) || -(i * 7 + 6) };
+        } else {
+            pos = fallbackPositions[fallbackIndex % fallbackPositions.length];
+            fallbackIndex++;
+        }
+        const color = new BABYLON.Color3(
+            parseInt(data.color.slice(1,3),16)/255,
+            parseInt(data.color.slice(3,5),16)/255,
+            parseInt(data.color.slice(5,7),16)/255
+        );
+
+        const group = new BABYLON.TransformNode('group');
+        group.position = new BABYLON.Vector3(pos.x, 0, pos.z);
+        const isLocked = data.status === 'locked';
+        const isCompleted = data.status === 'completed';
+        group.userData = {
+            slide: i,
+            completed: isCompleted,
+            locked: isLocked,
+            title: data.title,
+            lesson: data.subtitle || (data.associations && data.associations[0]) || '',
+            number: data.number,
+            appearProgress: 0
+        };
 
     const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', {
         diameter: 0.5 + i*0.02,
         segments: 32
     }, scene);
     const mat = new BABYLON.PBRMaterial('mat', scene);
-    mat.albedoColor = color;
-    mat.emissiveColor = new BABYLON.Color3(0.2, 0.5, 1);
-    mat.emissiveIntensity = 0.3;
+    mat.albedoColor = isLocked ? new BABYLON.Color3(0.15, 0.15, 0.15) : color;
+    mat.emissiveColor = isLocked ? new BABYLON.Color3(0.05, 0.05, 0.06) : (isCompleted ? new BABYLON.Color3(0.3, 0.7, 0.4) : new BABYLON.Color3(0.2, 0.5, 1));
+    mat.emissiveIntensity = isCompleted ? 1.2 : 0.3;
     mat.roughness = 0.05;
     mat.metallic = 0.1;
     mat.alpha = 0.02;
@@ -470,28 +480,48 @@ SLIDES.forEach((data, i) => {
     sphere.actionManager = new BABYLON.ActionManager(scene);
     sphere.actionManager.registerAction(
         new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
-            if (!group.userData.completed) {
-                initAudio();
-                group.userData.completed = true;
-                completed++;
-                mat.emissiveIntensity = 2.0;
-                mat.alpha = 0.3;
-                document.getElementById('modalIcon').textContent = data.icon;
+            initAudio();
+            if (group.userData.locked) {
+                document.getElementById('modalIcon').textContent = '🔒';
                 document.getElementById('modalTitle').textContent = data.title;
-                document.getElementById('modalText').textContent = data.lesson;
-                document.getElementById('modalRiddle').textContent = `❓ ${data.riddle} — ${data.answer}`;
+                document.getElementById('modalText').textContent = 'Этот модуль пока заблокирован — сначала пройди предыдущий.';
+                document.getElementById('modalRiddle').textContent = '';
                 document.getElementById('modal').style.display = 'flex';
-                document.getElementById('progress').innerHTML = `${completed} <span>/ ${SLIDES.length}</span>`;
-                if (completed === SLIDES.length) {
-                    document.getElementById('title').textContent = '🌟 Свет найден';
-                    document.getElementById('desc').textContent = 'Ты нашёл ответы на свои вопросы.';
-                }
+                return;
             }
+            document.getElementById('modalIcon').textContent = group.userData.completed ? '✅' : '📖';
+            document.getElementById('modalTitle').textContent = data.title;
+            document.getElementById('modalText').textContent = group.userData.lesson || 'Открыть модуль курса?';
+            document.getElementById('modalRiddle').textContent = '';
+            const modal = document.getElementById('modal');
+            const box = modal.querySelector('.box');
+            let openBtn = document.getElementById('openModuleBtn');
+            if (!openBtn) {
+                openBtn = document.createElement('button');
+                openBtn.id = 'openModuleBtn';
+                box.insertBefore(openBtn, box.querySelector('button'));
+            }
+            openBtn.textContent = group.userData.completed ? '📖 Открыть модуль' : '✨ Начать модуль';
+            openBtn.onclick = () => { window.location.href = '/course/module/' + group.userData.number + '/'; };
+            modal.style.display = 'flex';
         })
     );
 
     objects.push(group);
-});
+    });
+    document.getElementById('progress').innerHTML = `${modules.filter(m => m.status === 'completed').length} <span>/ ${modules.length}</span>`;
+}
+
+// Загрузка реального прогресса курса и запуск построения мира
+function fetchCourseData() {
+    fetch('/api/course/progress/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(data => {
+            completed = data.completed_module_ids ? data.completed_module_ids.length : 0;
+            buildCourseObjects(data.modules || []);
+        })
+        .catch(err => console.error('Не удалось загрузить прогресс курса:', err));
+}
 
 // ============================================================
 // ЦИКЛ
@@ -514,7 +544,7 @@ scene.registerBeforeRender(() => {
     objects.forEach((group, i) => {
         const dist = BABYLON.Vector3.Distance(camera.position, group.position);
         const appearSpeed = 0.004;
-        if (dist < 18 && !group.userData.completed) {
+        if (dist < 18) {
             group.userData.appearProgress = Math.min(1, group.userData.appearProgress + appearSpeed);
         } else if (dist > 22) {
             group.userData.appearProgress = Math.max(0, group.userData.appearProgress - appearSpeed * 0.2);
@@ -548,22 +578,30 @@ scene.registerBeforeRender(() => {
     const ray = new BABYLON.Ray(camera.position, camera.getDirection(new BABYLON.Vector3(0, 0, 1)));
     ray.length = 20;
     const hit = scene.pickWithRay(ray, (m) => {
-        return m.name === 'sphere' && m.parent && !m.parent.userData.completed && m.parent.userData.appearProgress > 0.2;
+        return m.name === 'sphere' && m.parent && m.parent.userData.appearProgress > 0.2;
     });
 
     if (hit && hit.pickedMesh) {
         const group = hit.pickedMesh.parent;
-        const idx = group.userData.slide;
-        const data = SLIDES[idx];
-        
-        label.innerHTML = `${data.icon} ${data.title} <span class="sub">❄️ ${data.riddle}</span>`;
+        const ud = group.userData;
+
+        if (ud.locked) {
+            label.innerHTML = `🔒 ${ud.title} <span class="sub">заблокировано</span>`;
+        } else {
+            label.innerHTML = `📖 ${ud.title} <span class="sub">❄️ ${ud.lesson || ''}</span>`;
+        }
         label.style.opacity = '1';
-        
-        riddleQ.textContent = `❓ ${data.riddle}`;
-        riddleA.textContent = `✦ кликни, чтобы узнать ответ`;
+
+        if (ud.locked) {
+            riddleQ.textContent = `🔒 Модуль заблокирован`;
+            riddleA.textContent = `✦ пройди предыдущий модуль`;
+        } else {
+            riddleQ.textContent = `❓ ${ud.lesson || ud.title}`;
+            riddleA.textContent = ud.completed ? `✦ кликни, чтобы открыть модуль` : `✦ кликни, чтобы начать модуль`;
+        }
         riddleBox.style.opacity = '1';
         riddleVisible = true;
-        
+
         flash.intensity = 0.6 + Math.sin(time * 1.2) * 0.1;
         fogTarget = 0.005;
         document.getElementById('flashlight-icon').style.opacity = '0.3';
@@ -589,6 +627,7 @@ function startGame() {
     setTimeout(() => {
         document.getElementById('intro').style.display = 'none';
     }, 1000);
+    fetchCourseData();
 }
 
 // ============================================================
