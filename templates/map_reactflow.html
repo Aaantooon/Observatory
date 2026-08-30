@@ -3,6 +3,10 @@
 {% block title %}Ментальная карта — Путь наблюдателя{% endblock %}
 
 {% block extra_head %}
+<!-- ВАЖНО: без этого файла React Flow рисует узлы голыми <div>-ами —
+     без позиционирования и обработки мыши, карта выглядит как есть,
+     но ничего не реагирует на клик/перетаскивание/колёсико. -->
+<link rel="stylesheet" href="https://unpkg.com/reactflow@11/dist/style.css">
 <style>
     .map-page {
         max-width: 1200px;
