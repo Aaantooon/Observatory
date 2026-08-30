@@ -178,8 +178,15 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
     ],
+    # ВАЖНО: этот API (bot_api) используется только VK-ботом — он всегда
+    # шлёт Authorization: Token ... на каждый запрос. Ничего на сайте
+    # (шаблоны, JS) им не пользуется. Раньше тут стоял IsAuthenticatedOrReadOnly,
+    # из-за чего ЛЮБОЙ человек в интернете мог без пароля читать
+    # /api/users/, /api/results/ (результаты упражнений) и
+    # /api/admin/review/ (переписка клиента с психологом). Исправлено
+    # 30.08.2026 — теперь чтение тоже требует токен.
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 
@@ -189,10 +196,24 @@ if not CORS_ALLOWED_ORIGINS or CORS_ALLOWED_ORIGINS == ['']:
 
 CORS_ALLOW_CREDENTIALS = True
 
-SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False') == 'True'
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
+# ВАЖНО: раньше эти 3 настройки включались только если явно задать
+# соответствующую переменную в .env (а её там могло и не быть — тогда
+# сайт работал бы БЕЗ этой защиты, даже в проде). Теперь они включаются
+# автоматически, когда DEBUG=False (то есть всегда на сервере), и
+# выключаются в локальной разработке (DEBUG=True), где HTTPS обычно нет.
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',')
+
+if not DEBUG:
+    # HSTS — говорит браузеру всегда ходить на сайт только по HTTPS.
+    # Начинаем с небольшого срока (1 час), чтобы проверить, что HTTPS
+    # стабильно работает. Если через пару недель проблем не будет —
+    # можно увеличить до года (31536000), как принято для продакшена.
+    SECURE_HSTS_SECONDS = 3600
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
 ADMIN_SITE_TITLE = "Путь Наблюдателя"
