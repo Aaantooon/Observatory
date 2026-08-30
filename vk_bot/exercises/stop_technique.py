@@ -1,5 +1,5 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard
 
 
 class StopTechniqueExercise(BaseExercise):
@@ -9,10 +9,8 @@ class StopTechniqueExercise(BaseExercise):
     def get_exercise_title(self):
         return "Стоп-техника"
 
-    def start(self, user_id):
-        progress = self.get_progress(user_id)
-        
-        session = {
+    def _fresh_session(self):
+        return {
             'phase': 'thoughts',
             'thoughts': '',
             'feelings': '',
@@ -21,12 +19,40 @@ class StopTechniqueExercise(BaseExercise):
             'count': 0
         }
 
-        is_resuming = bool(progress and progress.get('data'))
-        if is_resuming:
-            session.update(progress.get('data', {}))
-        else:
-            session['count'] = session.get('count', 0) + 1
+    def _handle_start_over(self, user_id, prev_count=0):
+        self.delete_progress(user_id)
+        session = self._fresh_session()
+        session['count'] = prev_count + 1
+        self.user_sessions[user_id] = session
+        self._show_phase(user_id, session)
 
+    def start(self, user_id):
+        progress = self.get_progress(user_id)
+        data = progress.get('data') if progress else None
+
+        has_saved = bool(data and (
+            data.get('thoughts') or data.get('feelings') or data.get('wants') or
+            (data.get('phase') and data.get('phase') != 'thoughts')
+        ))
+
+        if has_saved:
+            session = self._fresh_session()
+            session.update(data)
+            self.user_sessions[user_id] = session
+
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║     🛑 СТОП-ТЕХНИКА             ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                "· У тебя есть незаконченная остановка\n\n"
+                "🕯️ Продолжим с того места, где остановился?",
+                continue_keyboard()
+            )
+            return
+
+        session = self._fresh_session()
+        session['count'] = 1
         self.user_sessions[user_id] = session
         self._show_phase(user_id, session)
 
@@ -84,11 +110,19 @@ class StopTechniqueExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if "продолжи" in text_lower:
+            self._show_phase(user_id, session)
+            return
+
+        if "заново" in text_lower:
+            self._handle_start_over(user_id, session.get('count', 0))
+            return
+
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["завершить", "✅ завершить"]:
+        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
             self._next_phase(user_id, session)
             return
 

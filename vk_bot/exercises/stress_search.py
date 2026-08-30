@@ -161,7 +161,7 @@ class StressSearchExercise:
             self._handle_start_over(user_id)
             return
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
@@ -209,7 +209,7 @@ class StressSearchExercise:
                     "╚══════════════════════════════════╝\n\n"
                     "· Запиши хотя бы один образ\n"
                     "· 📌 **Формат:** `Причина 9`\n\n"
-                    "❌ **«Отмена»** — сохранить путь",
+                    "💾 **«Сохранить и выйти»**",
                     cancel_keyboard()
                 )
                 return
@@ -228,7 +228,7 @@ class StressSearchExercise:
                     "╚══════════════════════════════════╝\n\n"
                     "· Запиши хотя бы один образ\n"
                     "· 📌 **Формат:** `Причина 9`\n\n"
-                    "❌ **«Отмена»** — сохранить путь",
+                    "💾 **«Сохранить и выйти»**",
                     cancel_keyboard()
                 )
                 return
@@ -244,7 +244,7 @@ class StressSearchExercise:
                 "╚══════════════════════════════════╝\n\n"
                 "· Нужно: `Причина 9` (слово + пробел + оценка)\n"
                 "· 📌 **Пример:** `Работа 8`\n\n"
-                "❌ **«Отмена»** — сохранить путь",
+                "💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
             return
@@ -258,7 +258,7 @@ class StressSearchExercise:
                 f"· Оценка должна быть числом от 1 до 10\n"
                 f"· Ты написал: `{parts[1]}`\n\n"
                 f"· 📌 **Пример:** `Работа 8`\n\n"
-                f"❌ **«Отмена»** — сохранить путь",
+                f"💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
             return
@@ -272,7 +272,7 @@ class StressSearchExercise:
                 f"╚══════════════════════════════════╝\n\n"
                 f"· Оценка должна быть от 1 до 10\n"
                 f"· Ты поставил: `{rate}`\n\n"
-                f"❌ **«Отмена»** — сохранить путь",
+                f"💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
             return
@@ -376,7 +376,7 @@ class StressSearchExercise:
             f"❓ **Вопрос 1/4:**\n"
             f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
             f"{self._get_separator()}\n"
-            f"❌ **«Отмена»** — сохранить путь",
+            f"💾 **«Сохранить и выйти»**",
             cancel_keyboard()
         )
         
@@ -386,7 +386,7 @@ class StressSearchExercise:
     def handle_question(self, user_id, text, session):
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
@@ -415,7 +415,7 @@ class StressSearchExercise:
                 f"❓ **Вопрос 2/4:**\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
-                f"❌ **«Отмена»** — сохранить путь",
+                f"💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
 
@@ -450,7 +450,7 @@ class StressSearchExercise:
                 f"❓ **Вопрос 3/4:**\n"
                 f"· Почему так должно быть?\n"
                 f"· Объясни\n\n"
-                f"❌ **«Отмена»** — сохранить путь",
+                f"💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
 
@@ -474,7 +474,7 @@ class StressSearchExercise:
                 f"  · **Почему**?\n"
                 f"  · **На сколько %** это реально?\n\n"
                 f"· Напиши свои размышления\n\n"
-                f"❌ **«Отмена»** — сохранить путь",
+                f"💾 **«Сохранить и выйти»**",
                 cancel_keyboard()
             )
 

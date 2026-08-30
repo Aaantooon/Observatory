@@ -1,5 +1,5 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard, continue_keyboard
 
 
 class MyRolesExercise(BaseExercise):
@@ -9,20 +9,8 @@ class MyRolesExercise(BaseExercise):
     def get_exercise_title(self):
         return "Мои роли"
 
-    def start(self, user_id):
-        progress = self.get_progress(user_id)
-        
-        if progress and progress.get('is_completed'):
-            self.send_message(
-                user_id,
-                "✅ Это упражнение уже пройдено\n"
-                "Хочешь пройти заново?",
-                finish_keyboard()
-            )
-            self.user_sessions[user_id] = {'phase': 'complete_or_view'}
-            return
-
-        session = {
+    def _fresh_session(self):
+        return {
             'phase': 'social',
             'social_roles': [],
             'interpersonal_roles': [],
@@ -30,10 +18,44 @@ class MyRolesExercise(BaseExercise):
             'current_type': 'social',
             'step': 1
         }
-        
-        if progress and progress.get('data'):
-            session.update(progress.get('data', {}))
 
+    def _handle_start_over(self, user_id):
+        self.delete_progress(user_id)
+        session = self._fresh_session()
+        self.user_sessions[user_id] = session
+        self._show_instruction(user_id, session)
+
+    def start(self, user_id):
+        progress = self.get_progress(user_id)
+        data = progress.get('data') if progress else None
+
+        has_saved = bool(data and (
+            data.get('social_roles') or
+            data.get('interpersonal_roles') or
+            data.get('intrapersonal_roles')
+        ))
+
+        if has_saved:
+            session = self._fresh_session()
+            session.update(data)
+            self.user_sessions[user_id] = session
+
+            total = (len(session.get('social_roles', [])) +
+                      len(session.get('interpersonal_roles', [])) +
+                      len(session.get('intrapersonal_roles', [])))
+
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║        🎭 МОИ РОЛИ             ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                f"· Ты уже записал: **{total}** ролей\n\n"
+                "🕯️ Продолжим с того места, где остановился?",
+                continue_keyboard()
+            )
+            return
+
+        session = self._fresh_session()
         self.user_sessions[user_id] = session
         self._show_instruction(user_id, session)
 
@@ -90,11 +112,19 @@ class MyRolesExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if "продолжи" in text_lower:
+            self._show_instruction(user_id, session)
+            return
+
+        if "заново" in text_lower:
+            self._handle_start_over(user_id)
+            return
+
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["завершить", "✅ завершить"]:
+        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
             self._handle_phase_complete(user_id, session)
             return
 

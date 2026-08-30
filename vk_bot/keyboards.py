@@ -31,7 +31,7 @@ def analysis_keyboard():
 
 def cancel_keyboard():
     keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("❌ Отмена", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
 def continue_keyboard():
@@ -69,7 +69,7 @@ def finish_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
-    keyboard.add_button("❌ Отмена", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
 def main_menu():

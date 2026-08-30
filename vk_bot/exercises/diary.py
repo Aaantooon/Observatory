@@ -1,5 +1,5 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard
 from datetime import datetime
 
 
@@ -10,10 +10,8 @@ class DiaryExercise(BaseExercise):
     def get_exercise_title(self):
         return "Дневник"
 
-    def start(self, user_id):
-        progress = self.get_progress(user_id)
-        
-        session = {
+    def _fresh_session(self):
+        return {
             'phase': 'dream',
             'dream': '',
             'mood': '',
@@ -24,10 +22,40 @@ class DiaryExercise(BaseExercise):
             'step': 1,
             'completed': False
         }
-        
-        if progress and progress.get('data'):
-            session.update(progress.get('data', {}))
-        
+
+    def _handle_start_over(self, user_id):
+        self.delete_progress(user_id)
+        session = self._fresh_session()
+        self.user_sessions[user_id] = session
+        self._show_phase(user_id, session)
+
+    def start(self, user_id):
+        progress = self.get_progress(user_id)
+        data = progress.get('data') if progress else None
+
+        has_saved = bool(data and (
+            data.get('dream') or data.get('mood') or data.get('body') or
+            data.get('thoughts') or data.get('wants') or data.get('differences') or
+            (data.get('phase') and data.get('phase') != 'dream')
+        ))
+
+        if has_saved:
+            session = self._fresh_session()
+            session.update(data)
+            self.user_sessions[user_id] = session
+
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║        📖 ДНЕВНИК              ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                "· У тебя есть незаконченная запись\n\n"
+                "🕯️ Продолжим с того места, где остановился?",
+                continue_keyboard()
+            )
+            return
+
+        session = self._fresh_session()
         self.user_sessions[user_id] = session
         self._show_phase(user_id, session)
 
@@ -115,11 +143,19 @@ class DiaryExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if "продолжи" in text_lower:
+            self._show_phase(user_id, session)
+            return
+
+        if "заново" in text_lower:
+            self._handle_start_over(user_id)
+            return
+
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["завершить", "✅ завершить"]:
+        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
             self._next_phase(user_id, session)
             return
 

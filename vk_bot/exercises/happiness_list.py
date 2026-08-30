@@ -1,5 +1,5 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu
+from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard
 
 
 class HappinessListExercise(BaseExercise):
@@ -9,18 +9,12 @@ class HappinessListExercise(BaseExercise):
     def get_exercise_title(self):
         return "Список счастья"
 
+    def _handle_start_over(self, user_id):
+        self.delete_progress(user_id)
+        self._start_new(user_id)
+
     def start(self, user_id):
         progress = self.get_progress(user_id)
-        
-        if progress and progress.get('is_completed'):
-            self.send_message(
-                user_id,
-                "✅ Ты уже прошёл это упражнение!\n"
-                "Хочешь посмотреть свои записи или пройти заново?",
-                finish_keyboard()
-            )
-            self.user_sessions[user_id] = {'phase': 'complete_or_view'}
-            return
 
         items = []
         if progress and progress.get('data'):
@@ -28,9 +22,18 @@ class HappinessListExercise(BaseExercise):
 
         if items:
             self.user_sessions[user_id] = {'phase': 'continue', 'items': items}
-            self._show_items(user_id, items)
-        else:
-            self._start_new(user_id)
+            self.send_message(
+                user_id,
+                "╔══════════════════════════════════╗\n"
+                "║       ✨ СПИСОК СЧАСТЬЯ        ║\n"
+                "╚══════════════════════════════════╝\n\n"
+                f"· Ты уже записал: **{len(items)}** пунктов\n\n"
+                "🕯️ Продолжим с того места, где остановился?",
+                continue_keyboard()
+            )
+            return
+
+        self._start_new(user_id)
 
     def _start_new(self, user_id):
         self.user_sessions[user_id] = {'phase': 'collecting', 'items': []}
@@ -70,11 +73,19 @@ class HappinessListExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel"]:
+        if "продолжи" in text_lower:
+            self._show_items(user_id, session.get('items', []))
+            return
+
+        if "заново" in text_lower:
+            self._handle_start_over(user_id)
+            return
+
+        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["завершить", "✅ завершить"]:
+        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
             self._finish(user_id, session)
             return
 
