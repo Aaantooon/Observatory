@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Module, UserCourseProgress, ModuleComment
+from .models import Module, UserCourseProgress, ModuleComment, MindMapNodePosition
 
 
 @admin.register(Module)
@@ -20,3 +20,9 @@ class UserCourseProgressAdmin(admin.ModelAdmin):
 class ModuleCommentAdmin(admin.ModelAdmin):
     list_display = ('module', 'user', 'created_at')
     search_fields = ('text', 'user__username')
+
+
+@admin.register(MindMapNodePosition)
+class MindMapNodePositionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'node_id', 'x', 'y', 'updated_at')
+    search_fields = ('user__username', 'node_id')

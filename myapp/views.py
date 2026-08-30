@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
 from django.db.models import Q
-from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark
+from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
 import json
 import csv
 from datetime import date
@@ -282,34 +282,46 @@ def mindmap_data(request):
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
     modules = Module.objects.filter(is_published=True).order_by('number')
-    
+
+    # Позиции узлов, которые пользователь уже сам перетащил и сохранил —
+    # если для узла есть сохранённая позиция, используем её вместо
+    # автоматически рассчитанной.
+    saved_positions = {
+        p.node_id: {'x': p.x, 'y': p.y}
+        for p in MindMapNodePosition.objects.filter(user=request.user)
+    }
+
+    def node_position(node_id, default_x, default_y):
+        return saved_positions.get(node_id, {'x': default_x, 'y': default_y})
+
     nodes = []
     edges = []
-    
+
     # Корневой узел
     nodes.append({
         'id': 'root',
         'type': 'mindmap',
-        'position': {'x': 50, 'y': 300},
+        'position': node_position('root', 50, 300),
         'data': {
             'label': '🚀 Путь наблюдателя',
             'type': 'root',
             'url': '/flashlight/',
         },
     })
-    
+
     # Модули
     for i, module in enumerate(modules):
         is_completed = progress.is_module_completed(module)
         is_current = progress.current_module and module.id == progress.current_module.id
-        
+
         status = 'completed' if is_completed else ('current' if is_current else 'locked')
         color = '#4ac06a' if is_completed else ('#4a7a9a' if is_current else '#4a4a4a')
-        
+
+        module_node_id = f'module_{module.id}'
         nodes.append({
-            'id': f'module_{module.id}',
+            'id': module_node_id,
             'type': 'mindmap',
-            'position': {'x': 280, 'y': 150 + i * 150},
+            'position': node_position(module_node_id, 280, 150 + i * 150),
             'data': {
                 'label': f"{'✅' if is_completed else '📖'} {module.title}",
                 'status': status,
@@ -318,7 +330,7 @@ def mindmap_data(request):
                 'color': color,
             },
         })
-        
+
         # Связь от корня
         edges.append({
             'id': f'e_root_{module.id}',
@@ -326,17 +338,16 @@ def mindmap_data(request):
             'target': f'module_{module.id}',
             'style': {'stroke': '#2a3a4a', 'strokeWidth': 2},
         })
-        
+
         # Ассоциации как дочерние узлы
         for j, assoc in enumerate(module.associations):
             node_id = f'assoc_{module.id}_{j}'
+            default_x = 480
+            default_y = 150 + i * 150 + (j - (len(module.associations) - 1) / 2) * 60
             nodes.append({
                 'id': node_id,
                 'type': 'mindmap',
-                'position': {
-                    'x': 480,
-                    'y': 150 + i * 150 + (j - (len(module.associations) - 1) / 2) * 60
-                },
+                'position': node_position(node_id, default_x, default_y),
                 'data': {
                     'label': f'🔗 {assoc}',
                     'type': 'association',
@@ -363,10 +374,16 @@ def mindmap_save_position(request):
         node_id = data.get('nodeId')
         x = data.get('x')
         y = data.get('y')
-        
-        # TODO: Сохранять позиции в базу данных
-        # Например: UserMindMapNodePosition.objects.update_or_create(...)
-        
+
+        if not node_id or x is None or y is None:
+            return JsonResponse({'error': 'nodeId, x и y обязательны'}, status=400)
+
+        MindMapNodePosition.objects.update_or_create(
+            user=request.user,
+            node_id=node_id,
+            defaults={'x': x, 'y': y},
+        )
+
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)

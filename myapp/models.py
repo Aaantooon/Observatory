@@ -238,6 +238,23 @@ class ModuleComment(models.Model):
         return f"{self.user.username} — {self.module.title} ({self.created_at.strftime('%d.%m.%Y')})"
 
 
+# ===== ПОЗИЦИИ УЗЛОВ МЕНТАЛЬНОЙ КАРТЫ =====
+class MindMapNodePosition(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mindmap_positions')
+    node_id = models.CharField(max_length=100, verbose_name="ID узла")
+    x = models.FloatField()
+    y = models.FloatField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'node_id')
+        verbose_name = "Позиция узла карты"
+        verbose_name_plural = "Позиции узлов карты"
+
+    def __str__(self):
+        return f"{self.user.username} — {self.node_id}"
+
+
 # ===== ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ =====
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
