@@ -130,6 +130,7 @@ const ReactFlowComponent = ReactFlowModule.default || ReactFlowModule.ReactFlow 
 const Background = ReactFlowModule.Background;
 const Controls = ReactFlowModule.Controls;
 const MiniMap = ReactFlowModule.MiniMap;
+const applyNodeChanges = ReactFlowModule.applyNodeChanges;
 
 // ===== КОНСТАНТЫ =====
 const nodeStyles = {
@@ -268,6 +269,15 @@ function MindMap() {
             });
     }, []);
 
+    // ВАЖНО: без этого обработчика React Flow не запоминает новую позицию
+    // узла после перетаскивания — узел визуально двигается под курсором,
+    // но при отпускании кнопки мыши компонент перерисовывается со старыми
+    // координатами, и узел "прыгает" обратно на исходное место.
+    const onNodesChange = React.useCallback(
+        (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
+        []
+    );
+
     const onConnect = React.useCallback(
         (connection) => {
             setEdges((eds) => {
@@ -346,6 +356,7 @@ function MindMap() {
     return React.createElement(ReactFlowComponent, {
         nodes: nodes,
         edges: edges,
+        onNodesChange: onNodesChange,
         onConnect: onConnect,
         onNodeDragStop: onNodeDragStop,
         nodeTypes: nodeTypes,
