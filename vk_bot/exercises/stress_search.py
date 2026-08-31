@@ -472,8 +472,6 @@ class StressSearchExercise:
             self._handle_cancel(user_id, session)
             return
 
-        self._save_progress(user_id, session)
-
         step = session.get('question_step', 1)
         answers = session.get('answers', [])
         current_answer = answers[-1] if answers else {}
@@ -487,6 +485,7 @@ class StressSearchExercise:
         if step == 1:
             current_answer['ideal'] = text
             session['question_step'] = 2
+            self._save_progress(user_id, session)
 
             self.send_message(
                 user_id,
@@ -521,6 +520,7 @@ class StressSearchExercise:
 
             current_answer['percent'] = percent
             session['question_step'] = 3
+            self._save_progress(user_id, session)
 
             self.send_message(
                 user_id,
@@ -539,6 +539,7 @@ class StressSearchExercise:
         elif step == 3:
             current_answer['why'] = text
             session['question_step'] = 4
+            self._save_progress(user_id, session)
 
             self.send_message(
                 user_id,
@@ -581,8 +582,7 @@ class StressSearchExercise:
             'total_count': len(session.get('items', []))
         }
 
-        exercise_id = 1
-        self.api.save_result(user_id, exercise_id, result_data)
+        self.api.save_result(user_id, 'stress_search', result_data)
 
         self._delete_progress(user_id)
 
