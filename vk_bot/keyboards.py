@@ -1,5 +1,19 @@
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 
+# Точные (не по подстроке!) варианты текста для распознавания нажатий кнопок
+# "Продолжить"/"Начать заново"/"Сохранить и начать заново" в обычном тексте
+# пользователя (например в ответе на упражнение) — чтобы случайное слово
+# "заново" или "продолжить" внутри реального ответа не путалось с командой.
+CONTINUE_TEXTS = {"продолжи", "продолжить", "➡️ продолжить", "продолжить ✅", "✅ продолжить"}
+RESTART_TEXTS = {"заново", "начать заново", "начать заново 🔄", "🔄 начать заново"}
+SAVE_AND_RESTART_TEXTS = {
+    "сохранить и начать заново",
+    "💾 сохранить и начать заново",
+}
+CANCEL_TEXTS = {"отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"}
+ADVANCE_TEXTS = {"стоп", "⏹️ стоп", "завершить", "✅ завершить"} | CONTINUE_TEXTS
+
+
 def exercises_menu():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("1. Поиск стресса 🎯", color=VkKeyboardColor.POSITIVE)
@@ -17,9 +31,7 @@ def exercises_menu():
 
 def exercise_keyboard():
     keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()

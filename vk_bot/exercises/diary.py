@@ -1,5 +1,8 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard
+from keyboards import (
+    exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard,
+    CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+)
 from datetime import datetime
 
 
@@ -17,8 +20,8 @@ class DiaryExercise(BaseExercise):
             'mood': '',
             'body': '',
             'thoughts': '',
-            'debts': '',
             'wants': '',
+            'differences': '',
             'step': 1,
             'completed': False
         }
@@ -46,6 +49,7 @@ class DiaryExercise(BaseExercise):
         if has_saved:
             session = self._fresh_session()
             session.update(data)
+            session['_resume_prompt'] = True
             self.user_sessions[user_id] = session
 
             self.send_message(
@@ -147,23 +151,34 @@ class DiaryExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if "продолжи" in text_lower:
-            self._show_phase(user_id, session)
-            return
-
-        if "сохранить" in text_lower and "заново" in text_lower:
+        if text_lower in SAVE_AND_RESTART_TEXTS:
             self._handle_save_and_start_over(user_id, session)
             return
 
-        if "заново" in text_lower:
+        if session.get('_resume_prompt'):
+            if text_lower in CONTINUE_TEXTS:
+                session.pop('_resume_prompt', None)
+                self._show_phase(user_id, session)
+                return
+            if text_lower in RESTART_TEXTS:
+                self._handle_start_over(user_id)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «Продолжить ✅» или «Начать заново 🔄».",
+                continue_keyboard()
+            )
+            return
+
+        if text_lower in RESTART_TEXTS:
             self._handle_start_over(user_id)
             return
 
-        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
+        if text_lower in CANCEL_TEXTS:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
+        if text_lower in ADVANCE_TEXTS:
             self._next_phase(user_id, session)
             return
 
@@ -279,12 +294,12 @@ class DiaryExercise(BaseExercise):
 
     def _finish(self, user_id, session):
         result = {
-            'dream': session.get('dream'),
-            'mood': session.get('mood'),
-            'body': session.get('body'),
-            'thoughts': session.get('thoughts'),
-            'wants': session.get('wants'),
-            'differences': session.get('differences')
+            'dream': session.get('dream') or '',
+            'mood': session.get('mood') or '',
+            'body': session.get('body') or '',
+            'thoughts': session.get('thoughts') or '',
+            'wants': session.get('wants') or '',
+            'differences': session.get('differences') or ''
         }
         
         self.save_result(user_id, result)

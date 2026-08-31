@@ -2,7 +2,10 @@
 import random
 import logging
 from vk_api.utils import get_random_id
-from keyboards import main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard
+from keyboards import (
+    main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
+    CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,7 @@ class StressSearchExercise:
     def start(self, user_id):
         saved = self._load_progress(user_id)
         if saved and len(saved.get('items', [])) > 0:
+            saved['_resume_prompt'] = True
             self.user_sessions[user_id] = saved
             self.send_message(
                 user_id,
@@ -143,7 +147,7 @@ class StressSearchExercise:
             "· Запиши это и поставь оценку от 1 до 10\n\n"
             "📌 **Пример:** `Работа 8`\n\n"
             f"{self._get_separator()}\n"
-            "✅ **«Завершить»** — перейти к разбору\n"
+            "➡️ **«Продолжить»** — когда соберёшь образы, перейти к разбору\n"
             "💾 **«Сохранить и начать заново»** — сохранить как есть и начать новый путь",
             exercise_keyboard()
         )
@@ -157,24 +161,35 @@ class StressSearchExercise:
 
         text_lower = text.lower().strip()
 
-        if "продолжи" in text_lower:
-            self._restore_progress(user_id, session)
-            return
-
-        if "сохранить" in text_lower and "заново" in text_lower:
+        if text_lower in SAVE_AND_RESTART_TEXTS:
             self._handle_save_and_start_over(user_id, session)
             return
 
-        if "заново" in text_lower:
+        if session.get('_resume_prompt'):
+            if text_lower in CONTINUE_TEXTS:
+                session.pop('_resume_prompt', None)
+                self._restore_progress(user_id, session)
+                return
+            if text_lower in RESTART_TEXTS:
+                self._handle_start_over(user_id)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «Продолжить ✅» или «Начать заново 🔄».",
+                continue_keyboard()
+            )
+            return
+
+        if text_lower in RESTART_TEXTS:
             self._handle_start_over(user_id)
             return
 
-        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
+        if text_lower in CANCEL_TEXTS:
             self._handle_cancel(user_id, session)
             return
 
         phase = session.get('phase')
-        
+
         if phase == 'collecting':
             self.handle_collect(user_id, text.strip(), session)
         elif phase == 'analysis':
@@ -194,21 +209,19 @@ class StressSearchExercise:
                 "╚══════════════════════════════════╝\n\n"
                 f"· Уже записано: {count} образов\n"
                 f"· {progress}\n\n"
-                "🕯️ Продолжай или нажми **«Завершить»**.",
+                "🕯️ Пиши следующий образ, а когда закончишь — жми **«Продолжить»**.",
                 exercise_keyboard()
             )
         elif phase == 'analysis':
-            session['phase'] = 'question'
-            session['question_index'] = 0
-            session['answers'] = []
             self._start_analysis(user_id, session)
         elif phase == 'question':
-            self._show_current_question(user_id, session)
+            self._resume_current_question(user_id, session)
 
     def handle_collect(self, user_id, text, session):
         self._save_progress(user_id, session)
 
-        if text.lower() in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
+        t = text.lower().strip()
+        if t in ADVANCE_TEXTS:
             if len(session['items']) == 0:
                 self.send_message(
                     user_id,
@@ -294,7 +307,7 @@ class StressSearchExercise:
             f"· {progress}\n\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
-            f"· Продолжай или нажми **«Завершить»**",
+            f"· Пиши следующий образ, а когда закончишь — жми **«Продолжить»**",
             exercise_keyboard()
         )
 
@@ -375,10 +388,87 @@ class StressSearchExercise:
         session['phase'] = 'question'
         self._save_progress(user_id, session)
 
+    def _resume_current_question(self, user_id, session):
+        """Повторно показывает текущий под-вопрос при возобновлении сессии,
+        НЕ добавляя новую запись в session['answers'] (в отличие от
+        _show_current_question, которая используется для перехода к
+        следующему образу)."""
+        current_item = session.get('current_item', {})
+        item_text = current_item.get('text', '')
+        item_rate = current_item.get('rate', '')
+        total = len(session.get('items', []))
+        index = session.get('question_index', 0)
+        step = session.get('question_step', 1)
+        answers = session.get('answers', [])
+        current_answer = answers[-1] if answers else {}
+
+        if step == 1:
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"❓ **Вопрос 1/4:**\n"
+                f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
+                f"{self._get_separator()}\n"
+                f"💾 **«Сохранить и выйти»**",
+                cancel_keyboard()
+            )
+        elif step == 2:
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"❓ **Вопрос 2/4:**\n"
+                f"· На сколько процентов это реально?\n"
+                f"· Напиши число от 0 до 100\n\n"
+                f"💾 **«Сохранить и выйти»**",
+                cancel_keyboard()
+            )
+        elif step == 3:
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"❓ **Вопрос 3/4:**\n"
+                f"· Почему так должно быть?\n"
+                f"· Объясни\n\n"
+                f"💾 **«Сохранить и выйти»**",
+                cancel_keyboard()
+            )
+        elif step == 4:
+            self.send_message(
+                user_id,
+                f"╔══════════════════════════════════╗\n"
+                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
+                f"╚══════════════════════════════════╝\n\n"
+                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"❓ **Вопрос 4/4:**\n\n"
+                f"· «Ты — пуп земли и пуп вселенной.\n"
+                f"· И всё должно быть по-твоему?»\n\n"
+                f"· Это нормально так думать 😊\n\n"
+                f"· Важно сформулировать:\n"
+                f"  · **Как** должно быть?\n"
+                f"  · **Почему**?\n"
+                f"  · **На сколько %** это реально?\n\n"
+                f"· Напиши свои размышления\n\n"
+                f"💾 **«Сохранить и выйти»**",
+                cancel_keyboard()
+            )
+        else:
+            self._show_current_question(user_id, session)
+
     def handle_question(self, user_id, text, session):
         text_lower = text.lower().strip()
 
-        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
+        if text_lower in CANCEL_TEXTS:
             self._handle_cancel(user_id, session)
             return
 

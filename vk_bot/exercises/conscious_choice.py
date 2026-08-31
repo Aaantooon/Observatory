@@ -1,5 +1,8 @@
 from .base import BaseExercise
-from keyboards import exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard
+from keyboards import (
+    exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard,
+    CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+)
 
 
 class ConsciousChoiceExercise(BaseExercise):
@@ -36,6 +39,7 @@ class ConsciousChoiceExercise(BaseExercise):
         if has_saved:
             session = self._fresh_session()
             session.update(data)
+            session['_resume_prompt'] = True
             self.user_sessions[user_id] = session
 
             self.send_message(
@@ -120,23 +124,34 @@ class ConsciousChoiceExercise(BaseExercise):
 
         text_lower = text.lower().strip()
 
-        if "продолжи" in text_lower:
-            self._show_step(user_id, session)
-            return
-
-        if "сохранить" in text_lower and "заново" in text_lower:
+        if text_lower in SAVE_AND_RESTART_TEXTS:
             self._handle_save_and_start_over(user_id, session)
             return
 
-        if "заново" in text_lower:
+        if session.get('_resume_prompt'):
+            if text_lower in CONTINUE_TEXTS:
+                session.pop('_resume_prompt', None)
+                self._show_step(user_id, session)
+                return
+            if text_lower in RESTART_TEXTS:
+                self._handle_start_over(user_id)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «Продолжить ✅» или «Начать заново 🔄».",
+                continue_keyboard()
+            )
+            return
+
+        if text_lower in RESTART_TEXTS:
             self._handle_start_over(user_id)
             return
 
-        if text_lower in ["отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"]:
+        if text_lower in CANCEL_TEXTS:
             self._handle_cancel(user_id, session)
             return
 
-        if text_lower in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
+        if text_lower in ADVANCE_TEXTS:
             self._handle_next(user_id, session)
             return
 
@@ -149,7 +164,7 @@ class ConsciousChoiceExercise(BaseExercise):
             self.send_message(
                 user_id,
                 f"✅ Добавлено: {text}\n\n"
-                "Продолжай или нажми «Завершить»",
+                "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
                 exercise_keyboard()
             )
         
