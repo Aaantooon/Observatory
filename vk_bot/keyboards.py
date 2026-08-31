@@ -32,6 +32,15 @@ def exercises_menu():
     keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
+def stress_search_parts_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("🌫️ Часть 1: Собрать стресс", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("🧠 Часть 2: Разобрать стресс", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
 def exercise_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)

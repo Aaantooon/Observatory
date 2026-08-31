@@ -1,7 +1,7 @@
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
 from vk_api.utils import get_random_id
 from api_client import APIClient
-from keyboards import main_menu, exercises_menu, get_reminder_keyboard
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard
 from exercises.stress_search import StressSearchExercise
 from exercises.happiness_list import HappinessListExercise
 from exercises.my_roles import MyRolesExercise
@@ -184,8 +184,12 @@ class BotHandlers:
                     main_menu()
                 )
             elif "поиск стресса" in text_clean or "стресс" in text_clean or text_clean == "1":
-                self.user_states[user_id] = 'main'
-                self.stress_search.start(user_id)
+                self.user_states[user_id] = 'selecting_stress_part'
+                self.send_message(
+                    user_id,
+                    "🎯 ПОИСК СТРЕССА\n\nВыбери часть:",
+                    stress_search_parts_keyboard()
+                )
             elif "список счастья" in text_clean or "счасть" in text_clean or text_clean == "2":
                 self.user_states[user_id] = 'main'
                 self.happiness_list.start(user_id)
@@ -206,6 +210,27 @@ class BotHandlers:
                     user_id,
                     "🔦 Выбери упражнение из списка кнопок.",
                     exercises_menu()
+                )
+
+        elif state == 'selecting_stress_part':
+            if "назад" in text_clean:
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "🔦 Возвращаемся на перекрёсток.",
+                    main_menu()
+                )
+            elif "часть 1" in text_clean or "собрать" in text_clean or text_clean == "1":
+                self.user_states[user_id] = 'main'
+                self.stress_search.start(user_id)
+            elif "часть 2" in text_clean or "разобрать" in text_clean or text_clean == "2":
+                self.user_states[user_id] = 'main'
+                self.stress_search.start_part2(user_id)
+            else:
+                self.send_message(
+                    user_id,
+                    "🔦 Выбери часть из списка кнопок.",
+                    stress_search_parts_keyboard()
                 )
 
         elif state == 'sending_review':

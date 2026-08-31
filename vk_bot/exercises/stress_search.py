@@ -33,6 +33,21 @@ class StressSearchExercise:
     def _get_separator(self):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
+    def _get_question1_hint(self):
+        return (
+            "· Как должно быть? Это противоположность тому, что раздражает.\n\n"
+            "✍️ Пиши честно то, что первым приходит в голову — не думай, что "
+            "это обязательно \"твои\" мысли. Многое из этого вложили родители, "
+            "а им — их родители. Так нас и воспитали. Поэтому пиши без стеснения "
+            "и зазрения совести.\n\n"
+            "📌 Пример:\n"
+            "«Мне не нравится ложь»\n"
+            "Как должно быть? Противоположность — правда?\n"
+            "Все должны говорить правду?\n"
+            "Правду в моём присутствии?\n"
+            "Когда я хочу?"
+        )
+
     def _save_progress(self, user_id, session):
         data = {
             'items': session.get('items', []),
@@ -120,6 +135,33 @@ class StressSearchExercise:
         }
         self._send_intro(user_id)
 
+    def start_part2(self, user_id):
+        """Отдельный вход в Часть 2 (разбор стресса) — можно зайти сразу,
+        не дожидаясь, пока в Части 1 нажата «Продолжить». Разбирает те
+        образы, что уже записаны; если их пока нет — отправляет в Часть 1."""
+        saved = self._load_progress(user_id) or self.user_sessions.get(user_id)
+
+        if not saved or not saved.get('items'):
+            self.send_message(
+                user_id,
+                "🌫️ У тебя пока нет ни одного образа стресса.\n"
+                "Сначала пройди «🌫️ Часть 1: Собрать стресс».",
+                main_menu()
+            )
+            return
+
+        session = saved
+        if session.get('phase') == 'collecting':
+            session['phase'] = 'analysis'
+
+        self.user_sessions[user_id] = session
+        self._save_progress(user_id, session)
+
+        if session['phase'] == 'question':
+            self._resume_current_question(user_id, session)
+        else:
+            self._start_analysis(user_id, session)
+
     def _get_phase_text(self, phase):
         if phase == 'collecting':
             return "🌫️ Собираем образы"
@@ -133,7 +175,9 @@ class StressSearchExercise:
         self.send_message(
             user_id,
             "🎯 ПОИСК СТРЕССА\n\n"
-            "🌫️ Цель: найти источники стресса в своей жизни.\n\n"
+            "🌫️ Цель: найти источники стресса в своей жизни. Пиши, пока не наберётся 100 пунктов.\n"
+            "🧠 После 100 пунктов упражнение начинает работать само — в подсознании и мыслях: "
+            "ты учишься замечать стресс автоматически. Это и есть цель Части 1.\n\n"
             "📖 Формула стресса:\n"
             "Стресс = Прогноз ⚡ Реальность\n\n"
             "🕯️ Часть 1: Образ стресса\n"
@@ -314,6 +358,8 @@ class StressSearchExercise:
             f"· У тебя {len(items)} образов\n\n"
             "· Теперь будем разбирать каждый\n"
             "· Ты увидишь, где твоя карта расходится с реальностью\n\n"
+            "🎯 Цель Части 2 — научиться решать эти ситуации, чтобы потом они решались сами, "
+            "автоматически, в мыслях и подсознании. Чем больше практики — тем спокойнее ты остаёшься.\n\n"
             f"{self._get_separator()}\n"
             "➡️ Нажми «Далее», чтобы начать",
             analysis_keyboard()
@@ -358,7 +404,7 @@ class StressSearchExercise:
             f"🔦 ОБРАЗ {index + 1}/{len(items)}\n\n"
             f"📌 «{item['text']}» — {item['rate']}/10\n\n"
             f"❓ Вопрос 1/4:\n"
-            f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
+            f"{self._get_question1_hint()}\n\n"
             f"{self._get_separator()}\n"
             f"💾 «Сохранить и выйти»",
             cancel_keyboard()
@@ -387,7 +433,7 @@ class StressSearchExercise:
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 1/4:\n"
-                f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
+                f"· Как должно быть?\n\n"
                 f"{self._get_separator()}\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()

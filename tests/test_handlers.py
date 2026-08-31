@@ -179,8 +179,10 @@ def test_selecting_exercise_invalid_text_reprompts_menu():
 
 
 def test_selecting_exercise_starts_each_exercise_by_number():
+    # "1" (Поиск стресса) теперь ведёт не сразу в упражнение, а в подменю
+    # выбора части — проверяется отдельно ниже.
     cases = [
-        ("1", "stress_search"), ("2", "happiness_list"), ("3", "my_roles"),
+        ("2", "happiness_list"), ("3", "my_roles"),
         ("4", "conscious_choice"), ("5", "diary"), ("6", "stop_technique"),
     ]
     for number, attr_name in cases:
@@ -191,6 +193,80 @@ def test_selecting_exercise_starts_each_exercise_by_number():
         exercise = getattr(bh, attr_name)
         assert UID in exercise.user_sessions, f"Упражнение {attr_name} не запустилось по номеру {number}"
         assert bh.user_states[UID] == "main"
+
+
+def test_selecting_exercise_stress_search_opens_parts_submenu():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    assert bh.user_states[UID] == "selecting_stress_part"
+    assert UID not in bh.stress_search.user_sessions
+    assert "Выбери часть" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
+# state == 'selecting_stress_part' — раздельный запуск Части 1 / Части 2
+# ---------------------------------------------------------------------------
+
+def test_selecting_stress_part_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+
+
+def test_selecting_stress_part_invalid_text_reprompts_menu():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "абракадабра", "Аня", "И")
+    assert bh.user_states[UID] == "selecting_stress_part"
+    assert "Выбери часть из списка" in vk.last_message
+
+
+def test_selecting_stress_part_1_starts_collecting():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Часть 1: Собрать стресс", "Аня", "И")
+    assert UID in bh.stress_search.user_sessions
+    assert bh.stress_search.user_sessions[UID]['phase'] == 'collecting'
+    assert bh.user_states[UID] == "main"
+
+
+def test_selecting_stress_part_2_without_items_sends_to_part1():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Часть 2: Разобрать стресс", "Аня", "И")
+    assert "нет ни одного образа" in vk.last_message
+    assert UID not in bh.stress_search.user_sessions
+
+
+def test_selecting_stress_part_2_with_saved_items_jumps_to_analysis():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    # Копим один образ в Части 1, затем сохраняемся и выходим.
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Часть 1: Собрать стресс", "Аня", "И")
+    bh.stress_search.handle_message(UID, "Работа 8")
+    bh.stress_search.handle_message(UID, "Сохранить и выйти")
+    assert UID not in bh.stress_search.user_sessions
+
+    # Заходим сразу в Часть 2, минуя повторный сбор.
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Часть 2: Разобрать стресс", "Аня", "И")
+    assert UID in bh.stress_search.user_sessions
+    assert bh.stress_search.user_sessions[UID]['phase'] == 'analysis'
+    assert "РАЗБОР ПУТИ" in vk.last_message
 
 
 def test_selecting_exercise_starts_by_keyword():
@@ -357,7 +433,6 @@ def test_dispatch_routes_follow_up_message_into_each_active_exercise():
     прямо в него, а не обрабатываться как команда главного меню — для
     ВСЕХ 6 упражнений (не только my_roles, см. предыдущий тест)."""
     cases = [
-        ("1", "stress_search", "Работа 8", lambda ex: len(ex.user_sessions[UID]["items"]) == 1),
         ("2", "happiness_list", "Кофе — 8", lambda ex: len(ex.user_sessions[UID]["items"]) == 1),
         ("4", "conscious_choice", "Кормить детей", lambda ex: ex.user_sessions[UID]["must_items"] == ["Кормить детей"]),
         ("5", "diary", "Гулял по парку", lambda ex: ex.user_sessions[UID]["dream"] == "Гулял по парку"),
@@ -371,6 +446,16 @@ def test_dispatch_routes_follow_up_message_into_each_active_exercise():
         bh.handle_message(UID, follow_up, "Аня", "И")
         exercise = getattr(bh, attr_name)
         assert check(exercise), f"{attr_name}: follow-up сообщение не попало в активную сессию"
+
+    # stress_search теперь запускается через подменю "Часть 1"/"Часть 2" —
+    # проверяется тем же принципом (follow-up уходит в активную сессию).
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")
+    bh.handle_message(UID, "Часть 1: Собрать стресс", "Аня", "И")
+    bh.handle_message(UID, "Работа 8", "Аня", "И")
+    assert len(bh.stress_search.user_sessions[UID]["items"]) == 1
 
 
 def test_show_results_streak_text_branches():
