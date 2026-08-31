@@ -32,12 +32,14 @@ pg_dump -h "${DB_HOST:-localhost}" -p "${DB_PORT:-5432}" -U "$DB_USER" "$DB_NAME
 unset PGPASSWORD
 
 # --- Медиа (аватары, PDF модулей и т.п.) ---
+MEDIA_NOTE="медиа пропущены (папки media/ ещё нет)"
 if [ -d "./media" ]; then
     tar -czf "$BACKUP_DIR/media_${DATE}.tar.gz" media/
+    MEDIA_NOTE="media_${DATE}.tar.gz"
 fi
 
 # --- Удаляем бэкапы старше KEEP_DAYS дней ---
 find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime "+${KEEP_DAYS}" -delete
 find "$BACKUP_DIR" -name "media_*.tar.gz" -mtime "+${KEEP_DAYS}" -delete
 
-echo "[$(date)] Бэкап готов: db_${DATE}.sql.gz, media_${DATE}.tar.gz"
+echo "[$(date)] Бэкап готов: db_${DATE}.sql.gz, ${MEDIA_NOTE}"
