@@ -76,7 +76,7 @@ class StopTechniqueExercise(BaseExercise):
                 f"╔══════════════════════════════════╗\n"
                 f"║     🛑 СТОП-ТЕХНИКА #{count}     ║\n"
                 f"╚══════════════════════════════════╝\n\n"
-                f"**Вопрос 1/3: О чём я думаю?**\n\n"
+                f"Вопрос 1/3: О чём я думаю?\n\n"
                 f"Здесь и сейчас.\n\n"
                 f"Примеры:\n"
                 f"· Устал как собака\n"
@@ -89,7 +89,7 @@ class StopTechniqueExercise(BaseExercise):
         elif phase == 'feelings':
             self.send_message(
                 user_id,
-                f"**Вопрос 2/3: Что я сейчас чувствую?**\n\n"
+                f"Вопрос 2/3: Что я сейчас чувствую?\n\n"
                 f"Примеры:\n"
                 f"· Усталость\n"
                 f"· Радость\n"
@@ -102,7 +102,7 @@ class StopTechniqueExercise(BaseExercise):
         elif phase == 'wants':
             self.send_message(
                 user_id,
-                f"**Вопрос 3/3: Чего я сейчас хочу?**\n\n"
+                f"Вопрос 3/3: Чего я сейчас хочу?\n\n"
                 f"Примеры:\n"
                 f"· Сходить купить что-нибудь вкусное\n"
                 f"· Лечь и посмотреть сериал\n"
@@ -234,9 +234,9 @@ class StopTechniqueExercise(BaseExercise):
             f"╔══════════════════════════════════╗\n"
             f"║        ✨ СТОП #{count}           ║\n"
             f"╚══════════════════════════════════╝\n\n"
-            f"💭 **Мысли:** {result['thoughts']}\n\n"
-            f"❤️ **Чувства:** {result['feelings']}\n\n"
-            f"🎯 **Хочу:** {result['wants']}\n\n"
+            f"💭 Мысли: {result['thoughts']}\n\n"
+            f"❤️ Чувства: {result['feelings']}\n\n"
+            f"🎯 Хочу: {result['wants']}\n\n"
             f"🛑 Ты остановился и осознал момент.\n"
             f"Это уже победа ✨\n\n"
             f"Хочешь сделать ещё одну остановку?\n"

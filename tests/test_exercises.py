@@ -3,7 +3,7 @@
 
 Эмулируют реальную переписку пользователя с ботом (без сети — VK и Django API
 подменены in-memory заглушками из conftest.py) и проверяют:
-  - редизайн клавиатуры упражнений (2 кнопки: Продолжить / Сохранить и начать заново)
+  - клавиатура упражнений (3 кнопки: Продолжить / Сохранить и выйти / Сохранить и начать заново)
   - флаг _resume_prompt (одна и та же кнопка "Продолжить" на разных экранах)
   - защиту от бага с подстрокой ("заново"/"продолжить" внутри реального ответа)
   - "Сохранить и начать заново"
@@ -47,13 +47,16 @@ ALL_EXERCISES = [
 ]
 
 
-def test_fresh_start_shows_two_button_keyboard():
+EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и выйти", "💾 Сохранить и начать заново"]
+
+
+def test_fresh_start_shows_three_button_keyboard():
     for name, cls in ALL_EXERCISES:
         ex, vk, api = make(cls)
         ex.start(UID)
         buttons = vk.last_buttons
-        assert buttons == ["➡️ Продолжить", "💾 Сохранить и начать заново"], (
-            f"{name}: ожидались ровно 2 кнопки на стартовом экране, получено {buttons}"
+        assert buttons == EXERCISE_KEYBOARD_BUTTONS, (
+            f"{name}: ожидались ровно 3 кнопки на стартовом экране, получено {buttons}"
         )
 
 
@@ -118,7 +121,7 @@ def test_save_and_restart_all_exercises():
         )
         assert UID in ex.user_sessions, f"{name}: после сохранения должна начаться новая сессия"
         buttons = vk.last_buttons
-        assert buttons == ["➡️ Продолжить", "💾 Сохранить и начать заново"], (
+        assert buttons == EXERCISE_KEYBOARD_BUTTONS, (
             f"{name}: после рестарта должен показываться стартовый экран упражнения"
         )
 
@@ -163,7 +166,7 @@ def test_resume_prompt_continue_and_restart():
         ex4.vk, ex4.api = ex3.vk, api3  # тот же vk-объект, что и у ex3 (vk3)
         ex4.start(UID)
         ex4.handle_message(UID, "Начать заново 🔄")
-        assert ex3.vk.last_buttons == ["➡️ Продолжить", "💾 Сохранить и начать заново"], (
+        assert ex3.vk.last_buttons == EXERCISE_KEYBOARD_BUTTONS, (
             f"{name}: после 'Начать заново' должен показаться чистый старт"
         )
 
@@ -229,7 +232,7 @@ def test_happiness_list_20_items_uses_exercise_keyboard():
     for i in range(20):
         ex.handle_message(UID, f"Пункт{i} — {(i % 10) + 1}")
 
-    assert vk.last_buttons == ["➡️ Продолжить", "💾 Сохранить и начать заново"], (
+    assert vk.last_buttons == EXERCISE_KEYBOARD_BUTTONS, (
         f"Экран 20/20 должен использовать ту же клавиатуру, что и весь сбор: {vk.last_buttons}"
     )
     assert "Завершить" not in vk.last_message, "Текст не должен ссылаться на несуществующую кнопку «Завершить»"

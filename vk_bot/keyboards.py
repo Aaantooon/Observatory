@@ -33,6 +33,8 @@ def exercise_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_line()
     keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 

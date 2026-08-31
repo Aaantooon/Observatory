@@ -39,7 +39,7 @@ class HappinessListExercise(BaseExercise):
                 "╔══════════════════════════════════╗\n"
                 "║       ✨ СПИСОК СЧАСТЬЯ        ║\n"
                 "╚══════════════════════════════════╝\n\n"
-                f"· Ты уже записал: **{len(items)}** пунктов\n\n"
+                f"· Ты уже записал: {len(items)} пунктов\n\n"
                 "🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
             )
@@ -68,7 +68,7 @@ class HappinessListExercise(BaseExercise):
         )
 
     def _show_items(self, user_id, items):
-        message = "📋 **Твой список счастья:**\n\n"
+        message = "📋 Твой список счастья:\n\n"
         for i, item in enumerate(items, 1):
             message += f"{i}. {item.get('text')} — {item.get('score')}/10\n"
         

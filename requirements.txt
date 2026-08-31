@@ -2,17 +2,17 @@ asgiref==3.12.1
 certifi==2026.7.22
 cffi==2.1.1
 charset-normalizer==3.5.1
-cryptography==50.0.0
+cryptography==50.0.1
 defusedxml==0.7.1
-Django==6.0.7
+Django==6.0.8
 django-cors-headers==4.9.0
 django-haystack==3.4.0
-django-js-asset==4.0.2
+django-js-asset==4.1.0
 django-machina==1.3.1
 django-mptt==0.18.0
 django-sslserver==0.22
 django-widget-tweaks==1.5.1
-djangorestframework==3.14.0
+djangorestframework==3.18.0
 idna==3.19
 markdown2==2.5.5
 oauthlib==3.3.1
@@ -28,11 +28,11 @@ requests==2.34.2
 requests-oauthlib==2.0.0
 social-auth-app-django==6.0.1
 social-auth-core==5.1.0
-sqlparse==0.5.5
+sqlparse==0.6.0
 tzdata==2026.3
 urllib3==2.7.0
 whitenoise==6.12.0
 django-jazzmin==3.0.5
 
 # Зависимость VK-бота (vk_bot/), в требования сайта раньше не была включена
-vk-api==11.9.9
+vk-api==11.10.1

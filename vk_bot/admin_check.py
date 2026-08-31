@@ -30,7 +30,7 @@ class AdminCheck:
             for admin_id in self.admin_ids:
                 self.send_message(
                     admin_id,
-                    f"🔔 **Новая проверка!**\n\n"
+                    f"🔔 Новая проверка!\n\n"
                     f"👤 Пользователь: {user_id}\n"
                     f"📋 Упражнение: {exercise_type}\n"
                     f"🆔 ID: {review_id}"
@@ -38,7 +38,7 @@ class AdminCheck:
             
             self.send_message(
                 user_id,
-                "✅ **Отправлено на проверку!**\n\n"
+                "✅ Отправлено на проверку!\n\n"
                 "Администратор проверит твой путь\n"
                 "Ты получишь уведомление с комментариями\n"
                 "Можно продолжить диалог с админом\n\n"
@@ -80,7 +80,7 @@ class AdminCheck:
         
         self.send_message(
             review_user_id,
-            f"💬 **Комментарий от администратора:**\n\n{text}\n\n"
+            f"💬 Комментарий от администратора:\n\n{text}\n\n"
             "✏️ Можешь ответить или нажать «Завершить проверку»",
             self._get_review_keyboard()
         )
@@ -102,7 +102,7 @@ class AdminCheck:
         for admin_id in self.admin_ids:
             self.send_message(
                 admin_id,
-                f"💬 **Ответ от пользователя:**\n\n{text}\n\n"
+                f"💬 Ответ от пользователя:\n\n{text}\n\n"
                 f"🆔 Проверка: {review_id}"
             )
         
@@ -119,7 +119,7 @@ class AdminCheck:
         
         self.send_message(
             user_id,
-            "✅ **Проверка завершена!**\n\n"
+            "✅ Проверка завершена!\n\n"
             "Посмотреть результат можно на сайте\n\n"
             "🕯️ Продолжай путь!"
         )

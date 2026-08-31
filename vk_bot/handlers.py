@@ -32,7 +32,7 @@ class BotHandlers:
             'stop_technique': '6. Стоп-техника'
         }
         done = set(r.get('exercise_type') for r in results)
-        message = "📨 **Отправить на проверку:**\n\n"
+        message = "📨 Отправить на проверку:\n\n"
         for ex_type, name in exercises_map.items():
             if ex_type in done:
                 message += f"{name}\n"
@@ -253,17 +253,17 @@ class BotHandlers:
         if streak_info:
             streak = streak_info.get('streak', 0)
             if streak >= 365:
-                streak_text = f"👑 **{streak}** дней! Ты легенда!"
+                streak_text = f"👑 {streak} дней! Ты легенда!"
             elif streak >= 100:
-                streak_text = f"🔥 **{streak}** дней! Ты монстр!"
+                streak_text = f"🔥 {streak} дней! Ты монстр!"
             elif streak >= 30:
-                streak_text = f"🔥 **{streak}** дней! Круто!"
+                streak_text = f"🔥 {streak} дней! Круто!"
             elif streak >= 7:
-                streak_text = f"🔥 **{streak}** дней! Отличная привычка!"
+                streak_text = f"🔥 {streak} дней! Отличная привычка!"
             elif streak >= 3:
-                streak_text = f"🔥 **{streak}** дней! Так держать!"
+                streak_text = f"🔥 {streak} дней! Так держать!"
             elif streak == 1:
-                streak_text = f"🔥 **{streak}** день! Начинаем!"
+                streak_text = f"🔥 {streak} день! Начинаем!"
 
         if not results:
             self.send_message(
@@ -285,7 +285,7 @@ class BotHandlers:
         if streak_text:
             message += f"{streak_text}\n\n"
 
-        message += "📋 **Пройденные упражнения:**\n\n"
+        message += "📋 Пройденные упражнения:\n\n"
 
         exercises_map = {
             'stress_search': '1️⃣ Поиск стресса',
@@ -308,7 +308,7 @@ class BotHandlers:
             else:
                 message += f"{name} 🔘 Не начат\n"
 
-        message += "\n📝 **Последние записи:**\n\n"
+        message += "\n📝 Последние записи:\n\n"
         
         for res in results[:5]:
             ex_type = res.get('exercise_type')
@@ -339,9 +339,9 @@ class BotHandlers:
             "║        ⏰ НАПОМИНАНИЯ           ║\n"
             "╚══════════════════════════════════╝\n\n"
             "Ты можешь настроить напоминания:\n\n"
-            "📖 **Дневник** — утреннее напоминание\n"
-            "🛑 **Стоп-техника** — в течение дня\n"
-            "📋 **Любое упражнение** — продолжить позже\n\n"
+            "📖 Дневник — утреннее напоминание\n"
+            "🛑 Стоп-техника — в течение дня\n"
+            "📋 Любое упражнение — продолжить позже\n\n"
             "Выбери настройку:",
             get_reminder_keyboard()
         )
