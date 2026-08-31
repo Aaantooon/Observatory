@@ -120,8 +120,8 @@ class HappinessListExercise(BaseExercise):
         if len(parts) != 2 or not parts[1].isdigit():
             self.send_message(
                 user_id,
-                "❌ Формат: `Что радует — 9` (число от 1 до 10)\n"
-                "Пример: `Кофе утром — 8`",
+                "❌ Формат: Что радует — 9 (число от 1 до 10)\n"
+                "Пример: Кофе утром — 8",
                 exercise_keyboard()
             )
             return

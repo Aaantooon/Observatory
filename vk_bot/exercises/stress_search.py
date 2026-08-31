@@ -133,16 +133,16 @@ class StressSearchExercise:
         self.send_message(
             user_id,
             "🎯 ПОИСК СТРЕССА\n\n"
-            "🌫️ *Цель:* найти источники стресса в своей жизни.\n\n"
+            "🌫️ Цель: найти источники стресса в своей жизни.\n\n"
             "📖 Формула стресса:\n"
-            "`Стресс = Прогноз ≠ Реальность`\n\n"
-            "🕯️ Часть 1: Собираем образы\n"
-            "· Что вызывает напряжение?\n"
-            "· Что забирает энергию?\n"
+            "Стресс = Прогноз ⚡ Реальность\n\n"
+            "🕯️ Часть 1: Образ стресса\n"
+            "· Что вызывает раздражение?\n"
+            "· Что выводит из себя, забирает энергию?\n"
             "· Запиши это и поставь оценку от 1 до 10\n\n"
-            "📌 Пример: `Работа 8`\n\n"
+            "📌 Пример: Работа 8\n\n"
             f"{self._get_separator()}\n"
-            "➡️ «Продолжить» — когда соберёшь образы, перейти к разбору\n"
+            "➡️ «Продолжить» — когда запишешь все образы стресса, перейти к разбору\n"
             "💾 «Сохранить и начать заново» — сохранить как есть и начать новый путь",
             exercise_keyboard()
         )
@@ -220,7 +220,7 @@ class StressSearchExercise:
                     user_id,
                     "🌫️ ТУМАН ПУСТ\n\n"
                     "· Запиши хотя бы один образ\n"
-                    "· 📌 Формат: `Причина 9`\n\n"
+                    "· 📌 Формат: Причина 9\n\n"
                     "💾 «Сохранить и выйти»",
                     cancel_keyboard()
                 )
@@ -236,8 +236,8 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 "🌫️ ОБРАЗ НЕ ПРОЯВИЛСЯ\n\n"
-                "· Нужно: `Причина 9` (слово + пробел + оценка)\n"
-                "· 📌 Пример: `Работа 8`\n\n"
+                "· Нужно: Причина 9 (слово + пробел + оценка)\n"
+                "· 📌 Пример: Работа 8\n\n"
                 "💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
@@ -248,8 +248,8 @@ class StressSearchExercise:
                 user_id,
                 f"🌫️ НЕВЕРНАЯ ОЦЕНКА\n\n"
                 f"· Оценка должна быть числом от 1 до 10\n"
-                f"· Ты написал: `{parts[1]}`\n\n"
-                f"· 📌 Пример: `Работа 8`\n\n"
+                f"· Ты написал: {parts[1]}\n\n"
+                f"· 📌 Пример: Работа 8\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
@@ -261,7 +261,7 @@ class StressSearchExercise:
                 user_id,
                 f"🌫️ ОЦЕНКА ВНЕ ДИАПАЗОНА\n\n"
                 f"· Оценка должна быть от 1 до 10\n"
-                f"· Ты поставил: `{rate}`\n\n"
+                f"· Ты поставил: {rate}\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
@@ -286,7 +286,7 @@ class StressSearchExercise:
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ #{count}\n\n"
-            f"📌 *«{item}»* — {rate}/10\n\n"
+            f"📌 «{item}» — {rate}/10\n\n"
             f"· {progress}\n\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
@@ -356,7 +356,7 @@ class StressSearchExercise:
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ {index + 1}/{len(items)}\n\n"
-            f"📌 *«{item['text']}»* — {item['rate']}/10\n\n"
+            f"📌 «{item['text']}» — {item['rate']}/10\n\n"
             f"❓ Вопрос 1/4:\n"
             f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
             f"{self._get_separator()}\n"
@@ -385,7 +385,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"📌 «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 1/4:\n"
                 f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
                 f"{self._get_separator()}\n"
@@ -396,7 +396,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"📌 «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -407,7 +407,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"📌 «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
@@ -419,7 +419,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"📌 «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
@@ -461,7 +461,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n\n"
+                f"📌 «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -494,7 +494,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"📌 «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {percent}%\n\n"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
@@ -511,7 +511,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 *«{item_text}»* — {item_rate}/10\n"
+                f"📌 «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
@@ -588,7 +588,7 @@ class StressSearchExercise:
             f"🔥 Топ-3 образа:\n{top_text}\n\n"
             f"{self._get_separator()}\n"
             f"📖 Формула стресса:\n"
-            f"`Стресс = Прогноз ≠ Реальность`\n\n"
+            f"Стресс = Прогноз ⚡ Реальность\n\n"
             f"🌫️ Ты сделал шаг к ясности\n"
             f"· Карта становится точнее\n"
             f"· Туман рассеивается\n\n"
