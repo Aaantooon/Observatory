@@ -275,6 +275,18 @@ class StressSearchExercise:
             self._start_analysis(user_id, session)
             return
 
+        if '\n' in text.strip():
+            self._handle_multiline_collect(user_id, text, session)
+            return
+
+        tokenized_items, leftover = self._tokenize_stress_items(text)
+        if len(tokenized_items) >= 2:
+            note = None
+            if leftover:
+                note = f"Не смог разобрать хвост «{leftover}» — пришли отдельно в формате «Причина 9»."
+            self._add_stress_items(user_id, session, tokenized_items, note=note)
+            return
+
         parts = text.rsplit(' ', 1)
         if len(parts) != 2:
             self.send_message(
@@ -311,7 +323,7 @@ class StressSearchExercise:
             )
             return
 
-        item = parts[0].strip()
+        item = parts[0].strip().rstrip('-—–').strip()
         session['items'].append({'text': item, 'rate': rate})
         count = len(session['items'])
 
@@ -339,6 +351,115 @@ class StressSearchExercise:
         )
 
         self._save_progress(user_id, session)
+
+    def _parse_stress_line(self, line):
+        """Разбирает одну строку вида «Текст — 8» или «Текст 8» в (текст, оценка).
+        Возвращает None, если строка не подходит под формат."""
+        cleaned = line.strip(' \t;,.-—•·')
+        if not cleaned:
+            return None
+
+        parts = cleaned.rsplit(' ', 1)
+        if len(parts) != 2 or not parts[1].isdigit():
+            return None
+
+        rate = int(parts[1])
+        if not (1 <= rate <= 10):
+            return None
+
+        item_text = parts[0].strip().rstrip('-—–').strip()
+        if not item_text:
+            return None
+
+        return item_text, rate
+
+    def _split_stress_items(self, text):
+        """Разбивает вставленный текст на отдельные образы стресса — по
+        переносам строк (частый случай: человек вставляет сразу целый
+        список одним сообщением, каждый образ на своей строке)."""
+        items = []
+        invalid = []
+        for raw_line in text.split('\n'):
+            line = raw_line.strip()
+            if not line:
+                continue
+            parsed = self._parse_stress_line(line)
+            if parsed:
+                items.append(parsed)
+            else:
+                invalid.append(line)
+        return items, invalid
+
+    def _tokenize_stress_items(self, text):
+        """Разбирает ОДНУ строку вида «Фраза N Фраза N Фраза N …» без
+        переносов и разделителей — каждая оценка 1-10 закрывает фразу перед
+        собой и открывает следующую. Так распознаётся список, вставленный
+        сплошным текстом в одну строку. Возвращает (список пар (текст,
+        оценка), остаток текста после последней найденной оценки, если он
+        не пуст)."""
+        buffer = []
+        items = []
+        for tok in text.split():
+            cleaned = tok.strip(' \t;,.-—•·')
+            if cleaned.isdigit() and 1 <= int(cleaned) <= 10 and buffer:
+                phrase = ' '.join(buffer).strip(' \t;,.-—•·')
+                if phrase:
+                    items.append((phrase, int(cleaned)))
+                buffer = []
+            else:
+                buffer.append(tok)
+        leftover = ' '.join(buffer).strip()
+        return items, leftover
+
+    def _add_stress_items(self, user_id, session, parsed_items, note=None):
+        """Добавляет распознанные (текст, оценка) пары в сессию и одним
+        сообщением подтверждает добавление — используется и для
+        многострочной вставки, и для строки-вперемешку без переносов."""
+        for item_text, rate in parsed_items:
+            session['items'].append({'text': item_text, 'rate': rate})
+
+        count = len(session['items'])
+        progress = self._get_progress_bar(count, target=100)
+        listed = "\n".join(
+            f"{i + 1}. «{item_text}» — {rate}/10"
+            for i, (item_text, rate) in enumerate(parsed_items)
+        )
+
+        message = (
+            f"✅ Добавлено образов: {len(parsed_items)}\n"
+            f"{listed}\n\n"
+            f"· {progress}\n"
+            f"Всего: {count}/100\n"
+        )
+        if note:
+            message += f"\n⚠️ {note}\n"
+        message += (
+            f"\n{self._get_separator()}\n"
+            "· Пиши следующий образ (можно сразу списком) — а когда закончишь, жми «Продолжить»"
+        )
+
+        self.send_message(user_id, message, exercise_keyboard())
+        self._save_progress(user_id, session)
+
+    def _handle_multiline_collect(self, user_id, text, session):
+        parsed_items, invalid_lines = self._split_stress_items(text)
+
+        if not parsed_items:
+            self.send_message(
+                user_id,
+                "🌫️ Не смог распознать ни одной строки.\n"
+                "· Нужно на каждой строке: Причина 9 (слово + пробел + оценка)\n"
+                "· 📌 Пример: Работа 8\n\n"
+                "💾 «Сохранить и выйти»",
+                cancel_keyboard()
+            )
+            return
+
+        note = None
+        if invalid_lines:
+            note = f"Не распознал {len(invalid_lines)} строк(и) — пришли их отдельно в формате «Причина 9»."
+
+        self._add_stress_items(user_id, session, parsed_items, note=note)
 
     def _start_analysis(self, user_id, session):
         items = session.get('items', [])

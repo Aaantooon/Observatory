@@ -653,6 +653,104 @@ def test_stress_search_rejects_invalid_input_without_losing_progress():
     assert len(ex.user_sessions[UID]["items"]) == 1
 
 
+def test_stress_search_no_duplicate_dash_in_stored_text():
+    """Тот же баг, что чинили в happiness_list: rsplit оставляет тире на
+    конце текста ("Текст —"), а при показе добавляется ещё одно " — N/10" —
+    получалось двойное тире."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "Кофе утром — 8")
+
+    assert ex.user_sessions[UID]["items"][0]["text"] == "Кофе утром"
+    assert "— —" not in vk.last_message
+
+
+def test_stress_search_pasted_multiline_list_splits_into_separate_items():
+    """Как и в my_roles.py — вставленный одним сообщением многострочный
+    список должен разбираться на отдельные образы, а не сохраняться как
+    один гигантский пункт."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    pasted = "Работа 8\nШум за окном — 7\n· Дедлайны 9"
+    ex.handle_message(UID, pasted)
+
+    items = ex.user_sessions[UID]["items"]
+    assert len(items) == 3, "Многострочная вставка должна была разбиться на 3 образа"
+    assert items[0] == {"text": "Работа", "rate": 8}
+    assert items[1] == {"text": "Шум за окном", "rate": 7}
+    assert items[2] == {"text": "Дедлайны", "rate": 9}
+    assert "Добавлено образов: 3" in vk.last_message
+
+
+def test_stress_search_run_on_single_line_splits_by_embedded_scores():
+    """Пользователь может вставить список одной строкой без переносов —
+    "Фраза N Фраза N Фраза N ..." — каждая оценка 1-10 закрывает фразу
+    перед собой. Без этого вся строка сохранялась как один образ."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    pasted = (
+        "Рецепт не выходит 8 вода не фильтруется 7 баг в коде не ищется 8 "
+        "субстрат не сходится 7 время тает 8"
+    )
+    ex.handle_message(UID, pasted)
+
+    items = ex.user_sessions[UID]["items"]
+    assert len(items) == 5
+    assert items[0] == {"text": "Рецепт не выходит", "rate": 8}
+    assert items[1] == {"text": "вода не фильтруется", "rate": 7}
+    assert items[4] == {"text": "время тает", "rate": 8}
+    assert "Добавлено образов: 5" in vk.last_message
+
+
+def test_stress_search_run_on_single_line_reports_leftover_tail():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "Работа 8 Учёба 7 незаконченный хвост без оценки")
+
+    items = ex.user_sessions[UID]["items"]
+    assert len(items) == 2
+    assert "Не смог разобрать хвост" in vk.last_message
+    assert "незаконченный хвост без оценки" in vk.last_message
+
+
+def test_stress_search_single_item_still_uses_old_confirmation_format():
+    """Обычная одна запись "Текст N" не должна попадать в новый
+    "слитный список" разбор — сообщение должно остаться прежним."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "Работа 8")
+
+    assert ex.user_sessions[UID]["items"] == [{"text": "Работа", "rate": 8}]
+    assert "ОБРАЗ #1" in vk.last_message
+
+
+def test_stress_search_pasted_multiline_list_reports_unrecognized_lines():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    pasted = "Работа 8\nэто без оценки\nШум 7"
+    ex.handle_message(UID, pasted)
+
+    items = ex.user_sessions[UID]["items"]
+    assert len(items) == 2
+    assert "Не распознал 1" in vk.last_message
+
+
+def test_stress_search_multiline_all_unrecognized_does_not_add_items():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "первая строка без оценки\nвторая тоже без оценки")
+
+    assert ex.user_sessions[UID]["items"] == []
+    assert "Не смог распознать" in vk.last_message
+
+
 # ---------------------------------------------------------------------------
 # "Сохранить и выйти" (CANCEL_TEXTS) — прогресс сохраняется, сессия
 # закрывается, при повторном входе появляется resume-промпт
