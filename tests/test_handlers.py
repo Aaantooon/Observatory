@@ -103,3 +103,292 @@ def test_new_user_greeted_then_can_open_exercises_and_start_one():
     # а не обрабатываться как команды главного меню
     bh.handle_message(UID, "Продавец", "Аня", "Иванова")
     assert bh.my_roles.user_sessions[UID]["social_roles"] == ["Продавец"]
+
+
+def _greet(bh, uid=UID):
+    """Проводит нового пользователя через приветствие в состояние 'main'."""
+    bh.handle_message(uid, "любой текст", "Аня", "Иванова")
+
+
+# ---------------------------------------------------------------------------
+# state == 'main' — маршрутизация по ключевым словам
+# ---------------------------------------------------------------------------
+
+def test_main_menu_keyword_routes_to_results():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+    assert "ПУТЬ ПУСТ" in vk.last_message, "У нового пользователя результатов нет"
+
+
+def test_main_menu_keyword_routes_to_review_menu():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    # Без пройденных упражнений отправлять нечего — state остаётся 'main'
+    # (см. show_review_menu: ранний return до смены user_states)
+    assert bh.user_states[UID] == "main"
+    assert "нет пройденных упражнений" in vk.last_message
+
+
+def test_main_menu_keyword_routes_to_reminders():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    assert bh.user_states[UID] == "reminders"
+    assert "НАПОМИНАНИЯ" in vk.last_message
+
+
+def test_main_menu_unrecognized_text_shows_hint_and_stays_in_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "непонятная фраза", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+    assert "Используй кнопки меню" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
+# state == 'selecting_exercise' — запуск каждого упражнения и 'назад'
+# ---------------------------------------------------------------------------
+
+def test_selecting_exercise_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "Назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+    assert "перекрёсток" in vk.last_message
+
+
+def test_selecting_exercise_invalid_text_reprompts_menu():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "абракадабра", "Аня", "И")
+    assert bh.user_states[UID] == "selecting_exercise", "Состояние не должно было смениться"
+    assert "Выбери упражнение из списка" in vk.last_message
+
+
+def test_selecting_exercise_starts_each_exercise_by_number():
+    cases = [
+        ("1", "stress_search"), ("2", "happiness_list"), ("3", "my_roles"),
+        ("4", "conscious_choice"), ("5", "diary"), ("6", "stop_technique"),
+    ]
+    for number, attr_name in cases:
+        bh, vk, api = make_handlers()
+        _greet(bh)
+        bh.handle_message(UID, "Упражнения", "Аня", "И")
+        bh.handle_message(UID, number, "Аня", "И")
+        exercise = getattr(bh, attr_name)
+        assert UID in exercise.user_sessions, f"Упражнение {attr_name} не запустилось по номеру {number}"
+        assert bh.user_states[UID] == "main"
+
+
+def test_selecting_exercise_starts_by_keyword():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    bh.handle_message(UID, "Список счастья", "Аня", "И")
+    assert UID in bh.happiness_list.user_sessions
+
+
+# ---------------------------------------------------------------------------
+# show_results — пустой список, стрик, сводка по каждому типу упражнения
+# ---------------------------------------------------------------------------
+
+def test_show_results_with_completed_exercises_and_streak_text():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "stress_search", "result_data": {"items": [1, 2, 3]}},
+        {"user_vk_id": UID, "exercise_type": "happiness_list", "result_data": {"items": [1]}},
+        {"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "Спокойное"}},
+        {"user_vk_id": UID, "exercise_type": "stop_technique", "result_data": {"count": 2}},
+    ]
+    api.update_streak = lambda user_vk_id: {"streak": 7}
+
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+
+    msg = vk.last_message
+    assert "Отличная привычка" in msg, "Стрик 7 дней должен показать соответствующий текст"
+    assert "Поиск стресса ✅ Пройдено" in msg
+    assert "Мои роли 🔘 Не начат" in msg, "Непройденное упражнение должно быть помечено"
+    assert "3 образов" in msg
+    assert "1 пунктов" in msg
+    assert "Спокойное" in msg
+    assert "#2" in msg
+
+
+def test_show_results_empty_shows_path_is_empty_message():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+    assert "ПУТЬ ПУСТ" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
+# show_review_menu / handle_send_review — полный флоу отправки на проверку
+# ---------------------------------------------------------------------------
+
+def test_review_menu_lists_only_completed_exercises():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "diary", "result_data": {}},
+    ]
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    assert bh.user_states[UID] == "sending_review"
+    assert "5. Дневник" in vk.last_message
+    assert "1. Поиск стресса" not in vk.last_message
+
+
+def test_send_review_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}}]
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    bh.handle_message(UID, "назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+
+
+def test_send_review_invalid_number_reprompts():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}}]
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    bh.handle_message(UID, "абв", "Аня", "И")
+    assert "номер упражнения из списка" in vk.last_message
+    assert bh.user_states[UID] == "sending_review"
+
+
+def test_send_review_not_yet_completed_exercise_rejected():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}}]
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    bh.handle_message(UID, "1", "Аня", "И")  # stress_search — не пройден
+    assert "ещё не пройдено" in vk.last_message
+    assert len(api.sent_for_review) == 0
+
+
+def test_send_review_valid_selection_sends_for_review():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}}]
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    bh.handle_message(UID, "5", "Аня", "И")  # diary — пройден
+    assert len(api.sent_for_review) == 1
+    assert api.sent_for_review[0]["exercise_type"] == "diary"
+    assert "Отправлено на проверку" in vk.last_message
+    assert bh.user_states[UID] == "main"
+
+
+# ---------------------------------------------------------------------------
+# state == 'reminders' — настройка напоминаний
+# ---------------------------------------------------------------------------
+
+def test_reminders_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+
+
+def test_reminders_setup_1_hour():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "1 час", "Аня", "И")
+    assert "через 1 час" in vk.last_message
+    assert bh.notifications.reminder_calls[-1] == ("continue", UID, "general", 1)
+
+
+def test_reminders_setup_3_hours():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "3 часа", "Аня", "И")
+    assert "через 3 часа" in vk.last_message
+    assert bh.notifications.reminder_calls[-1] == ("continue", UID, "general", 3)
+
+
+def test_reminders_setup_tomorrow_morning():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Завтра утром", "Аня", "И")
+    assert "08:00" in vk.last_message
+    assert bh.notifications.reminder_calls[-1] == ("diary", UID, "08:00")
+
+
+def test_reminders_disable():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Отключить", "Аня", "И")
+    assert "отключены" in vk.last_message
+
+
+def test_reminders_invalid_text_reprompts():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "чепуха", "Аня", "И")
+    assert "Выбери настройку из кнопок" in vk.last_message
+    assert bh.user_states[UID] == "reminders"
+
+
+# ---------------------------------------------------------------------------
+# _normalize_text — эмодзи не мешают распознаванию ключевых слов
+# ---------------------------------------------------------------------------
+
+def test_dispatch_routes_follow_up_message_into_each_active_exercise():
+    """Пока сессия упражнения открыта, следующее сообщение должно уходить
+    прямо в него, а не обрабатываться как команда главного меню — для
+    ВСЕХ 6 упражнений (не только my_roles, см. предыдущий тест)."""
+    cases = [
+        ("1", "stress_search", "Работа 8", lambda ex: len(ex.user_sessions[UID]["items"]) == 1),
+        ("2", "happiness_list", "Кофе — 8", lambda ex: len(ex.user_sessions[UID]["items"]) == 1),
+        ("4", "conscious_choice", "Кормить детей", lambda ex: ex.user_sessions[UID]["must_items"] == ["Кормить детей"]),
+        ("5", "diary", "Гулял по парку", lambda ex: ex.user_sessions[UID]["dream"] == "Гулял по парку"),
+        ("6", "stop_technique", "Думаю о работе", lambda ex: ex.user_sessions[UID]["thoughts"] == "Думаю о работе"),
+    ]
+    for number, attr_name, follow_up, check in cases:
+        bh, vk, api = make_handlers()
+        _greet(bh)
+        bh.handle_message(UID, "Упражнения", "Аня", "И")
+        bh.handle_message(UID, number, "Аня", "И")
+        bh.handle_message(UID, follow_up, "Аня", "И")
+        exercise = getattr(bh, attr_name)
+        assert check(exercise), f"{attr_name}: follow-up сообщение не попало в активную сессию"
+
+
+def test_show_results_streak_text_branches():
+    cases = [
+        (400, "легенда"), (150, "монстр"), (50, "Круто"), (5, "Так держать"),
+    ]
+    for streak, expected_word in cases:
+        bh, vk, api = make_handlers()
+        _greet(bh)
+        api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {}}]
+        api.update_streak = lambda user_vk_id, s=streak: {"streak": s}
+        bh.handle_message(UID, "Мои результаты", "Аня", "И")
+        assert expected_word in vk.last_message, f"streak={streak}: ожидалось '{expected_word}'"
+
+
+def test_show_results_generic_exercise_type_shows_checkmark():
+    """my_roles/conscious_choice в сводке последних записей не имеют
+    отдельной ветки форматирования — должны попадать в общий 'else' с ✅."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "my_roles", "result_data": {}}]
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+    assert "Мои роли: ✅" in vk.last_message
+
+
+def test_emoji_in_button_text_does_not_break_routing():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "📋 Упражнения", "Аня", "И")
+    assert bh.user_states[UID] == "selecting_exercise", "Эмодзи перед словом должно быть проигнорировано"

@@ -142,6 +142,7 @@ class FakeNotificationSystem:
         self.vk = vk_session
         self.api = api_client
         self.running = False
+        self.reminder_calls = []  # list of ("continue", user_id, kind, hours) / ("diary", user_id, time_str)
 
     def start(self):
         self.running = True
@@ -150,7 +151,9 @@ class FakeNotificationSystem:
         self.running = False
 
     def setup_reminder_to_continue(self, user_id, kind, hours=1):
+        self.reminder_calls.append(("continue", user_id, kind, hours))
         return None
 
     def setup_diary_reminder(self, user_id, time_str):
+        self.reminder_calls.append(("diary", user_id, time_str))
         return None

@@ -539,6 +539,149 @@ def test_two_users_do_not_share_session_state():
     assert result_for_b[0]["result_data"]["items"][0]["text"] == "Прогулка —"
 
 
+def test_stress_search_question_step2_validates_percent():
+    """Шаг 2/4 (реалистичность в %) должен отвергать нечисловой ввод и
+    число вне 0-100, не продвигая question_step и не теряя ответ шага 1."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "➡️ Продолжить")   # analysis
+    ex.handle_message(UID, "➡️ Далее")        # question, step 1
+    ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> step 2
+
+    ex.handle_message(UID, "не число")
+    assert ex.user_sessions[UID]["question_step"] == 2, "Нечисловой % не должен продвигать шаг"
+    assert "0 до 100" in vk.last_message
+
+    ex.handle_message(UID, "150")
+    assert ex.user_sessions[UID]["question_step"] == 2, "% вне 0-100 не должен продвигать шаг"
+
+    ex.handle_message(UID, "70")  # корректно -> step 3
+    assert ex.user_sessions[UID]["question_step"] == 3
+    assert ex.user_sessions[UID]["answers"][-1]["ideal"] == "Идеальная ситуация", (
+        "Ответ шага 1 не должен был потеряться из-за ошибок ввода на шаге 2"
+    )
+    assert ex.user_sessions[UID]["answers"][-1]["percent"] == 70
+
+
+def test_stress_search_full_flow_through_all_questions_to_finish():
+    """Естественное завершение через все 4 вопроса разбора для каждого
+    образа (а не досрочное '✅ Завершить' из фазы analysis) — до сих пор
+    не было ни разу пройдено целиком ни для одного, ни для нескольких
+    образов подряд."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "Семья 5")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> analysis, 2 образа
+    ex.handle_message(UID, "➡️ Далее")        # -> вопрос по образу 1, step 1
+
+    # образ 1: все 4 шага
+    ex.handle_message(UID, "Идеал 1")
+    ex.handle_message(UID, "80")
+    ex.handle_message(UID, "Почему 1")
+    ex.handle_message(UID, "Рефлексия 1")  # step 4 -> следующий образ
+
+    session = ex.user_sessions[UID]
+    assert session["question_index"] == 1, "После образа 1 индекс должен указывать на образ 2"
+    assert len(session["answers"]) == 2, "Для образа 2 должна была добавиться новая запись answers"
+    assert session["answers"][0] == {
+        "text": "Работа", "rate": 8,
+        "ideal": "Идеал 1", "percent": 80, "why": "Почему 1", "reflection": "Рефлексия 1",
+    }
+
+    # образ 2: все 4 шага -> естественное завершение (index >= len(items))
+    ex.handle_message(UID, "Идеал 2")
+    ex.handle_message(UID, "40")
+    ex.handle_message(UID, "Почему 2")
+    ex.handle_message(UID, "Рефлексия 2")
+
+    assert UID not in ex.user_sessions, "После разбора обоих образов упражнение должно завершиться само"
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 2
+    assert len(result["analysis"]) == 2
+    assert result["analysis"][1] == {
+        "text": "Семья", "rate": 5,
+        "ideal": "Идеал 2", "percent": 40, "why": "Почему 2", "reflection": "Рефлексия 2",
+    }
+
+
+def test_diary_advance_without_answer_shows_error_and_does_not_advance():
+    """Нажатие «➡️ Продолжить» до того, как что-то написано на шаге,
+    должно показать «❌ Напиши...» и не сдвигать фазу вперёд."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["phase"] == "dream", "Фаза не должна была смениться без ответа"
+    assert "Напиши свой сон" in vk.last_message
+
+    ex.handle_message(UID, "Гулял по парку")  # ответ сразу переводит на фазу 'mood'
+    assert ex.user_sessions[UID]["phase"] == "mood"
+
+    # на новой фазе тот же guard снова срабатывает, пока нет ответа
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["phase"] == "mood", "Фаза не должна была смениться без ответа на 'mood'"
+    assert "Напиши настроение" in vk.last_message
+
+
+def test_stop_technique_advance_without_answer_shows_error_and_does_not_advance():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["phase"] == "thoughts"
+    assert "Напиши, о чём думаешь" in vk.last_message
+
+
+def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step():
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+
+    # шаг 1: 0 пунктов -> "Продолжить" отклоняется
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["step"] == 1
+    assert "хотя бы один пункт" in vk.last_message
+
+    ex.handle_message(UID, "Кормить детей")     # 1 пункт -> теперь можно перейти
+    ex.handle_message(UID, "➡️ Продолжить")     # -> step 2
+    assert ex.user_sessions[UID]["step"] == 2
+
+    # шаг 2: "Продолжить" без ответа на вопрос
+    ex.handle_message(UID, "✅ Завершить")
+    assert ex.user_sessions[UID]["step"] == 2
+    assert "Напиши свой ответ" in vk.last_message
+
+    ex.handle_message(UID, "Никто не отнял")
+    # шаг 3: "Продолжить" без ответа
+    ex.handle_message(UID, "✅ Завершить")
+    assert ex.user_sessions[UID]["step"] == 3
+    assert "Напиши свой ответ" in vk.last_message
+
+    ex.handle_message(UID, "Я сам")             # -> step 4
+    # шаг 4: "Завершить" без choice_analysis
+    ex.handle_message(UID, "✅ Завершить")
+    assert ex.user_sessions[UID]["step"] == 4
+    assert "минусы и плюсы" in vk.last_message
+
+    ex.handle_message(UID, "Минусы: устану, Плюсы: улыбка")
+    ex.handle_message(UID, "✅ Завершить")      # -> step 5
+    assert ex.user_sessions[UID]["step"] == 5
+
+    # шаг 5: "Завершить" без alternatives
+    ex.handle_message(UID, "✅ Завершить")
+    assert ex.user_sessions[UID]["step"] == 5
+    assert "минусы и плюсы" in vk.last_message
+
+
+def test_happiness_list_finish_with_empty_list_shows_error_and_does_not_finish():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 пунктов
+    assert "Список пуст" in vk.last_message
+    assert len(api.results) == 0
+    assert UID in ex.user_sessions, "Упражнение не должно было завершиться на пустом списке"
+
+
 def test_stress_search_saves_result_with_correct_exercise_type():
     """Результат должен сохраняться под exercise_type='stress_search',
     как и остальные 5 упражнений — иначе он не попадёт в 'Мои результаты'
