@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
 from django.db.models import Q
-from .models import Observation, Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
+from .models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
 import json
 import csv
 from datetime import date
