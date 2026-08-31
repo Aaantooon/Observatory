@@ -65,14 +65,19 @@ class DiaryExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_phase(user_id, session)
 
+    PHASES_ORDER = ['dream', 'mood', 'body', 'thoughts', 'wants', 'differences']
+
     def _show_phase(self, user_id, session):
         phase = session.get('phase')
-        
+        step_num = self.PHASES_ORDER.index(phase) + 1 if phase in self.PHASES_ORDER else len(self.PHASES_ORDER)
+        progress = self._get_progress_bar(step_num, target=len(self.PHASES_ORDER))
+
         if phase == 'dream':
             self.send_message(
                 user_id,
                 "📖 ДНЕВНИК\n\n"
-                "Шаг 1: Сон\n\n"
+                "Шаг 1: Сон\n"
+                f"{progress}\n\n"
                 "Напиши коротко самое основное.\n"
                 "Не весь клубок разматывай — а ниточку,\n"
                 "за которую дернишь и всё вспомнишь.\n\n"
@@ -80,11 +85,12 @@ class DiaryExercise(BaseExercise):
                 "✏️ Напиши свой сон:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'mood':
             self.send_message(
                 user_id,
-                "Шаг 2: Настроение\n\n"
+                "Шаг 2: Настроение\n"
+                f"{progress}\n\n"
                 "Всё что угодно, кроме «нормально».\n\n"
                 "Примеры:\n"
                 "· Замечательное, приятное\n"
@@ -93,11 +99,12 @@ class DiaryExercise(BaseExercise):
                 "✏️ Напиши своё настроение:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'body':
             self.send_message(
                 user_id,
-                "Шаг 3: Общее ощущение в теле\n\n"
+                "Шаг 3: Общее ощущение в теле\n"
+                f"{progress}\n\n"
                 "Что чувствуешь?\n\n"
                 "Примеры:\n"
                 "· Ноги ноют\n"
@@ -106,22 +113,24 @@ class DiaryExercise(BaseExercise):
                 "✏️ Напиши свои ощущения:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'thoughts':
             self.send_message(
                 user_id,
-                "Шаг 4: О чём думаешь?\n\n"
+                "Шаг 4: О чём думаешь?\n"
+                f"{progress}\n\n"
                 "Не всех козлов перечисляй — а папочку о козлах.\n"
                 "Не всех родственниках — а папку «родственники».\n\n"
                 "Папка обязательная: долги\n\n"
                 "✏️ Напиши свои мысли (папками):",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'wants':
             self.send_message(
                 user_id,
-                "Шаг 5: Чего я хочу?\n\n"
+                "Шаг 5: Чего я хочу?\n"
+                f"{progress}\n\n"
                 "Сейчас. Без ограничений. Всё, что приходит в голову.\n\n"
                 "Пример:\n"
                 "«Сон неприятный и ноги ноют — сейчас разминку сделаю\n"
@@ -129,11 +138,12 @@ class DiaryExercise(BaseExercise):
                 "✏️ Напиши, чего хочешь:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'differences':
             self.send_message(
                 user_id,
-                "Шаг 6: Чем этот день отличается от других?\n\n"
+                "Шаг 6: Чем этот день отличается от других?\n"
+                f"{progress}\n\n"
                 "Важно заметить уникальность каждого дня.\n\n"
                 "✏️ Напиши, что особенного в этом дне:",
                 exercise_keyboard()

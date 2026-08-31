@@ -50,3 +50,11 @@ class BaseExercise(ABC):
 
     def _get_separator(self):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
+
+    def _get_progress_bar(self, count, target):
+        if not target:
+            return ""
+        percent = min(100, int((count / target) * 100))
+        filled = "▰" * (percent // 5)
+        empty = "▱" * (20 - len(filled))
+        return f"▰{filled}{empty}▱ {percent}%"

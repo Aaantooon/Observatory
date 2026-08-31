@@ -75,6 +75,8 @@ class ConsciousChoiceExercise(BaseExercise):
                 "· Кормить детей\n"
                 "· Ходить на работу\n"
                 "· Заботиться о родителях\n\n"
+                "🎯 Нужно набрать 20 пунктов.\n"
+                "Можешь нажать «➡️ Продолжить» и раньше — прогресс сохранится.\n\n"
                 "📝 Пиши по одному пункту:",
                 conscious_choice_keyboard()
             )
@@ -177,12 +179,25 @@ class ConsciousChoiceExercise(BaseExercise):
             session['must_items'].append(text)
             session['must_index'] = len(session['must_items']) - 1
             self.save_progress(user_id, session)
-            self.send_message(
-                user_id,
-                f"✅ Добавлено: {text}\n\n"
-                "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
-                conscious_choice_keyboard()
-            )
+            count = len(session['must_items'])
+            progress = self._get_progress_bar(count, target=20)
+
+            if count >= 20:
+                self.send_message(
+                    user_id,
+                    f"🎉 Отлично! Ты собрал {count} пунктов.\n"
+                    f"{progress}\n\n"
+                    "Нажми «➡️ Продолжить», чтобы перейти дальше.",
+                    conscious_choice_keyboard()
+                )
+            else:
+                self.send_message(
+                    user_id,
+                    f"✅ Добавлено: {text} ({count}/20)\n"
+                    f"{progress}\n\n"
+                    "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
+                    conscious_choice_keyboard()
+                )
 
         elif step == 2:
             session['current_answer'] = text

@@ -68,7 +68,8 @@ class HappinessListExercise(BaseExercise):
         for i, item in enumerate(items, 1):
             message += f"{i}. {item.get('text')} — {item.get('score')}/10\n"
         
-        message += f"\nВсего: {len(items)}/20 пунктов\n\n"
+        message += f"\nВсего: {len(items)}/20 пунктов\n"
+        message += f"{self._get_progress_bar(len(items), target=20)}\n\n"
         message += "✏️ Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»."
         
         self.send_message(user_id, message, exercise_keyboard())
@@ -145,18 +146,21 @@ class HappinessListExercise(BaseExercise):
         self.save_progress(user_id, {'items': session['items']})
 
         count = len(session['items'])
-        
+        progress = self._get_progress_bar(count, target=20)
+
         if count >= 20:
             self.send_message(
                 user_id,
                 f"🎉 Отлично! Ты собрал {count} пунктов счастья!\n"
+                f"{progress}\n\n"
                 "Нажми «➡️ Продолжить», чтобы сохранить результат.",
                 exercise_keyboard()
             )
         else:
             self.send_message(
                 user_id,
-                f"✅ Добавлено! {count}/20\n\n"
+                f"✅ Добавлено! {count}/20\n"
+                f"{progress}\n\n"
                 f"📌 {item_text} — {score}/10\n\n"
                 "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
                 exercise_keyboard()

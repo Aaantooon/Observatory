@@ -183,6 +183,45 @@ def test_resume_prompt_continue_and_restart():
 
 
 # ---------------------------------------------------------------------------
+# Прогресс-бар (▰▰▱▱ N%) — во всех упражнениях, где есть счётчик пунктов/шагов
+# ---------------------------------------------------------------------------
+
+def test_happiness_list_shows_progress_bar_when_adding_item():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кофе утром — 8")
+    assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+def test_my_roles_shows_progress_bar_when_adding_role():
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+def test_conscious_choice_shows_progress_bar_when_adding_item():
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+def test_diary_shows_step_progress_bar():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    assert "▰" in vk.last_message and "%" in vk.last_message
+    ex.handle_message(UID, "Гулял по парку")
+    assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+def test_stop_technique_shows_step_progress_bar():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
 # my_roles — снятое ограничение "минимум 1 роль"
 # ---------------------------------------------------------------------------
 
@@ -816,6 +855,23 @@ def test_diary_full_flow_to_finish():
         "differences": "Солнечный день",
     }
     assert "None" not in vk.last_message
+
+
+def test_conscious_choice_step1_shows_progress_and_target_nudge():
+    """Шаг 1 ('Что я должен?') показывает счётчик X/20 при добавлении
+    пункта и отдельное сообщение по достижении 20."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    assert "20 пунктов" in vk.last_message
+
+    ex.handle_message(UID, "Кормить детей")
+    assert "(1/20)" in vk.last_message
+
+    for i in range(19):
+        ex.handle_message(UID, f"Пункт {i}")
+
+    assert len(ex.user_sessions[UID]["must_items"]) == 20
+    assert "Отлично! Ты собрал 20 пунктов" in vk.last_message
 
 
 def test_conscious_choice_full_flow_to_finish():

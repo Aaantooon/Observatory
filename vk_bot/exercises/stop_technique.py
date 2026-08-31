@@ -63,16 +63,21 @@ class StopTechniqueExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_phase(user_id, session)
 
+    PHASES_ORDER = ['thoughts', 'feelings', 'wants']
+
     def _show_phase(self, user_id, session):
         count = session.get('count', 0)
 
         phase = session.get('phase')
-        
+        step_num = self.PHASES_ORDER.index(phase) + 1 if phase in self.PHASES_ORDER else len(self.PHASES_ORDER)
+        progress = self._get_progress_bar(step_num, target=len(self.PHASES_ORDER))
+
         if phase == 'thoughts':
             self.send_message(
                 user_id,
                 f"🛑 СТОП-ТЕХНИКА #{count}\n\n"
-                f"Вопрос 1/3: О чём я думаю?\n\n"
+                f"Вопрос 1/3: О чём я думаю?\n"
+                f"{progress}\n\n"
                 f"Здесь и сейчас.\n\n"
                 f"Примеры:\n"
                 f"· Устал как собака\n"
@@ -81,11 +86,12 @@ class StopTechniqueExercise(BaseExercise):
                 f"✏️ Напиши, о чём думаешь:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'feelings':
             self.send_message(
                 user_id,
-                f"Вопрос 2/3: Что я сейчас чувствую?\n\n"
+                f"Вопрос 2/3: Что я сейчас чувствую?\n"
+                f"{progress}\n\n"
                 f"Примеры:\n"
                 f"· Усталость\n"
                 f"· Радость\n"
@@ -94,11 +100,12 @@ class StopTechniqueExercise(BaseExercise):
                 f"✏️ Напиши свои чувства:",
                 exercise_keyboard()
             )
-        
+
         elif phase == 'wants':
             self.send_message(
                 user_id,
-                f"Вопрос 3/3: Чего я сейчас хочу?\n\n"
+                f"Вопрос 3/3: Чего я сейчас хочу?\n"
+                f"{progress}\n\n"
                 f"Примеры:\n"
                 f"· Сходить купить что-нибудь вкусное\n"
                 f"· Лечь и посмотреть сериал\n"

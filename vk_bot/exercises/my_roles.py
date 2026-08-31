@@ -275,10 +275,13 @@ class MyRolesExercise(BaseExercise):
             )
             return
 
+        progress = self._get_progress_bar(count, target)
+
         if count >= target:
             self.send_message(
                 user_id,
                 f"🎉 Отлично! Ты собрал {count} ролей в этом разделе.\n"
+                f"{progress}\n\n"
                 "Нажми «➡️ Продолжить», чтобы перейти дальше.",
                 exercise_keyboard()
             )
@@ -287,7 +290,8 @@ class MyRolesExercise(BaseExercise):
         if len(items) == 1:
             self.send_message(
                 user_id,
-                f"✅ Добавлено: {items[0]} ({count}/{target})\n\n"
+                f"✅ Добавлено: {items[0]} ({count}/{target})\n"
+                f"{progress}\n\n"
                 "Пиши следующую роль, а когда закончишь раздел — жми «➡️ Продолжить»",
                 exercise_keyboard()
             )
@@ -297,7 +301,8 @@ class MyRolesExercise(BaseExercise):
                 user_id,
                 f"✅ Добавлено ролей: {len(items)}\n"
                 f"{listed}\n\n"
-                f"Всего в этом разделе: {count}/{target}\n\n"
+                f"Всего в этом разделе: {count}/{target}\n"
+                f"{progress}\n\n"
                 "Можешь писать по одной роли или сразу списком (каждая — с новой строки) — "
                 "а когда закончишь раздел, жми «➡️ Продолжить»",
                 exercise_keyboard()
