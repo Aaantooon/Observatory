@@ -60,12 +60,14 @@ class ConsciousChoiceExercise(BaseExercise):
         plus_text = plus_text.strip() if plus_text else '—'
         return f"Минусы: {minus_text}, Плюсы: {plus_text}"
 
-    def _show_step(self, user_id, session):
+    def _show_step(self, user_id, session, error=None):
         step = session.get('step', 1)
+        prefix = f"❌ {error}\n\n" if error else ""
 
         if step == 1:
             self.send_message(
                 user_id,
+                f"{prefix}"
                 "🧘 ОСОЗНАННЫЙ ВЫБОР\n\n"
                 "Шаг 1: Что я должен?\n\n"
                 "Напиши по пунктам, что ты должен делать.\n"
@@ -80,6 +82,7 @@ class ConsciousChoiceExercise(BaseExercise):
             must = session.get('current_must')
             self.send_message(
                 user_id,
+                f"{prefix}"
                 f"Шаг 2: Я имею право не хотеть\n\n"
                 f"Ты написал: «{must}»\n\n"
                 f"Это ролевые ожидания.\n"
@@ -98,6 +101,7 @@ class ConsciousChoiceExercise(BaseExercise):
 
             self.send_message(
                 user_id,
+                f"{prefix}"
                 f"Шаг 3: Я выбираю это делать\n\n"
                 f"Ты должен: «{must}»\n"
                 f"Ты ответил: «{answer}»\n\n"
@@ -267,18 +271,10 @@ class ConsciousChoiceExercise(BaseExercise):
             self._show_step(user_id, session)
 
         elif step == 2:
-            self.send_message(
-                user_id,
-                "❌ Напиши свой ответ на вопрос",
-                conscious_choice_keyboard()
-            )
+            self._show_step(user_id, session, error="Напиши свой ответ на вопрос")
 
         elif step == 3:
-            self.send_message(
-                user_id,
-                "❌ Напиши свой ответ на вопрос",
-                conscious_choice_keyboard()
-            )
+            self._show_step(user_id, session, error="Напиши свой ответ на вопрос")
 
         elif step == 4:
             session['step'] = 5
