@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('course/', views.course_index, name='course_index'),
     path('course/module/<int:module_number>/', views.module_detail, name='course_module'),
+    path('course/module/<int:module_number>/pdf/', views.module_pdf, name='module_pdf'),
     path('course/module/<int:module_number>/complete/', views.complete_module, name='complete_module'),
     path('course/module/<int:module_number>/comment/', views.add_comment, name='add_comment'),
     path('course/module/<int:module_number>/bookmark/', views.toggle_bookmark, name='toggle_bookmark'),

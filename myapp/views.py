@@ -1,13 +1,14 @@
 import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 from django.contrib import messages
 from django.db.models import Q
 from .models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
 import json
 import csv
 from datetime import date
+from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,29 @@ def module_detail(request, module_number):
         'streak': streak.current_streak,
         'profile': profile,
     })
+
+
+@login_required
+def module_pdf(request, module_number):
+    """Отдаёт PDF-конспект модуля — раньше ссылка на media/ вела в обход
+    login_required и проверки пройденных модулей (можно было скачать,
+    не пройдя курс). Та же проверка прогресса, что и в module_detail."""
+    module = get_object_or_404(Module, number=module_number, is_published=True)
+    if not module.pdf_file:
+        raise Http404("У этого модуля нет PDF-файла")
+
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    if module.number > 1:
+        prev = module.get_prev()
+        if prev and not progress.is_module_completed(prev):
+            messages.warning(request, 'Сначала пройдите предыдущий модуль')
+            return redirect('course_index')
+
+    filename = module.pdf_file.name.rsplit('/', 1)[-1]
+    return FileResponse(module.pdf_file.open('rb'), as_attachment=True, filename=filename)
 
 
 @login_required
@@ -259,8 +283,21 @@ def edit_profile(request):
             if avatar_file.size > max_avatar_size:
                 messages.error(request, '❌ Файл слишком большой (максимум 5 МБ)')
                 return render(request, 'edit_profile.html', {'profile': profile})
-            if not (avatar_file.content_type or '').startswith('image/'):
-                messages.error(request, '❌ Аватар должен быть изображением')
+            content_type = (avatar_file.content_type or '').lower()
+            # content_type присылает клиент — ему нельзя доверять напрямую (легко подделать),
+            # поэтому дальше ещё проверяем реальное содержимое файла через Pillow.
+            # SVG отдельно запрещаем явно: это не растровый формат (Pillow его не откроет
+            # и просто отбросит ниже), но явный запрет — понятнее как сообщение об ошибке,
+            # и на всякий случай подчёркивает, что SVG может содержать исполняемый <script>.
+            if not content_type.startswith('image/') or content_type == 'image/svg+xml':
+                messages.error(request, '❌ Аватар должен быть изображением (JPG, PNG, WEBP)')
+                return render(request, 'edit_profile.html', {'profile': profile})
+            try:
+                avatar_file.seek(0)
+                Image.open(avatar_file).verify()
+                avatar_file.seek(0)
+            except (UnidentifiedImageError, OSError, ValueError):
+                messages.error(request, '❌ Файл повреждён или не является настоящим изображением')
                 return render(request, 'edit_profile.html', {'profile': profile})
             profile.avatar = avatar_file
 

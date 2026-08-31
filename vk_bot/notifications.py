@@ -73,6 +73,7 @@ class NotificationSystem:
                 )
             except Exception as e:
                 logger.error(f"Send admin comment error: {e}")
+                continue  # не помечать отправленным — иначе комментарий психолога потеряется навсегда
             self.api.mark_comment_sent(c['review_id'], c['comment_index'])
 
     def _get_reminder_text(self, exercise_type):

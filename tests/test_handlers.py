@@ -341,6 +341,82 @@ def test_show_results_empty_shows_path_is_empty_message():
 
 
 # ---------------------------------------------------------------------------
+# show_full_history / кнопка «Вся история»
+# ---------------------------------------------------------------------------
+
+def test_show_results_offers_full_history_button_when_more_than_five():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}, "completed_at": "2026-01-01"}
+        for _ in range(6)
+    ]
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+    assert "📜 Вся история" in vk.last_buttons
+
+
+def test_show_results_hides_full_history_button_when_five_or_fewer():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}, "completed_at": "2026-01-01"}
+        for _ in range(3)
+    ]
+    bh.handle_message(UID, "Мои результаты", "Аня", "И")
+    assert not any("история" in b.lower() for b in vk.last_buttons)
+
+
+def test_show_full_history_lists_all_results_up_to_limit():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {
+            "user_vk_id": UID,
+            "exercise_type": "stop_technique",
+            "result_data": {"count": i},
+            "completed_at": f"2026-01-{i:02d}",
+        }
+        for i in range(1, 8)
+    ]
+    bh.handle_message(UID, "Вся история", "Аня", "И")
+    msg = vk.last_message
+    assert "ВСЯ ИСТОРИЯ" in msg
+    assert "последние 7 из 7" in msg
+    assert "#7" in msg and "#1" in msg
+
+
+def test_show_full_history_caps_at_thirty_entries():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "stop_technique", "result_data": {"count": i}, "completed_at": "2026-01-01"}
+        for i in range(1, 41)
+    ]
+    bh.handle_message(UID, "Вся история", "Аня", "И")
+    msg = vk.last_message
+    assert "последние 30 из 40" in msg
+    assert "показаны только последние 30" in msg
+
+
+def test_show_full_history_empty_shows_path_is_empty_message():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Вся история", "Аня", "И")
+    assert "ПУТЬ ПУСТ" in vk.last_message
+
+
+def test_full_history_button_works_even_with_active_review():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [
+        {"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}, "completed_at": "2026-01-01"}
+    ]
+    api.set_active_review(UID)
+    bh.handle_message(UID, "📜 Вся история", "Аня", "И")
+    assert "ВСЯ ИСТОРИЯ" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
 # show_review_menu / handle_send_review — полный флоу отправки на проверку
 # ---------------------------------------------------------------------------
 
@@ -437,6 +513,24 @@ def test_reminders_setup_tomorrow_morning():
 
 
 def test_reminders_disable():
+    """Правка 31.08.2026: раньше кнопка «Отключить» только показывала
+    текст, но не отменяла ни одного реального напоминания — теперь
+    вызывает delete_notification для каждого активного напоминания."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.created_notifications.append({
+        "user_vk_id": UID, "exercise_type": "diary",
+        "schedule_type": "daily", "schedule_data": {"time": "08:00"},
+    })
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Отключить", "Аня", "И")
+    assert "отключены" in vk.last_message
+    assert api.deleted_notification_ids == {1}
+
+
+def test_reminders_disable_with_none_survives():
+    """Если у пользователя нет ни одного напоминания, get_notifications
+    может вернуть пусто — обработчик не должен падать."""
     bh, vk, api = make_handlers()
     _greet(bh)
     bh.handle_message(UID, "Напоминания", "Аня", "И")

@@ -55,6 +55,7 @@ class FakeAPIClient:
         self.created_notifications = []
         self.marked_notifications_sent = []
         self.marked_comments_sent = []
+        self.deleted_notification_ids = set()
 
     def save_progress(self, user_vk_id, exercise_type, data):
         self.progress_store[(user_vk_id, exercise_type)] = dict(data)
@@ -132,6 +133,17 @@ class FakeAPIClient:
         }
         self.created_notifications.append(entry)
         return {"id": len(self.created_notifications), **entry}
+
+    def get_notifications(self, user_vk_id):
+        return [
+            {"id": n_id, **n}
+            for n_id, n in enumerate(self.created_notifications, start=1)
+            if str(n["user_vk_id"]) == str(user_vk_id) and n_id not in self.deleted_notification_ids
+        ]
+
+    def delete_notification(self, notification_id):
+        self.deleted_notification_ids.add(notification_id)
+        return True
 
 
 class FakeNotificationSystem:

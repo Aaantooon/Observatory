@@ -85,8 +85,21 @@ class StressSearchExercise:
         }
         self.api.save_progress(user_id, 'stress_search', data)
 
+    def _progress_unavailable_notice(self, user_id):
+        """Вызывать, когда get_progress() вернул None — это сбой сети/сервера,
+        а НЕ «прогресса действительно не было». См. base.py — тот же хелпер,
+        продублирован здесь, потому что этот класс не наследует BaseExercise."""
+        self.send_message(
+            user_id,
+            "⚠️ Не получилось загрузить твой сохранённый прогресс — сервис "
+            "временно недоступен. Продолжаю с чистого листа; если прогресс "
+            "был, попробуй зайти чуть позже."
+        )
+
     def _load_progress(self, user_id):
         progress = self.api.get_progress(user_id, 'stress_search')
+        if progress is None:
+            self._progress_unavailable_notice(user_id)
         if progress and progress.get('exists'):
             data = progress.get('data', {})
             return {
@@ -749,7 +762,16 @@ class StressSearchExercise:
             'total_count': len(session.get('items', []))
         }
 
-        self.api.save_result(user_id, 'stress_search', result_data)
+        if not self.api.save_result(user_id, 'stress_search', result_data):
+            self._save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                "⚠️ Не получилось сохранить результат — сервис на секунду недоступен.\n"
+                "Ничего не потеряно, твои ответы сохранены как черновик. "
+                "Попробуй завершить ещё раз через минуту.",
+                main_menu()
+            )
+            return
 
         self._delete_progress(user_id)
 

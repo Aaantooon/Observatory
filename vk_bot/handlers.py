@@ -1,7 +1,7 @@
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
 from vk_api.utils import get_random_id
 from api_client import APIClient
-from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard
 from exercises.stress_search import StressSearchExercise
 from exercises.happiness_list import HappinessListExercise
 from exercises.my_roles import MyRolesExercise
@@ -12,6 +12,28 @@ from notifications import NotificationSystem
 from workload import format_daily_plan_message
 from datetime import datetime
 import re
+
+# Кризисный протокол: фразы, при которых бот показывает контакты
+# бесплатной круглосуточной психологической помощи. Список сознательно
+# не исчерпывающий и не заменяет профессиональную помощь — только
+# добавляет контакты, не блокирует и не подменяет обычный диалог.
+CRISIS_TRIGGER_PHRASES = (
+    "не хочу жить", "не хочется жить", "хочу умереть", "лучше бы я умер",
+    "лучше бы я умерла", "покончить с собой", "покончить с жизнью",
+    "свести счёты с жизнью", "свести счеты с жизнью", "убить себя",
+    "не вижу смысла жить", "нет смысла жить", "навредить себе",
+    "причинить себе вред", "порезать себя", "самоубийств",
+)
+
+CRISIS_RESOURCES_MESSAGE = (
+    "Мне важно, что ты это написал(а). Если сейчас тяжело — пожалуйста, "
+    "обратись за живой поддержкой прямо сейчас, не откладывая:\n\n"
+    "☎️ +7 (495) 989-50-50 — Центр экстренной психологической помощи МЧС "
+    "России, бесплатно, круглосуточно\n"
+    "☎️ 124 (или 8-800-2000-122) — Единый телефон доверия для детей, "
+    "подростков и их родителей, бесплатно, круглосуточно\n\n"
+    "Ты не обязан(а) справляться с этим в одиночку."
+)
 
 
 class BotHandlers:
@@ -111,7 +133,47 @@ class BotHandlers:
             "]+", flags=re.UNICODE)
         return emoji_pattern.sub('', text).strip().lower()
 
+    def _exit_to_main_menu(self, user_id):
+        """Глобальный выход в главное меню словом «меню»/«помощь».
+        Если пользователь был посреди упражнения — сохраняет прогресс
+        перед выходом (не молча теряет ответы); при следующем выборе
+        того же упражнения оно само предложит продолжить с этого места."""
+        for exercise in (
+            self.stress_search, self.happiness_list, self.my_roles,
+            self.conscious_choice, self.diary, self.stop_technique,
+        ):
+            session = exercise.user_sessions.get(user_id)
+            if session is not None:
+                if hasattr(exercise, '_save_progress'):
+                    exercise._save_progress(user_id, session)
+                elif hasattr(exercise, 'save_progress'):
+                    exercise.save_progress(user_id, session)
+                del exercise.user_sessions[user_id]
+
+        self.user_states[user_id] = 'main'
+        self.send_message(
+            user_id,
+            "🔦 Возвращаемся на перекрёсток. Если было незакончено упражнение — прогресс сохранён.",
+            main_menu()
+        )
+
     def handle_message(self, user_id, text, first_name, last_name):
+        # Кризисный протокол — проверяется первым делом, для ЛЮБОГО
+        # сообщения независимо от того, в каком экране/упражнении сейчас
+        # пользователь. Не прерывает обычную обработку — только добавляет
+        # сообщение с контактами поддержки.
+        text_for_crisis_check = (text or "").lower()
+        if any(phrase in text_for_crisis_check for phrase in CRISIS_TRIGGER_PHRASES):
+            self.send_message(user_id, CRISIS_RESOURCES_MESSAGE)
+
+        # Глобальный выход в меню — работает с ЛЮБОГО экрана, даже посреди
+        # упражнения (точное совпадение слова, не подстрока — см. грабля
+        # №26 в документации проекта: подстрочная проверка теряет данные,
+        # если слово встретится внутри обычного ответа пользователя).
+        if user_id in self.user_states and self._normalize_text(text) in ('меню', 'помощь'):
+            self._exit_to_main_menu(user_id)
+            return
+
         # Проверка сессий упражнений — идёт ПЕРЕД перехватом Review: если
         # клиент уже в середине упражнения, его ответ должен продолжить
         # упражнение, а не улететь комментарием психологу (раньше открытый
@@ -143,7 +205,7 @@ class BotHandlers:
             # открытый Review не даёт вообще начать новое упражнение.
             current_state = self.user_states.get(user_id)
             in_exercise_selection = current_state in ('selecting_exercise', 'selecting_stress_part')
-            if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка'] and not in_exercise_selection:
+            if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история'] and not in_exercise_selection:
                 self.api.add_comment(active_review['id'], text, is_admin=False)
                 self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())
                 return
@@ -167,6 +229,8 @@ class BotHandlers:
         if state == 'main':
             if "упражнен" in text_clean:
                 self.show_exercises(user_id)
+            elif "истори" in text_clean:
+                self.show_full_history(user_id)
             elif "результат" in text_clean or "мои" in text_clean:
                 self.show_results(user_id)
             elif "проверк" in text_clean:
@@ -261,6 +325,9 @@ class BotHandlers:
                 self.notifications.setup_diary_reminder(user_id, "08:00")
                 self.send_message(user_id, "✅ Напомню завтра утром в 08:00.", get_reminder_keyboard())
             elif "отключить" in text_clean:
+                notifications = self.api.get_notifications(user_id) or []
+                for n in notifications:
+                    self.api.delete_notification(n.get('id'))
                 self.send_message(user_id, "🔕 Напоминания отключены.", get_reminder_keyboard())
             else:
                 self.send_message(user_id, "⏰ Выбери настройку из кнопок.", get_reminder_keyboard())
@@ -359,6 +426,62 @@ class BotHandlers:
                 message += f"· {name}: #{data.get('count', 1)}\n"
             else:
                 message += f"· {name}: ✅\n"
+
+        self.send_message(user_id, message, results_keyboard(has_more=len(results) > 5))
+
+    def show_full_history(self, user_id):
+        results = self.api.get_user_results(user_id)
+
+        if not results:
+            self.send_message(
+                user_id,
+                "🌫️ ПУТЬ ПУСТ\n\n"
+                "· Твой путь ещё пуст\n"
+                "· Начни с любого упражнения",
+                main_menu()
+            )
+            return
+
+        exercises_map = {
+            'stress_search': '1️⃣ Поиск стресса',
+            'happiness_list': '2️⃣ Список счастья',
+            'my_roles': '3️⃣ Мои роли',
+            'conscious_choice': '4️⃣ Осознанный выбор',
+            'diary': '5️⃣ Дневник',
+            'stop_technique': '6️⃣ Стоп-техника'
+        }
+
+        # Ограничиваем список, чтобы не упереться в лимит длины сообщения VK (~4096 символов)
+        HISTORY_LIMIT = 30
+        shown = results[:HISTORY_LIMIT]
+
+        message = f"📜 ВСЯ ИСТОРИЯ (последние {len(shown)} из {len(results)})\n\n"
+
+        for res in shown:
+            ex_type = res.get('exercise_type')
+            name = exercises_map.get(ex_type, ex_type)
+            data = res.get('result_data', {})
+            completed_at = res.get('completed_at', '')
+            date_part = completed_at[:10] if completed_at else ''
+
+            if ex_type == 'stress_search':
+                count = len(data.get('items', []))
+                message += f"· {date_part} {name}: {count} образов\n"
+            elif ex_type == 'happiness_list':
+                count = len(data.get('items', []))
+                message += f"· {date_part} {name}: {count} пунктов\n"
+            elif ex_type == 'diary':
+                if data.get('mood'):
+                    message += f"· {date_part} {name}: {data.get('mood')[:30]}\n"
+                else:
+                    message += f"· {date_part} {name}: ✅\n"
+            elif ex_type == 'stop_technique':
+                message += f"· {date_part} {name}: #{data.get('count', 1)}\n"
+            else:
+                message += f"· {date_part} {name}: ✅\n"
+
+        if len(results) > HISTORY_LIMIT:
+            message += f"\n… показаны только последние {HISTORY_LIMIT} записей."
 
         self.send_message(user_id, message, main_menu())
 

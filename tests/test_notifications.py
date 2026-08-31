@@ -97,12 +97,10 @@ def test_pending_admin_comment_is_sent_and_marked():
     assert api.marked_comments_sent == [(10, 0)]
 
 
-def test_pending_admin_comment_send_error_still_marks_sent():
-    """В отличие от обычных напоминаний, для комментариев психолога
-    mark_comment_sent вызывается ДАЖЕ если отправка упала (см. код —
-    нет `continue` перед mark_comment_sent). Это текущее (не факт что
-    идеальное) поведение — тест закрепляет его, чтобы будущая правка не
-    поменяла это незаметно."""
+def test_pending_admin_comment_send_error_does_not_mark_sent():
+    """Правка 31.08.2026: если отправка комментария психолога упала,
+    mark_comment_sent НЕ должен вызываться — иначе комментарий помечается
+    доставленным и больше никогда не ретраится, теряясь навсегда."""
     ns, vk, api = make()
     api.get_pending_admin_comments = lambda: [
         {"review_id": 11, "comment_index": 0, "user_vk_id": "666", "exercise_type": "diary", "text": "текст"}
@@ -115,7 +113,9 @@ def test_pending_admin_comment_send_error_still_marks_sent():
 
     ns._check_notifications()  # не должно упасть
 
-    assert api.marked_comments_sent == [(11, 0)]
+    assert api.marked_comments_sent == [], (
+        "Комментарий, для которого отправка упала, не должен помечаться отправленным"
+    )
 
 
 # ---------------------------------------------------------------------------

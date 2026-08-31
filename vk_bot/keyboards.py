@@ -154,3 +154,14 @@ def main_menu():
     keyboard.add_line()
     keyboard.add_button("📅 Мой план на день", color=VkKeyboardColor.PRIMARY)
     return keyboard.get_keyboard()
+
+def results_keyboard(has_more=False):
+    """Клавиатура экрана «Мои результаты» — с кнопкой «Вся история»,
+    если записей больше, чем показано в кратком списке."""
+    keyboard = VkKeyboard(one_time=False)
+    if has_more:
+        keyboard.add_button("📜 Вся история", color=VkKeyboardColor.SECONDARY)
+        keyboard.add_line()
+    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("🔙 Меню", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()

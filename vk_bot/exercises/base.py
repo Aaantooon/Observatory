@@ -38,11 +38,37 @@ class BaseExercise(ABC):
     def get_progress(self, user_id):
         return self.api.get_progress(user_id, self.get_exercise_type())
 
+    def _progress_unavailable_notice(self, user_id):
+        """Вызывать, когда get_progress() вернул None — это значит сбой
+        сети/сервера, а НЕ «прогресса действительно не было». Не путать
+        одно с другим молча — иначе сохранённый прогресс может незаметно
+        потеряться из вида пользователя."""
+        self.send_message(
+            user_id,
+            "⚠️ Не получилось загрузить твой сохранённый прогресс — сервис "
+            "временно недоступен. Продолжаю с чистого листа; если прогресс "
+            "был, попробуй зайти чуть позже."
+        )
+
     def delete_progress(self, user_id):
         return self.api.delete_progress(user_id, self.get_exercise_type())
 
     def save_result(self, user_id, data):
         return self.api.save_result(user_id, self.get_exercise_type(), data)
+
+    def _report_save_failure(self, user_id, session, keyboard=None):
+        """Сервер не подтвердил сохранение результата (сеть/сервер недоступны).
+        Не терять ответы (сохраняем прогресс как резервную копию) и честно
+        сказать пользователю, а не показывать «Путь завершён», как будто
+        всё прошло успешно."""
+        self.save_progress(user_id, session)
+        self.send_message(
+            user_id,
+            "⚠️ Не получилось сохранить результат — сервис на секунду недоступен.\n"
+            "Ничего не потеряно, твои ответы сохранены как черновик. "
+            "Попробуй завершить ещё раз той же кнопкой через минуту.",
+            keyboard
+        )
 
     def end_session(self, user_id):
         if user_id in self.user_sessions:

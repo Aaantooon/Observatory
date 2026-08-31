@@ -37,6 +37,8 @@ class MyRolesExercise(BaseExercise):
 
     def start(self, user_id):
         progress = self.get_progress(user_id)
+        if progress is None:
+            self._progress_unavailable_notice(user_id)
         data = progress.get('data') if progress else None
 
         has_saved = bool(data and (
@@ -515,7 +517,9 @@ class MyRolesExercise(BaseExercise):
             'analysis': session.get('analysis_results', [])
         }
         
-        self.save_result(user_id, result)
+        if not self.save_result(user_id, result):
+            self._report_save_failure(user_id, session, main_menu())
+            return
         self.delete_progress(user_id)
         self.end_session(user_id)
 

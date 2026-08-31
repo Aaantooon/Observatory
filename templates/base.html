@@ -181,7 +181,8 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="{% url 'home' %}">Привал</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/flashlight/' in request.path %}active{% endif %}" href="{% url 'flashlight' %}">Карта</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/course/' in request.path %}active{% endif %}" href="{% url 'course_index' %}">Курс</a></li>
+                <li class="nav-item"><a class="nav-link {% if request.path == '/map/' %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
 
                 <!-- ===== АВТОРИЗАЦИЯ ЧЕРЕЗ VK ===== -->
@@ -210,7 +211,7 @@
                     </li>
                 {% else %}
                     <li class="nav-item ms-2">
-                        <a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'social:begin' 'vk' %}">Войти через VK</a>
+                        <a class="nav-link btn-lantern px-3 rounded-pill" href="{% url 'vk_login_start' %}">Войти через VK</a>
                     </li>
                 {% endif %}
             </ul>
@@ -219,6 +220,20 @@
 </nav>
 
 <div class="main-content page-transition">
+    {% if messages %}
+        <div class="site-messages" style="max-width: 900px; margin: 0 auto 20px;">
+            {% for message in messages %}
+                <div class="site-message site-message-{{ message.tags }}" style="
+                    padding: 12px 18px; border-radius: 10px; margin-bottom: 10px;
+                    font-size: 0.95rem; line-height: 1.5;
+                    {% if message.tags == 'error' %}background: rgba(220,53,69,0.12); border: 1px solid rgba(220,53,69,0.35); color: #ff8a95;
+                    {% elif message.tags == 'success' %}background: rgba(226,192,68,0.10); border: 1px solid rgba(226,192,68,0.3); color: #e2c044;
+                    {% elif message.tags == 'warning' %}background: rgba(255,193,7,0.10); border: 1px solid rgba(255,193,7,0.3); color: #ffd76b;
+                    {% else %}background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #d4d9e6;{% endif %}
+                ">{{ message }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
     {% block content %}
     {% endblock %}
 </div>

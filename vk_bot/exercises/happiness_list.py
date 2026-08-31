@@ -27,6 +27,8 @@ class HappinessListExercise(BaseExercise):
 
     def start(self, user_id):
         progress = self.get_progress(user_id)
+        if progress is None:
+            self._progress_unavailable_notice(user_id)
 
         items = []
         if progress and progress.get('data'):
@@ -179,7 +181,9 @@ class HappinessListExercise(BaseExercise):
             )
             return
 
-        self.save_result(user_id, {'items': items, 'total': len(items)})
+        if not self.save_result(user_id, {'items': items, 'total': len(items)}):
+            self._report_save_failure(user_id, session, main_menu())
+            return
         self.delete_progress(user_id)
         self.end_session(user_id)
 
