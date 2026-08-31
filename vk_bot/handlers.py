@@ -8,7 +8,6 @@ from exercises.my_roles import MyRolesExercise
 from exercises.conscious_choice import ConsciousChoiceExercise
 from exercises.diary import DiaryExercise
 from exercises.stop_technique import StopTechniqueExercise
-from admin_check import AdminCheck
 from notifications import NotificationSystem
 from workload import format_daily_plan_message
 from datetime import datetime
@@ -85,7 +84,6 @@ class BotHandlers:
         self.diary = DiaryExercise(vk_session, self.api)
         self.stop_technique = StopTechniqueExercise(vk_session, self.api)
         
-        self.admin_check = AdminCheck(vk_session, self.api)
         self.notifications = NotificationSystem(vk_session, self.api)
         self.notifications.start()
 
@@ -114,14 +112,10 @@ class BotHandlers:
         return emoji_pattern.sub('', text).strip().lower()
 
     def handle_message(self, user_id, text, first_name, last_name):
-        active_review = self.api.get_active_review(user_id)
-        if active_review and active_review.get('status') == 'in_review':
-            text_lower = self._normalize_text(text)
-            if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка']:
-                self.api.add_comment(active_review['id'], text, is_admin=False)
-                self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())
-                return
-        # Проверка сессий упражнений
+        # Проверка сессий упражнений — идёт ПЕРЕД перехватом Review: если
+        # клиент уже в середине упражнения, его ответ должен продолжить
+        # упражнение, а не улететь комментарием психологу (раньше открытый
+        # Review глушил вообще всё, включая уже начатое упражнение).
         if user_id in self.stress_search.user_sessions:
             self.stress_search.handle_message(user_id, text)
             return
@@ -140,6 +134,19 @@ class BotHandlers:
         if user_id in self.stop_technique.user_sessions:
             self.stop_technique.handle_message(user_id, text)
             return
+
+        active_review = self.api.get_active_review(user_id)
+        if active_review and active_review.get('status') == 'in_review':
+            text_lower = self._normalize_text(text)
+            # Пока клиент выбирает/запускает упражнение (ещё нет активной
+            # сессии — она проверяется выше), тоже не перехватываем: иначе
+            # открытый Review не даёт вообще начать новое упражнение.
+            current_state = self.user_states.get(user_id)
+            in_exercise_selection = current_state in ('selecting_exercise', 'selecting_stress_part')
+            if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка'] and not in_exercise_selection:
+                self.api.add_comment(active_review['id'], text, is_admin=False)
+                self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())
+                return
 
         if user_id not in self.user_states:
             self.api.get_or_create_user(user_id, first_name, last_name)

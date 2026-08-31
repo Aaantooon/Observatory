@@ -42,25 +42,23 @@ python -m pytest tests/ --cov=vk_bot --cov-report=term-missing
 |---|---|---|
 | `handlers.py` | **100%** | |
 | `api_client.py` | **97%** | |
-| `keyboards.py` | 94% | остаток — `get_review_keyboard()`, используется только мёртвым `admin_check.py` |
-| `conscious_choice.py` | 94% | |
-| `my_roles.py` | 93% | |
+| `keyboards.py` | 96% | |
+| `conscious_choice.py` | 95% | |
+| `my_roles.py` | 99% | |
 | `happiness_list.py` | 91% | |
 | `stress_search.py` | 89% | |
-| `base.py` | 85% | |
-| `stop_technique.py` | 78% | |
+| `base.py` | 86% | |
+| `stop_technique.py` | 82% | |
 | `notifications.py` | 77% | |
-| `diary.py` | 75% | |
-| `admin_check.py` | 24% | **мёртвый код**, см. ниже |
-| `main.py`, `models.py`, `states.py` | 0% | не импортируются нигде / точка входа с реальным VK longpoll — юнит-тестами не имеют смысла |
+| `diary.py` | 80% | |
+| `main.py` | 0% | точка входа с реальным VK longpoll — юнит-тестами не имеет смысла |
 
-**Находка, не связанная с тестами:** `admin_check.py` (класс `AdminCheck`) и
-`models.py`/`states.py` — мёртвый код. `AdminCheck` создаётся в конструкторе
-`BotHandlers`, но ни один его метод нигде не вызывается — вся логика проверки
-психологом реализована напрямую через `active_review`/`get_active_review`/
-`pending_admin_comments` (эта логика протестирована). `models.py`/`states.py`
-не импортируются вообще нигде в проекте. Не баг и ничего не сломает, но можно
-удалить как мёртвый вес, если захочется прибраться — не срочно.
+**Уборка 31.08.2026:** `admin_check.py` (класс `AdminCheck`, ни один метод
+нигде не вызывался — вся логика проверки психологом идёт напрямую через
+`active_review`/`get_active_review`/`pending_admin_comments`), а также
+неиспользуемые нигде `models.py`/`states.py` — удалены как мёртвый код.
+`get_review_keyboard()` в `keyboards.py` (использовалась только
+`admin_check.py`) удалена вместе с ними.
 
 ## Что проверяется
 

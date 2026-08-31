@@ -94,13 +94,6 @@ def continue_keyboard():
     keyboard.add_button("Начать заново 🔄", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
-def get_review_keyboard():
-    keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("💬 Ответить", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("✅ Завершить проверку", color=VkKeyboardColor.POSITIVE)
-    return keyboard.get_keyboard()
-
 def get_reminder_keyboard():
     keyboard = VkKeyboard(one_time=False)
     keyboard.add_button("⏰ Напомнить через 1 час", color=VkKeyboardColor.PRIMARY)
