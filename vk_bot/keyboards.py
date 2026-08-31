@@ -17,9 +17,11 @@ def exercises_menu():
 
 def exercise_keyboard():
     keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("⏹️ Стоп", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 
 def analysis_keyboard():

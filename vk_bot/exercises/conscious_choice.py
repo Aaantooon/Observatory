@@ -23,6 +23,10 @@ class ConsciousChoiceExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_step(user_id, session)
 
+    def _handle_save_and_start_over(self, user_id, session):
+        self._finish(user_id, session)
+        self._handle_start_over(user_id)
+
     def start(self, user_id):
         progress = self.get_progress(user_id)
         data = progress.get('data') if progress else None
@@ -118,6 +122,10 @@ class ConsciousChoiceExercise(BaseExercise):
 
         if "продолжи" in text_lower:
             self._show_step(user_id, session)
+            return
+
+        if "сохранить" in text_lower and "заново" in text_lower:
+            self._handle_save_and_start_over(user_id, session)
             return
 
         if "заново" in text_lower:

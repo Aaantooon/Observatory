@@ -25,6 +25,10 @@ class MyRolesExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_instruction(user_id, session)
 
+    def _handle_save_and_start_over(self, user_id, session):
+        self._finish(user_id, session)
+        self._handle_start_over(user_id)
+
     def start(self, user_id):
         progress = self.get_progress(user_id)
         data = progress.get('data') if progress else None
@@ -116,6 +120,10 @@ class MyRolesExercise(BaseExercise):
             self._show_instruction(user_id, session)
             return
 
+        if "сохранить" in text_lower and "заново" in text_lower:
+            self._handle_save_and_start_over(user_id, session)
+            return
+
         if "заново" in text_lower:
             self._handle_start_over(user_id)
             return
@@ -167,40 +175,16 @@ class MyRolesExercise(BaseExercise):
         phase = session.get('phase')
         
         if phase == 'social':
-            if not session.get('social_roles'):
-                self.send_message(
-                    user_id,
-                    "❌ Добавь хотя бы одну социальную роль",
-                    exercise_keyboard()
-                )
-                return
-            
             session['phase'] = 'interpersonal'
             self.save_progress(user_id, session)
             self._show_instruction(user_id, session)
-        
+
         elif phase == 'interpersonal':
-            if not session.get('interpersonal_roles'):
-                self.send_message(
-                    user_id,
-                    "❌ Добавь хотя бы одну межличностную роль",
-                    exercise_keyboard()
-                )
-                return
-            
             session['phase'] = 'intrapersonal'
             self.save_progress(user_id, session)
             self._show_instruction(user_id, session)
-        
+
         elif phase == 'intrapersonal':
-            if not session.get('intrapersonal_roles'):
-                self.send_message(
-                    user_id,
-                    "❌ Добавь хотя бы одну внутриличностную роль",
-                    exercise_keyboard()
-                )
-                return
-            
             session['phase'] = 'analyze'
             session['analysis_index'] = 0
             session['analysis_results'] = []

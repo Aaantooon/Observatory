@@ -13,6 +13,15 @@ class HappinessListExercise(BaseExercise):
         self.delete_progress(user_id)
         self._start_new(user_id)
 
+    def _handle_save_and_start_over(self, user_id, session):
+        items = session.get('items', [])
+        if items:
+            self._finish(user_id, session)
+        else:
+            self.delete_progress(user_id)
+            self.end_session(user_id)
+        self._start_new(user_id)
+
     def start(self, user_id):
         progress = self.get_progress(user_id)
 
@@ -75,6 +84,10 @@ class HappinessListExercise(BaseExercise):
 
         if "продолжи" in text_lower:
             self._show_items(user_id, session.get('items', []))
+            return
+
+        if "сохранить" in text_lower and "заново" in text_lower:
+            self._handle_save_and_start_over(user_id, session)
             return
 
         if "заново" in text_lower:

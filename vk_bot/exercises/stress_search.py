@@ -72,6 +72,10 @@ class StressSearchExercise:
         )
         return True
 
+    def _handle_save_and_start_over(self, user_id, session):
+        self._finish_exercise(user_id, session)
+        self._handle_start_over(user_id)
+
     def _handle_start_over(self, user_id):
         self._delete_progress(user_id)
         if user_id in self.user_sessions:
@@ -139,8 +143,8 @@ class StressSearchExercise:
             "· Запиши это и поставь оценку от 1 до 10\n\n"
             "📌 **Пример:** `Работа 8`\n\n"
             f"{self._get_separator()}\n"
-            "⏹️ **«Стоп»** — перейти к разбору\n"
-            "✅ **«Завершить»** — завершить путь",
+            "✅ **«Завершить»** — перейти к разбору\n"
+            "💾 **«Сохранить и начать заново»** — сохранить как есть и начать новый путь",
             exercise_keyboard()
         )
 
@@ -155,6 +159,10 @@ class StressSearchExercise:
 
         if "продолжи" in text_lower:
             self._restore_progress(user_id, session)
+            return
+
+        if "сохранить" in text_lower and "заново" in text_lower:
+            self._handle_save_and_start_over(user_id, session)
             return
 
         if "заново" in text_lower:
@@ -186,7 +194,7 @@ class StressSearchExercise:
                 "╚══════════════════════════════════╝\n\n"
                 f"· Уже записано: {count} образов\n"
                 f"· {progress}\n\n"
-                "🕯️ Продолжай или нажми **«Стоп»**.",
+                "🕯️ Продолжай или нажми **«Завершить»**.",
                 exercise_keyboard()
             )
         elif phase == 'analysis':
@@ -200,7 +208,7 @@ class StressSearchExercise:
     def handle_collect(self, user_id, text, session):
         self._save_progress(user_id, session)
 
-        if text.lower() in ["стоп", "⏹️ стоп"]:
+        if text.lower() in ["стоп", "⏹️ стоп", "завершить", "✅ завершить"]:
             if len(session['items']) == 0:
                 self.send_message(
                     user_id,
@@ -213,26 +221,10 @@ class StressSearchExercise:
                     cancel_keyboard()
                 )
                 return
-            
+
             session['phase'] = 'analysis'
             self._save_progress(user_id, session)
             self._start_analysis(user_id, session)
-            return
-
-        if text.lower() in ["завершить", "✅ завершить"]:
-            if len(session['items']) == 0:
-                self.send_message(
-                    user_id,
-                    "╔══════════════════════════════════╗\n"
-                    "║        🌫️ ТУМАН ПУСТ            ║\n"
-                    "╚══════════════════════════════════╝\n\n"
-                    "· Запиши хотя бы один образ\n"
-                    "· 📌 **Формат:** `Причина 9`\n\n"
-                    "💾 **«Сохранить и выйти»**",
-                    cancel_keyboard()
-                )
-                return
-            self._finish_exercise(user_id, session)
             return
 
         parts = text.rsplit(' ', 1)
@@ -302,7 +294,7 @@ class StressSearchExercise:
             f"· {progress}\n\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
-            f"· Продолжай или нажми **«Стоп»**",
+            f"· Продолжай или нажми **«Завершить»**",
             exercise_keyboard()
         )
 
