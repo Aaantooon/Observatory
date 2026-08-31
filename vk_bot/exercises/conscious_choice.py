@@ -1,6 +1,6 @@
 from .base import BaseExercise
 from keyboards import (
-    exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard,
+    conscious_choice_keyboard, back_keyboard, main_menu, continue_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
 )
 
@@ -55,9 +55,14 @@ class ConsciousChoiceExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_step(user_id, session)
 
+    def _format_pros_cons(self, minus_text, plus_text):
+        minus_text = minus_text.strip() if minus_text else '—'
+        plus_text = plus_text.strip() if plus_text else '—'
+        return f"Минусы: {minus_text}, Плюсы: {plus_text}"
+
     def _show_step(self, user_id, session):
         step = session.get('step', 1)
-        
+
         if step == 1:
             self.send_message(
                 user_id,
@@ -69,7 +74,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 "· Ходить на работу\n"
                 "· Заботиться о родителях\n\n"
                 "📝 Пиши по одному пункту:",
-                exercise_keyboard()
+                conscious_choice_keyboard()
             )
         elif step == 2:
             must = session.get('current_must')
@@ -85,12 +90,12 @@ class ConsciousChoiceExercise(BaseExercise):
                 f"· Общество требует\n"
                 f"· Другое...\n\n"
                 f"Напиши свой ответ:",
-                finish_keyboard()
+                conscious_choice_keyboard()
             )
         elif step == 3:
             must = session.get('current_must')
             answer = session.get('current_answer')
-            
+
             self.send_message(
                 user_id,
                 f"Шаг 3: Я выбираю это делать\n\n"
@@ -98,18 +103,29 @@ class ConsciousChoiceExercise(BaseExercise):
                 f"Ты ответил: «{answer}»\n\n"
                 f"Теперь ответь на вопрос:\n"
                 f"❓ Кто круче Бога?\n\n"
+                f"💭 Вселенная (или Бог — кто во что верит) дала право выбора всему живому.\n"
+                f"Если кто-то забирает у тебя этот выбор — получается, он круче Бога?\n"
+                f"Тогда кто же он?\n\n"
                 f"· Никто\n"
                 f"· Родители\n"
                 f"· Я сам\n"
                 f"· Другое...\n\n"
                 f"Напиши свой ответ:",
-                finish_keyboard()
+                conscious_choice_keyboard()
             )
         elif step == 4:
-            self._show_choice_analysis(user_id, session)
+            self._show_choice_ack(user_id, session)
         elif step == 5:
-            self._show_alternatives(user_id, session)
+            self._show_choice_minus(user_id, session)
         elif step == 6:
+            self._show_choice_plus(user_id, session)
+        elif step == 7:
+            self._show_alt_ack(user_id, session)
+        elif step == 8:
+            self._show_alt_minus(user_id, session)
+        elif step == 9:
+            self._show_alt_plus(user_id, session)
+        elif step == 10:
             self._finish(user_id, session)
 
     def handle_message(self, user_id, text):
@@ -161,15 +177,15 @@ class ConsciousChoiceExercise(BaseExercise):
                 user_id,
                 f"✅ Добавлено: {text}\n\n"
                 "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
-                exercise_keyboard()
+                conscious_choice_keyboard()
             )
-        
+
         elif step == 2:
             session['current_answer'] = text
             session['step'] = 3
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
-        
+
         elif step == 3:
             session['who_greater'] = text
             session['step'] = 4
@@ -177,130 +193,195 @@ class ConsciousChoiceExercise(BaseExercise):
             self._show_step(user_id, session)
 
         elif step == 4:
-            session['choice_analysis'] = text
-            self.save_progress(user_id, session)
+            # Шаг-подтверждение — тут нечего вводить, ждём «Продолжить»
             self.send_message(
                 user_id,
-                "✅ Записано!\n\nНажми «Завершить», чтобы перейти дальше",
-                finish_keyboard()
+                "➡️ Жми «Продолжить», чтобы двигаться дальше",
+                conscious_choice_keyboard()
             )
 
         elif step == 5:
-            session['alternatives'] = text
+            session['choice_minus'] = text
+            session['step'] = 6
             self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 6:
+            session['choice_plus'] = text
+            session['choice_analysis'] = self._format_pros_cons(
+                session.get('choice_minus', ''), text
+            )
+            session['step'] = 7
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 7:
             self.send_message(
                 user_id,
-                "✅ Записано!\n\nНажми «Завершить», чтобы закончить упражнение",
-                finish_keyboard()
+                "➡️ Жми «Продолжить», чтобы двигаться дальше",
+                conscious_choice_keyboard()
             )
+
+        elif step == 8:
+            session['alt_minus'] = text
+            session['step'] = 9
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 9:
+            session['alt_plus'] = text
+            session['alternatives'] = self._format_pros_cons(
+                session.get('alt_minus', ''), text
+            )
+            session['step'] = 10
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
 
     def _handle_next(self, user_id, session):
         step = session.get('step', 1)
-        
+
         if step == 1:
             if not session.get('must_items'):
                 self.send_message(
                     user_id,
                     "❌ Добавь хотя бы один пункт",
-                    exercise_keyboard()
+                    conscious_choice_keyboard()
                 )
                 return
-            
+
             must_index = session.get('must_index', 0)
             items = session.get('must_items', [])
-            
+
             if must_index >= len(items):
                 self.send_message(
                     user_id,
                     "✅ Все пункты записаны!\n"
-                    "Нажми «Завершить» для следующего шага",
-                    finish_keyboard()
+                    "Нажми «➡️ Продолжить» для следующего шага",
+                    conscious_choice_keyboard()
                 )
                 return
-            
+
             session['current_must'] = items[must_index]
             session['step'] = 2
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
-        
+
         elif step == 2:
             self.send_message(
                 user_id,
                 "❌ Напиши свой ответ на вопрос",
-                finish_keyboard()
+                conscious_choice_keyboard()
             )
-        
+
         elif step == 3:
             self.send_message(
                 user_id,
                 "❌ Напиши свой ответ на вопрос",
-                finish_keyboard()
+                conscious_choice_keyboard()
             )
-        
+
         elif step == 4:
-            if not session.get('choice_analysis'):
-                self.send_message(
-                    user_id,
-                    "❌ Напиши свои минусы и плюсы перед тем, как продолжить",
-                    finish_keyboard()
-                )
-                return
             session['step'] = 5
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 5:
-            if not session.get('alternatives'):
-                self.send_message(
-                    user_id,
-                    "❌ Напиши свои минусы и плюсы перед тем, как продолжить",
-                    finish_keyboard()
-                )
-                return
+            session.setdefault('choice_minus', '')
             session['step'] = 6
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
-    def _show_choice_analysis(self, user_id, session):
+        elif step == 6:
+            session.setdefault('choice_plus', '')
+            session['choice_analysis'] = self._format_pros_cons(
+                session.get('choice_minus', ''), session.get('choice_plus', '')
+            )
+            session['step'] = 7
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 7:
+            session['step'] = 8
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 8:
+            session.setdefault('alt_minus', '')
+            session['step'] = 9
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+        elif step == 9:
+            session.setdefault('alt_plus', '')
+            session['alternatives'] = self._format_pros_cons(
+                session.get('alt_minus', ''), session.get('alt_plus', '')
+            )
+            session['step'] = 10
+            self.save_progress(user_id, session)
+            self._show_step(user_id, session)
+
+    def _show_choice_ack(self, user_id, session):
         must = session.get('current_must')
-        answer = session.get('current_answer')
-        who = session.get('who_greater')
-        
         self.send_message(
             user_id,
             f"Шаг 4: Анализ выбора\n\n"
             f"📌 Я выбираю: «{must}»\n\n"
+            f"➡️ Жми «Продолжить», чтобы посмотреть на минусы и плюсы этого выбора.",
+            conscious_choice_keyboard()
+        )
+
+    def _show_choice_minus(self, user_id, session):
+        self.send_message(
+            user_id,
             f"❓ Не хочу (опасные минусы):\n"
             f"· Дети будут голодными\n"
             f"· Будут жаловаться\n"
             f"· Будут ныть\n\n"
+            f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
+            conscious_choice_keyboard()
+        )
+
+    def _show_choice_plus(self, user_id, session):
+        self.send_message(
+            user_id,
             f"❓ Хочу (полезные плюсы):\n"
             f"· Увидеть улыбку на лице ребёнка\n"
             f"· Увидеть, как он радуется вкусной еде\n\n"
-            f"Напиши свои минусы и плюсы через запятую:\n"
-            f"Минусы: ..., Плюсы: ...",
-            finish_keyboard()
+            f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
+            conscious_choice_keyboard()
         )
 
-    def _show_alternatives(self, user_id, session):
+    def _show_alt_ack(self, user_id, session):
         must = session.get('current_must')
-        
         self.send_message(
             user_id,
             f"Шаг 5: Альтернативы\n\n"
             f"Иногда «{must}» можно не делать.\n\n"
+            f"➡️ Жми «Продолжить», чтобы посмотреть на другие минусы и плюсы.",
+            conscious_choice_keyboard()
+        )
+
+    def _show_alt_minus(self, user_id, session):
+        self.send_message(
+            user_id,
             f"❓ Не хочу (другие минусы):\n"
             f"· Устал сильно\n"
             f"· Не могу собраться с мыслями\n"
             f"· Мало времени\n"
             f"· Накопить стресс\n\n"
+            f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
+            conscious_choice_keyboard()
+        )
+
+    def _show_alt_plus(self, user_id, session):
+        self.send_message(
+            user_id,
             f"❓ Хочу (другие плюсы):\n"
             f"· Набрать энергии и с хорошим настроением\n"
             f"· Заказать что-то из доставки\n"
             f"· Попробовать что-то новое\n\n"
-            f"Напиши свои минусы и плюсы через запятую:\n"
-            f"Минусы: ..., Плюсы: ...",
-            finish_keyboard()
+            f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
+            conscious_choice_keyboard()
         )
 
     def _finish(self, user_id, session):
@@ -313,7 +394,7 @@ class ConsciousChoiceExercise(BaseExercise):
             'choice_analysis': session.get('choice_analysis', ''),
             'alternatives': session.get('alternatives', '')
         }
-        
+
         self.save_result(user_id, result)
         self.delete_progress(user_id)
         self.end_session(user_id)

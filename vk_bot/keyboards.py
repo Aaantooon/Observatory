@@ -9,8 +9,14 @@ RESTART_TEXTS = {"заново", "начать заново", "начать за
 SAVE_AND_RESTART_TEXTS = {
     "сохранить и начать заново",
     "💾 сохранить и начать заново",
+    "начать заново и сохранить",
+    "🔄 начать заново и сохранить",
 }
-CANCEL_TEXTS = {"отмена", "❌ отмена", "cancel", "сохранить и выйти", "💾 сохранить и выйти"}
+CANCEL_TEXTS = {
+    "отмена", "❌ отмена", "cancel",
+    "сохранить и выйти", "💾 сохранить и выйти",
+    "выйти и сохранить", "💾 выйти и сохранить",
+}
 ADVANCE_TEXTS = {"стоп", "⏹️ стоп", "завершить", "✅ завершить"} | CONTINUE_TEXTS
 CONFIRM_YES_TEXTS = {"да", "да, дальше", "да, дальше ✅", "✅ да, дальше"}
 CONFIRM_NO_TEXTS = {"нет", "нет, буду писать", "нет, буду писать ✏️", "✏️ нет, буду писать"}
@@ -112,6 +118,15 @@ def finish_keyboard():
     keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
+    return keyboard.get_keyboard()
+
+def conscious_choice_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("🔄 Начать заново и сохранить", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Выйти и сохранить", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
 def main_menu():

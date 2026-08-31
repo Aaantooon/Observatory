@@ -48,6 +48,14 @@ ALL_EXERCISES = [
 
 
 EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и начать заново", "💾 Сохранить и выйти"]
+# conscious_choice — единственное упражнение с собственной клавиатурой (те же
+# 3 действия, но подписаны в обратном порядке слов — "Начать заново и
+# сохранить" / "Выйти и сохранить", см. conscious_choice_keyboard()).
+CONSCIOUS_CHOICE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "🔄 Начать заново и сохранить", "💾 Выйти и сохранить"]
+
+
+def _expected_buttons(name):
+    return CONSCIOUS_CHOICE_KEYBOARD_BUTTONS if name == "conscious_choice" else EXERCISE_KEYBOARD_BUTTONS
 
 
 def test_fresh_start_shows_three_button_keyboard():
@@ -55,7 +63,7 @@ def test_fresh_start_shows_three_button_keyboard():
         ex, vk, api = make(cls)
         ex.start(UID)
         buttons = vk.last_buttons
-        assert buttons == EXERCISE_KEYBOARD_BUTTONS, (
+        assert buttons == _expected_buttons(name), (
             f"{name}: ожидались ровно 3 кнопки на стартовом экране, получено {buttons}"
         )
 
@@ -124,7 +132,7 @@ def test_save_and_restart_all_exercises():
         )
         assert UID in ex.user_sessions, f"{name}: после сохранения должна начаться новая сессия"
         buttons = vk.last_buttons
-        assert buttons == EXERCISE_KEYBOARD_BUTTONS, (
+        assert buttons == _expected_buttons(name), (
             f"{name}: после рестарта должен показываться стартовый экран упражнения"
         )
 
@@ -169,7 +177,7 @@ def test_resume_prompt_continue_and_restart():
         ex4.vk, ex4.api = ex3.vk, api3  # тот же vk-объект, что и у ex3 (vk3)
         ex4.start(UID)
         ex4.handle_message(UID, "Начать заново 🔄")
-        assert ex3.vk.last_buttons == EXERCISE_KEYBOARD_BUTTONS, (
+        assert ex3.vk.last_buttons == _expected_buttons(name), (
             f"{name}: после 'Начать заново' должен показаться чистый старт"
         )
 
@@ -811,6 +819,10 @@ def test_diary_full_flow_to_finish():
 
 
 def test_conscious_choice_full_flow_to_finish():
+    """Шаги 4 и 5 ("Анализ выбора" и "Альтернативы") разбиты на отдельные
+    экраны — сначала показывается сам выбор (подтверждение "Продолжить"),
+    потом отдельно минусы, потом отдельно плюсы, каждый можно ответить
+    текстом или пропустить кнопкой "Продолжить"."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     assert ex.user_sessions[UID]["step"] == 1
@@ -822,28 +834,82 @@ def test_conscious_choice_full_flow_to_finish():
     ex.handle_message(UID, "Никто не отнял")        # who_took -> step 3
     assert ex.user_sessions[UID]["step"] == 3
 
-    ex.handle_message(UID, "Я сам")                 # who_greater -> step 4
+    ex.handle_message(UID, "Я сам")                 # who_greater -> step 4 (ack "Я выбираю")
     assert ex.user_sessions[UID]["step"] == 4
+    assert "Я выбираю" in vk.last_message
 
-    ex.handle_message(UID, "Минусы: устану, Плюсы: увижу улыбку")  # choice_analysis, step остаётся 4
-    assert ex.user_sessions[UID]["step"] == 4
-    assert ex.user_sessions[UID]["choice_analysis"]
-
-    ex.handle_message(UID, "✅ Завершить")          # -> step 5
+    ex.handle_message(UID, "➡️ Продолжить")        # -> step 5 (минусы)
     assert ex.user_sessions[UID]["step"] == 5
+    assert "Не хочу" in vk.last_message
 
-    ex.handle_message(UID, "Минусы: устал, Плюсы: энергия")  # alternatives, step остаётся 5
-    assert ex.user_sessions[UID]["step"] == 5
+    ex.handle_message(UID, "устану")                # choice_minus -> step 6 (плюсы)
+    assert ex.user_sessions[UID]["step"] == 6
+    assert "Хочу" in vk.last_message
 
-    ex.handle_message(UID, "✅ Завершить")          # -> step 6 -> _finish()
-    assert UID not in ex.user_sessions, "Упражнение должно завершиться после шага 5"
+    ex.handle_message(UID, "увижу улыбку")          # choice_plus -> step 7 (alt ack)
+    assert ex.user_sessions[UID]["step"] == 7
+    assert "устану" in ex.user_sessions[UID]["choice_analysis"]
+    assert "увижу улыбку" in ex.user_sessions[UID]["choice_analysis"]
+
+    ex.handle_message(UID, "➡️ Продолжить")        # -> step 8 (другие минусы)
+    assert ex.user_sessions[UID]["step"] == 8
+
+    ex.handle_message(UID, "➡️ Продолжить")        # пропускаем минусы -> step 9 (другие плюсы)
+    assert ex.user_sessions[UID]["step"] == 9
+
+    ex.handle_message(UID, "энергия")               # alt_plus -> step 10 -> _finish()
+    assert UID not in ex.user_sessions, "Упражнение должно завершиться после шага 9"
     assert len(api.results) == 1
     result = api.results[0]["result_data"]
     assert result["must_items"] == ["Кормить детей"]
     assert result["answers"]["who_took"] == "Никто не отнял"
     assert result["answers"]["who_greater"] == "Я сам"
     assert "устану" in result["choice_analysis"]
-    assert "устал" in result["alternatives"]
+    assert "энергия" in result["alternatives"]
+    assert "—" in result["alternatives"], "Пропущенные минусы должны отметиться прочерком"
+
+
+def test_conscious_choice_skip_all_minus_plus_via_continue():
+    """Все 4 экрана минусов/плюсов (шаги 5, 6, 8, 9) можно пропустить одной
+    кнопкой «Продолжить», не отвечая ни разу — упражнение всё равно
+    доходит до конца."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2
+    ex.handle_message(UID, "Никто не отнял")   # -> step 3
+    ex.handle_message(UID, "Я сам")            # -> step 4
+
+    for _ in range(6):  # шаги 4,5,6,7,8,9 — каждый пропускается "Продолжить"
+        ex.handle_message(UID, "➡️ Продолжить")
+
+    assert UID not in ex.user_sessions, "Упражнение должно завершиться, даже если все минусы/плюсы пропущены"
+    result = api.results[-1]["result_data"]
+    assert result["choice_analysis"] == "Минусы: —, Плюсы: —"
+    assert result["alternatives"] == "Минусы: —, Плюсы: —"
+
+
+def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
+    """Шаги 4 и 7 — экраны-подтверждения без поля ввода: если пользователь
+    вместо «Продолжить» пришлёт текст, шаг не должен смениться."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Никто не отнял")
+    ex.handle_message(UID, "Я сам")            # -> step 4
+
+    ex.handle_message(UID, "случайный текст")
+    assert ex.user_sessions[UID]["step"] == 4
+    assert "Жми «Продолжить»" in vk.last_message
+
+    ex.handle_message(UID, "➡️ Продолжить")   # -> 5
+    ex.handle_message(UID, "устану")           # -> 6
+    ex.handle_message(UID, "улыбка")           # -> 7
+
+    ex.handle_message(UID, "случайный текст")
+    assert ex.user_sessions[UID]["step"] == 7
+    assert "Жми «Продолжить»" in vk.last_message
 
 
 def test_my_roles_full_flow_two_step_analysis():
@@ -1242,6 +1308,10 @@ def test_stop_technique_advance_without_answer_shows_error_and_does_not_advance(
 
 
 def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step():
+    """Шаги 1-3 обязательны (нельзя продолжить без ответа). Шаги 4-9
+    (подтверждение выбора + минусы/плюсы по отдельности для "Анализа
+    выбора" и "Альтернатив") НЕ обязательны — "Продолжить" всегда
+    пропускает их дальше, см. test_conscious_choice_full_flow_to_finish."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
 
@@ -1264,21 +1334,6 @@ def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step(
     ex.handle_message(UID, "✅ Завершить")
     assert ex.user_sessions[UID]["step"] == 3
     assert "Напиши свой ответ" in vk.last_message
-
-    ex.handle_message(UID, "Я сам")             # -> step 4
-    # шаг 4: "Завершить" без choice_analysis
-    ex.handle_message(UID, "✅ Завершить")
-    assert ex.user_sessions[UID]["step"] == 4
-    assert "минусы и плюсы" in vk.last_message
-
-    ex.handle_message(UID, "Минусы: устану, Плюсы: улыбка")
-    ex.handle_message(UID, "✅ Завершить")      # -> step 5
-    assert ex.user_sessions[UID]["step"] == 5
-
-    # шаг 5: "Завершить" без alternatives
-    ex.handle_message(UID, "✅ Завершить")
-    assert ex.user_sessions[UID]["step"] == 5
-    assert "минусы и плюсы" in vk.last_message
 
 
 def test_happiness_list_finish_with_empty_list_shows_error_and_does_not_finish():
