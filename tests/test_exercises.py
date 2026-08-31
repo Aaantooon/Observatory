@@ -48,14 +48,27 @@ ALL_EXERCISES = [
 
 
 EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и начать заново", "💾 Сохранить и выйти"]
-# conscious_choice — единственное упражнение с собственной клавиатурой (те же
-# 3 действия, но подписаны в обратном порядке слов — "Начать заново и
-# сохранить" / "Выйти и сохранить", см. conscious_choice_keyboard()).
-CONSCIOUS_CHOICE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "🔄 Начать заново и сохранить", "💾 Выйти и сохранить"]
+# diary / stop_technique — фиксированные линейные упражнения, у них есть
+# навигация по шагам (Назад / В начало / В конец), см. step_nav_keyboard().
+STEP_NAV_KEYBOARD_BUTTONS = [
+    "➡️ Продолжить", "⬅️ Назад", "🏠 В начало", "🏁 В конец",
+    "💾 Сохранить и начать заново", "💾 Сохранить и выйти",
+]
+# conscious_choice — тоже линейное упражнение с той же навигацией, но
+# подписи "начать заново"/"выйти" в обратном порядке слов, см.
+# conscious_choice_keyboard().
+CONSCIOUS_CHOICE_KEYBOARD_BUTTONS = [
+    "➡️ Продолжить", "⬅️ Назад", "🏠 В начало", "🏁 В конец",
+    "🔄 Начать заново и сохранить", "💾 Выйти и сохранить",
+]
 
 
 def _expected_buttons(name):
-    return CONSCIOUS_CHOICE_KEYBOARD_BUTTONS if name == "conscious_choice" else EXERCISE_KEYBOARD_BUTTONS
+    if name == "conscious_choice":
+        return CONSCIOUS_CHOICE_KEYBOARD_BUTTONS
+    if name in ("diary", "stop_technique"):
+        return STEP_NAV_KEYBOARD_BUTTONS
+    return EXERCISE_KEYBOARD_BUTTONS
 
 
 def test_fresh_start_shows_three_button_keyboard():
@@ -219,6 +232,43 @@ def test_stop_technique_shows_step_progress_bar():
     ex, vk, api = make(StopTechniqueExercise)
     ex.start(UID)
     assert "▰" in vk.last_message and "%" in vk.last_message
+
+
+def test_happiness_list_shows_score_emoji():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Плохой день — 2")
+    assert "🔴" in vk.last_message
+    ex.handle_message(UID, "Кофе — 8")
+    assert "🟢" in vk.last_message
+
+
+def test_happiness_list_milestone_at_quarter_marks():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    for i in range(5):  # target=20 -> четверть = 5 пунктов
+        ex.handle_message(UID, f"Пункт{i} — 5")
+    assert "Четверть пути" in vk.last_message
+
+
+def test_workload_progress_map_marks_done_exercises():
+    from workload import format_progress_map
+    results = [{"exercise_type": "happiness_list"}, {"exercise_type": "diary"}]
+    message = format_progress_map(results)
+    assert "✅ Список счастья ✨" in message
+    assert "✅ Дневник 📖" in message
+    assert "⬜ Поиск стресса 🎯" in message
+
+
+def test_workload_week_strip_marks_today_active():
+    from datetime import date
+    from workload import format_daily_plan_message
+    today = date(2026, 1, 15)
+    results = [{"exercise_type": "diary", "completed_at": "2026-01-15T10:00:00Z"}]
+    message = format_daily_plan_message(results, today=today)
+    assert "📆 Неделя:" in message
+    assert "✅" in message
+    assert "🗺️ Твой путь:" in message
 
 
 # ---------------------------------------------------------------------------
@@ -1416,3 +1466,92 @@ def test_stress_search_saves_result_with_correct_exercise_type():
         f"Результат сохранён с exercise_type={api.results[0]['exercise_type']!r}, "
         f"а не 'stress_search' — см. _finish_exercise(), там 'exercise_id = 1'"
     )
+
+
+# ---------------------------------------------------------------------------
+# Навигация по шагам (⬅️ Назад / 🏠 В начало / 🏁 В конец) — diary,
+# stop_technique, conscious_choice
+# ---------------------------------------------------------------------------
+
+def test_diary_back_to_start_and_end_navigation():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")   # dream -> mood
+    ex.handle_message(UID, "Спокойное")        # mood -> body
+
+    session = ex.user_sessions[UID]
+    assert session["phase"] == "body"
+    assert session["_max_phase_index"] == 2
+
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["phase"] == "mood"
+    assert "Текущий ответ" in vk.last_message and "Спокойное" in vk.last_message
+
+    ex.handle_message(UID, "🏠 В начало")
+    assert ex.user_sessions[UID]["phase"] == "dream"
+    assert "Гулял по парку" in vk.last_message
+
+    ex.handle_message(UID, "🏁 В конец")
+    assert ex.user_sessions[UID]["phase"] == "body", (
+        "«В конец» должно вести на самый дальний из достигнутых шагов, а не на текущий"
+    )
+
+
+def test_diary_back_at_first_step_is_noop():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["phase"] == "dream"
+    assert "первый шаг" in vk.last_message
+
+
+def test_stop_technique_back_to_start_and_end_navigation():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "О работе")   # thoughts -> feelings
+    ex.handle_message(UID, "Усталость")  # feelings -> wants
+
+    assert ex.user_sessions[UID]["phase"] == "wants"
+
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["phase"] == "feelings"
+    assert "Текущий ответ" in vk.last_message and "Усталость" in vk.last_message
+
+    ex.handle_message(UID, "🏠 В начало")
+    assert ex.user_sessions[UID]["phase"] == "thoughts"
+
+    ex.handle_message(UID, "🏁 В конец")
+    assert ex.user_sessions[UID]["phase"] == "wants"
+
+
+def test_conscious_choice_back_to_start_and_end_navigation():
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")       # must_items[0]
+    ex.handle_message(UID, "➡️ Продолжить")        # -> step 2
+    ex.handle_message(UID, "Никто")                # step 2 -> 3
+    ex.handle_message(UID, "Никто")                # step 3 -> 4
+
+    session = ex.user_sessions[UID]
+    assert session["step"] == 4
+    assert session["_max_step"] == 4
+
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["step"] == 3
+    assert "Текущий ответ" in vk.last_message
+
+    ex.handle_message(UID, "🏠 В начало")
+    assert ex.user_sessions[UID]["step"] == 1
+
+    ex.handle_message(UID, "🏁 В конец")
+    assert ex.user_sessions[UID]["step"] == 4, (
+        "«В конец» должно вести на самый дальний из достигнутых шагов"
+    )
+
+
+def test_conscious_choice_back_at_step1_is_noop():
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["step"] == 1
+    assert "первый шаг" in vk.last_message

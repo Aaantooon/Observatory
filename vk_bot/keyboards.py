@@ -22,6 +22,11 @@ CONFIRM_YES_TEXTS = {"да", "да, дальше", "да, дальше ✅", "�
 CONFIRM_NO_TEXTS = {"нет", "нет, буду писать", "нет, буду писать ✏️", "✏️ нет, буду писать"}
 OVERRIDE_LIMIT_TEXTS = {"всё равно продолжить", "⚠️ всё равно продолжить"}
 
+# Навигация по шагам упражнения — доступна в любой момент внутри сессии
+BACK_TEXTS = {"назад", "⬅️ назад"}
+TO_START_TEXTS = {"в начало", "🏠 в начало"}
+TO_END_TEXTS = {"в конец", "🏁 в конец"}
+
 
 def exercises_menu():
     keyboard = VkKeyboard(one_time=True)
@@ -124,9 +129,26 @@ def conscious_choice_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
+    keyboard.add_button("⬅️ Назад", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("🏠 В начало", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_button("🏁 В конец", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_line()
     keyboard.add_button("🔄 Начать заново и сохранить", color=VkKeyboardColor.NEGATIVE)
     keyboard.add_line()
     keyboard.add_button("💾 Выйти и сохранить", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
+def step_nav_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("⬅️ Назад", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_button("🏠 В начало", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_button("🏁 В конец", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
 def main_menu():

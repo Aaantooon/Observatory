@@ -2,6 +2,7 @@ from .base import BaseExercise
 from keyboards import (
     conscious_choice_keyboard, back_keyboard, main_menu, continue_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+    BACK_TEXTS, TO_START_TEXTS, TO_END_TEXTS,
 )
 
 
@@ -17,8 +18,19 @@ class ConsciousChoiceExercise(BaseExercise):
             'phase': 'must',
             'must_items': [],
             'current_must': None,
-            'step': 1
+            'step': 1,
+            '_max_step': 1,
         }
+
+    def _bump_max_step(self, session):
+        step = session.get('step', 1)
+        if step > session.get('_max_step', 1):
+            session['_max_step'] = step
+
+    def _existing_answer_note(self, value):
+        if not value:
+            return ""
+        return f"📝 Текущий ответ: «{value}»\n(напиши новый, чтобы заменить)\n\n"
 
     def _handle_start_over(self, user_id):
         self.delete_progress(user_id)
@@ -39,6 +51,7 @@ class ConsciousChoiceExercise(BaseExercise):
         if has_saved:
             session = self._fresh_session()
             session.update(data)
+            session['_max_step'] = max(session.get('_max_step', 1), session.get('step', 1))
             session['_resume_prompt'] = True
             self.user_sessions[user_id] = session
 
@@ -82,6 +95,7 @@ class ConsciousChoiceExercise(BaseExercise):
             )
         elif step == 2:
             must = session.get('current_must')
+            note = self._existing_answer_note(session.get('current_answer'))
             self.send_message(
                 user_id,
                 f"{prefix}"
@@ -94,12 +108,14 @@ class ConsciousChoiceExercise(BaseExercise):
                 f"· Родители запрещают\n"
                 f"· Общество требует\n"
                 f"· Другое...\n\n"
+                f"{note}"
                 f"Напиши свой ответ:",
                 conscious_choice_keyboard()
             )
         elif step == 3:
             must = session.get('current_must')
             answer = session.get('current_answer')
+            note = self._existing_answer_note(session.get('who_greater'))
 
             self.send_message(
                 user_id,
@@ -116,6 +132,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 f"· Родители\n"
                 f"· Я сам\n"
                 f"· Другое...\n\n"
+                f"{note}"
                 f"Напиши свой ответ:",
                 conscious_choice_keyboard()
             )
@@ -169,6 +186,18 @@ class ConsciousChoiceExercise(BaseExercise):
             self._handle_cancel(user_id, session)
             return
 
+        if text_lower in BACK_TEXTS:
+            self._handle_back(user_id, session)
+            return
+
+        if text_lower in TO_START_TEXTS:
+            self._handle_to_start(user_id, session)
+            return
+
+        if text_lower in TO_END_TEXTS:
+            self._handle_to_end(user_id, session)
+            return
+
         if text_lower in ADVANCE_TEXTS:
             self._handle_next(user_id, session)
             return
@@ -181,6 +210,8 @@ class ConsciousChoiceExercise(BaseExercise):
             self.save_progress(user_id, session)
             count = len(session['must_items'])
             progress = self._get_progress_bar(count, target=20)
+            milestone = self._milestone_line(count, target=20)
+            milestone_text = f"{milestone}\n" if milestone else ""
 
             if count >= 20:
                 self.send_message(
@@ -194,7 +225,8 @@ class ConsciousChoiceExercise(BaseExercise):
                 self.send_message(
                     user_id,
                     f"✅ Добавлено: {text} ({count}/20)\n"
-                    f"{progress}\n\n"
+                    f"{progress}\n"
+                    f"{milestone_text}\n"
                     "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
                     conscious_choice_keyboard()
                 )
@@ -202,12 +234,14 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 2:
             session['current_answer'] = text
             session['step'] = 3
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 3:
             session['who_greater'] = text
             session['step'] = 4
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -222,6 +256,7 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 5:
             session['choice_minus'] = text
             session['step'] = 6
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -231,6 +266,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 session.get('choice_minus', ''), text
             )
             session['step'] = 7
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -244,6 +280,7 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 8:
             session['alt_minus'] = text
             session['step'] = 9
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -253,8 +290,32 @@ class ConsciousChoiceExercise(BaseExercise):
                 session.get('alt_minus', ''), text
             )
             session['step'] = 10
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
+
+    def _handle_back(self, user_id, session):
+        step = session.get('step', 1)
+        if step <= 1:
+            self.send_message(
+                user_id,
+                "🔙 Это первый шаг — дальше назад некуда.",
+                conscious_choice_keyboard()
+            )
+            return
+        session['step'] = step - 1
+        self.save_progress(user_id, session)
+        self._show_step(user_id, session)
+
+    def _handle_to_start(self, user_id, session):
+        session['step'] = 1
+        self.save_progress(user_id, session)
+        self._show_step(user_id, session)
+
+    def _handle_to_end(self, user_id, session):
+        session['step'] = session.get('_max_step', 1)
+        self.save_progress(user_id, session)
+        self._show_step(user_id, session)
 
     def _handle_next(self, user_id, session):
         step = session.get('step', 1)
@@ -282,6 +343,7 @@ class ConsciousChoiceExercise(BaseExercise):
 
             session['current_must'] = items[must_index]
             session['step'] = 2
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -293,12 +355,14 @@ class ConsciousChoiceExercise(BaseExercise):
 
         elif step == 4:
             session['step'] = 5
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 5:
             session.setdefault('choice_minus', '')
             session['step'] = 6
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -308,17 +372,20 @@ class ConsciousChoiceExercise(BaseExercise):
                 session.get('choice_minus', ''), session.get('choice_plus', '')
             )
             session['step'] = 7
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 7:
             session['step'] = 8
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 8:
             session.setdefault('alt_minus', '')
             session['step'] = 9
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -328,6 +395,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 session.get('alt_minus', ''), session.get('alt_plus', '')
             )
             session['step'] = 10
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -342,22 +410,26 @@ class ConsciousChoiceExercise(BaseExercise):
         )
 
     def _show_choice_minus(self, user_id, session):
+        note = self._existing_answer_note(session.get('choice_minus'))
         self.send_message(
             user_id,
             f"❓ Не хочу (опасные минусы):\n"
             f"· Дети будут голодными\n"
             f"· Будут жаловаться\n"
             f"· Будут ныть\n\n"
+            f"{note}"
             f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
             conscious_choice_keyboard()
         )
 
     def _show_choice_plus(self, user_id, session):
+        note = self._existing_answer_note(session.get('choice_plus'))
         self.send_message(
             user_id,
             f"❓ Хочу (полезные плюсы):\n"
             f"· Увидеть улыбку на лице ребёнка\n"
             f"· Увидеть, как он радуется вкусной еде\n\n"
+            f"{note}"
             f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
             conscious_choice_keyboard()
         )
@@ -373,6 +445,7 @@ class ConsciousChoiceExercise(BaseExercise):
         )
 
     def _show_alt_minus(self, user_id, session):
+        note = self._existing_answer_note(session.get('alt_minus'))
         self.send_message(
             user_id,
             f"❓ Не хочу (другие минусы):\n"
@@ -380,17 +453,20 @@ class ConsciousChoiceExercise(BaseExercise):
             f"· Не могу собраться с мыслями\n"
             f"· Мало времени\n"
             f"· Накопить стресс\n\n"
+            f"{note}"
             f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
             conscious_choice_keyboard()
         )
 
     def _show_alt_plus(self, user_id, session):
+        note = self._existing_answer_note(session.get('alt_plus'))
         self.send_message(
             user_id,
             f"❓ Хочу (другие плюсы):\n"
             f"· Набрать энергии и с хорошим настроением\n"
             f"· Заказать что-то из доставки\n"
             f"· Попробовать что-то новое\n\n"
+            f"{note}"
             f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
             conscious_choice_keyboard()
         )
