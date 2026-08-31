@@ -51,9 +51,7 @@ class StopTechniqueExercise(BaseExercise):
 
             self.send_message(
                 user_id,
-                "╔══════════════════════════════════╗\n"
-                "║     🛑 СТОП-ТЕХНИКА             ║\n"
-                "╚══════════════════════════════════╝\n\n"
+                "🛑 СТОП-ТЕХНИКА\n\n"
                 "· У тебя есть незаконченная остановка\n\n"
                 "🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
@@ -73,9 +71,7 @@ class StopTechniqueExercise(BaseExercise):
         if phase == 'thoughts':
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║     🛑 СТОП-ТЕХНИКА #{count}     ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🛑 СТОП-ТЕХНИКА #{count}\n\n"
                 f"Вопрос 1/3: О чём я думаю?\n\n"
                 f"Здесь и сейчас.\n\n"
                 f"Примеры:\n"
@@ -231,9 +227,7 @@ class StopTechniqueExercise(BaseExercise):
 
         self.send_message(
             user_id,
-            f"╔══════════════════════════════════╗\n"
-            f"║        ✨ СТОП #{count}           ║\n"
-            f"╚══════════════════════════════════╝\n\n"
+            f"✨ СТОП #{count}\n\n"
             f"💭 Мысли: {result['thoughts']}\n\n"
             f"❤️ Чувства: {result['feelings']}\n\n"
             f"🎯 Хочу: {result['wants']}\n\n"

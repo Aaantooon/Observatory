@@ -47,7 +47,7 @@ ALL_EXERCISES = [
 ]
 
 
-EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и выйти", "💾 Сохранить и начать заново"]
+EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и начать заново", "💾 Сохранить и выйти"]
 
 
 def test_fresh_start_shows_three_button_keyboard():
@@ -197,6 +197,44 @@ def test_my_roles_no_minimum_items_restriction():
     assert result["social_roles"] == []
     assert result["interpersonal_roles"] == []
     assert result["intrapersonal_roles"] == []
+
+
+def test_my_roles_shows_progress_and_nudges_at_20():
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "Продавец")
+    assert "(1/20)" in vk.last_message
+
+    for i in range(19):  # доводим раздел 'social' до 20 ролей
+        ex.handle_message(UID, f"Роль {i}")
+
+    assert len(ex.user_sessions[UID]["social_roles"]) == 20
+    assert "20 ролей" in vk.last_message
+    assert vk.last_buttons[0] == "➡️ Продолжить"
+
+    # можно писать и дальше сверх 20 — жёсткого лимита нет
+    ex.handle_message(UID, "Ещё одна роль")
+    assert len(ex.user_sessions[UID]["social_roles"]) == 21
+
+
+def test_my_roles_intrapersonal_target_is_10_not_20():
+    """Часть 3 (внутриличностные роли) — цель 10, в отличие от частей 1 и 2 (по 20)."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "➡️ Продолжить")  # social -> interpersonal, 0 ролей
+    ex.handle_message(UID, "➡️ Продолжить")  # interpersonal -> intrapersonal, 0 ролей
+    assert ex.user_sessions[UID]["phase"] == "intrapersonal"
+
+    ex.handle_message(UID, "Смелый")
+    assert "(1/10)" in vk.last_message
+
+    for i in range(9):  # доводим intrapersonal до 10 ролей
+        ex.handle_message(UID, f"Роль {i}")
+
+    assert len(ex.user_sessions[UID]["intrapersonal_roles"]) == 10
+    assert "10 ролей" in vk.last_message
+    assert vk.last_buttons[0] == "➡️ Продолжить"
 
 
 # ---------------------------------------------------------------------------
@@ -476,7 +514,10 @@ def test_conscious_choice_full_flow_to_finish():
     assert "устал" in result["alternatives"]
 
 
-def test_my_roles_full_flow_with_analysis_parsing():
+def test_my_roles_full_flow_two_step_analysis():
+    """Разбор каждой роли — два отдельных шага: сначала 'Идеально', потом
+    'Ужасно' (заменили хрупкий формат 'Идеально: ..., Ужасно: ...' одной
+    строкой на последовательные вопросы, см. СВОДКА_ПРОЕКТА.md)."""
     ex, vk, api = make(MyRolesExercise)
     ex.start(UID)
 
@@ -485,26 +526,35 @@ def test_my_roles_full_flow_with_analysis_parsing():
     ex.handle_message(UID, "Друг для Саши")        # interpersonal role
     ex.handle_message(UID, "➡️ Продолжить")        # -> intrapersonal
     ex.handle_message(UID, "Смелый")               # intrapersonal role
-    ex.handle_message(UID, "➡️ Продолжить")        # -> analyze, показывает первую роль ("Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")        # -> analyze, роль 1 ("Продавец"), шаг 1
 
     session = ex.user_sessions[UID]
     assert session["phase"] == "analyze"
     assert session["analysis_index"] == 0
+    assert session["analysis_step"] == 1
+    assert "идеально" in vk.last_message.lower()
 
-    # неверный формат ответа (нет "Ужасно:") — не должен продвигать индекс
-    ex.handle_message(UID, "Идеально: всё отлично")
-    assert ex.user_sessions[UID]["analysis_index"] == 0, "Неверный формат не должен продвигать анализ"
-    assert "Формат" in vk.last_message
+    # шаг 1: "Идеально" — любой текст принимается, продвигает на шаг 2
+    ex.handle_message(UID, "всё отлично")
+    assert ex.user_sessions[UID]["analysis_step"] == 2
+    assert ex.user_sessions[UID]["analysis_index"] == 0, "Индекс роли не должен смениться между шагами 1 и 2"
+    assert ex.user_sessions[UID]["current_ideal"] == "всё отлично"
+    assert "ужасно" in vk.last_message.lower()
 
-    # верный формат — продвигает к следующей роли
-    ex.handle_message(UID, "Идеально: всё отлично, Ужасно: провал")
+    # шаг 2: "Ужасно" — завершает роль 1, переходит к роли 2, снова шаг 1
+    ex.handle_message(UID, "провал")
     assert ex.user_sessions[UID]["analysis_index"] == 1
+    assert ex.user_sessions[UID]["analysis_step"] == 1
+    assert "current_ideal" not in ex.user_sessions[UID]
 
-    ex.handle_message(UID, "Идеально: дружба, Ужасно: ссора")
+    # роль 2 (Друг для Саши)
+    ex.handle_message(UID, "дружба")
+    ex.handle_message(UID, "ссора")
     assert ex.user_sessions[UID]["analysis_index"] == 2
 
-    # последняя роль -> после ответа упражнение завершается
-    ex.handle_message(UID, "Идеально: смелость, Ужасно: трусость")
+    # роль 3 (Смелый) — последняя, после шага 2 упражнение завершается
+    ex.handle_message(UID, "смелость")
+    ex.handle_message(UID, "трусость")
     assert UID not in ex.user_sessions, "После анализа всех ролей упражнение должно завершиться"
 
     assert len(api.results) == 1
@@ -513,8 +563,39 @@ def test_my_roles_full_flow_with_analysis_parsing():
     assert result["interpersonal_roles"] == ["Друг для Саши"]
     assert result["intrapersonal_roles"] == ["Смелый"]
     assert len(result["analysis"]) == 3
-    assert result["analysis"][0]["role"] == "Продавец"
-    assert result["analysis"][0]["terrible"] == "провал"
+    assert result["analysis"][0] == {"role": "Продавец", "ideal": "всё отлично", "terrible": "провал"}
+    assert result["analysis"][1] == {"role": "Друг для Саши", "ideal": "дружба", "terrible": "ссора"}
+    assert result["analysis"][2] == {"role": "Смелый", "ideal": "смелость", "terrible": "трусость"}
+
+
+def test_my_roles_resume_mid_analysis_does_not_lose_ideal_answer():
+    """Возобновление сессии ПОСЛЕ ответа на 'Идеально', но ДО ответа на
+    'Ужасно' (например бот перезапустился между сообщениями) не должно
+    сбрасывать уже введённый ответ и не должно откатывать на шаг 1."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 interpersonal ролей -> intrapersonal
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 intrapersonal ролей -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "всё отлично")     # -> шаг 2 ('current_ideal' сохранён)
+
+    # "перезапуск бота": новый объект, тот же api (тот же сохранённый прогресс)
+    ex2, vk2, _ = make(MyRolesExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    assert vk.last_buttons == ["Продолжить ✅", "Начать заново 🔄"]
+
+    ex2.handle_message(UID, "Продолжить ✅")
+    assert ex2.user_sessions[UID]["analysis_step"] == 2, "Должен остаться на шаге 2, не откатиться на 1"
+    assert ex2.user_sessions[UID]["current_ideal"] == "всё отлично"
+    assert "ужасно" in vk.last_message.lower()
+
+    ex2.handle_message(UID, "провал")
+    assert len(api.results) == 1
+    assert api.results[0]["result_data"]["analysis"][0] == {
+        "role": "Продавец", "ideal": "всё отлично", "terrible": "провал"
+    }
 
 
 def test_two_users_do_not_share_session_state():

@@ -36,9 +36,7 @@ class HappinessListExercise(BaseExercise):
             self.user_sessions[user_id] = {'phase': 'collecting', 'items': items, '_resume_prompt': True}
             self.send_message(
                 user_id,
-                "╔══════════════════════════════════╗\n"
-                "║       ✨ СПИСОК СЧАСТЬЯ        ║\n"
-                "╚══════════════════════════════════╝\n\n"
+                "✨ СПИСОК СЧАСТЬЯ\n\n"
                 f"· Ты уже записал: {len(items)} пунктов\n\n"
                 "🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
@@ -52,9 +50,7 @@ class HappinessListExercise(BaseExercise):
         
         self.send_message(
             user_id,
-            "╔══════════════════════════════════╗\n"
-            "║       ✨ СПИСОК СЧАСТЬЯ        ║\n"
-            "╚══════════════════════════════════╝\n\n"
+            "✨ СПИСОК СЧАСТЬЯ\n\n"
             "Давай вспомним, что приносит тебе радость.\n\n"
             "📝 Пиши по пунктам, что тебя радует, и ставь оценку от 1 до 10.\n"
             "Например:\n"
@@ -180,9 +176,7 @@ class HappinessListExercise(BaseExercise):
 
         self.send_message(
             user_id,
-            f"╔══════════════════════════════════╗\n"
-            f"║        ✨ ПУТЬ ЗАВЕРШЁН         ║\n"
-            f"╚══════════════════════════════════╝\n\n"
+            f"✨ ПУТЬ ЗАВЕРШЁН\n\n"
             f"📋 Собрано: {len(items)} пунктов счастья\n"
             f"📊 Средняя оценка: {avg_score:.1f}/10\n\n"
             f"Топ-3:\n" + "\n".join(

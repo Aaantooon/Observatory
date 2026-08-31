@@ -102,9 +102,7 @@ class StressSearchExercise:
             self.user_sessions[user_id] = saved
             self.send_message(
                 user_id,
-                "╔══════════════════════════════════╗\n"
-                "║       🔦 СВЕТ В ТУМАНЕ          ║\n"
-                "╚══════════════════════════════════╝\n\n"
+                "🔦 СВЕТ В ТУМАНЕ\n\n"
                 f"· Ты уже записал: {len(saved['items'])} образов\n"
                 f"· Текущая точка: {self._get_phase_text(saved['phase'])}\n\n"
                 "🕯️ Продолжим путь?",
@@ -134,10 +132,7 @@ class StressSearchExercise:
     def _send_intro(self, user_id):
         self.send_message(
             user_id,
-            "╔══════════════════════════════════╗\n"
-            "║       🎯 ПОИСК СТРЕССА          ║\n"
-            "║       ПУТЬ НАБЛЮДАТЕЛЯ          ║\n"
-            "╚══════════════════════════════════╝\n\n"
+            "🎯 ПОИСК СТРЕССА\n\n"
             "🌫️ *Цель:* найти источники стресса в своей жизни.\n\n"
             "📖 Формула стресса:\n"
             "`Стресс = Прогноз ≠ Реальность`\n\n"
@@ -204,9 +199,7 @@ class StressSearchExercise:
             progress = self._get_progress_bar(count, target=100)
             self.send_message(
                 user_id,
-                "╔══════════════════════════════════╗\n"
-                "║       🔦 ПРОДОЛЖАЕМ ПУТЬ        ║\n"
-                "╚══════════════════════════════════╝\n\n"
+                "🔦 ПРОДОЛЖАЕМ ПУТЬ\n\n"
                 f"· Уже записано: {count} образов\n"
                 f"· {progress}\n\n"
                 "🕯️ Пиши следующий образ, а когда закончишь — жми «Продолжить».",
@@ -225,9 +218,7 @@ class StressSearchExercise:
             if len(session['items']) == 0:
                 self.send_message(
                     user_id,
-                    "╔══════════════════════════════════╗\n"
-                    "║        🌫️ ТУМАН ПУСТ            ║\n"
-                    "╚══════════════════════════════════╝\n\n"
+                    "🌫️ ТУМАН ПУСТ\n\n"
                     "· Запиши хотя бы один образ\n"
                     "· 📌 Формат: `Причина 9`\n\n"
                     "💾 «Сохранить и выйти»",
@@ -244,9 +235,7 @@ class StressSearchExercise:
         if len(parts) != 2:
             self.send_message(
                 user_id,
-                "╔══════════════════════════════════╗\n"
-                "║     🌫️ ОБРАЗ НЕ ПРОЯВИЛСЯ      ║\n"
-                "╚══════════════════════════════════╝\n\n"
+                "🌫️ ОБРАЗ НЕ ПРОЯВИЛСЯ\n\n"
                 "· Нужно: `Причина 9` (слово + пробел + оценка)\n"
                 "· 📌 Пример: `Работа 8`\n\n"
                 "💾 «Сохранить и выйти»",
@@ -257,9 +246,7 @@ class StressSearchExercise:
         if not parts[1].isdigit():
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🌫️ НЕВЕРНАЯ ОЦЕНКА          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🌫️ НЕВЕРНАЯ ОЦЕНКА\n\n"
                 f"· Оценка должна быть числом от 1 до 10\n"
                 f"· Ты написал: `{parts[1]}`\n\n"
                 f"· 📌 Пример: `Работа 8`\n\n"
@@ -272,9 +259,7 @@ class StressSearchExercise:
         if not (1 <= rate <= 10):
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🌫️ ОЦЕНКА ВНЕ ДИАПАЗОНА    ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🌫️ ОЦЕНКА ВНЕ ДИАПАЗОНА\n\n"
                 f"· Оценка должна быть от 1 до 10\n"
                 f"· Ты поставил: `{rate}`\n\n"
                 f"💾 «Сохранить и выйти»",
@@ -300,9 +285,7 @@ class StressSearchExercise:
 
         self.send_message(
             user_id,
-            f"╔══════════════════════════════════╗\n"
-            f"║       🔦 ОБРАЗ #{count}            ║\n"
-            f"╚══════════════════════════════════╝\n\n"
+            f"🔦 ОБРАЗ #{count}\n\n"
             f"📌 *«{item}»* — {rate}/10\n\n"
             f"· {progress}\n\n"
             f"{reply}\n\n"
@@ -327,9 +310,7 @@ class StressSearchExercise:
 
         self.send_message(
             user_id,
-            "╔══════════════════════════════════╗\n"
-            "║       🧠 РАЗБОР ПУТИ            ║\n"
-            "╚══════════════════════════════════╝\n\n"
+            "🧠 РАЗБОР ПУТИ\n\n"
             f"· У тебя {len(items)} образов\n\n"
             "· Теперь будем разбирать каждый\n"
             "· Ты увидишь, где твоя карта расходится с реальностью\n\n"
@@ -374,9 +355,7 @@ class StressSearchExercise:
 
         self.send_message(
             user_id,
-            f"╔══════════════════════════════════╗\n"
-            f"║    🔦 ОБРАЗ {index + 1}/{len(items)}          ║\n"
-            f"╚══════════════════════════════════╝\n\n"
+            f"🔦 ОБРАЗ {index + 1}/{len(items)}\n\n"
             f"📌 *«{item['text']}»* — {item['rate']}/10\n\n"
             f"❓ Вопрос 1/4:\n"
             f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
@@ -405,9 +384,7 @@ class StressSearchExercise:
         if step == 1:
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n\n"
                 f"❓ Вопрос 1/4:\n"
                 f"· Как должно быть? Опиши идеальную ситуацию.\n\n"
@@ -418,9 +395,7 @@ class StressSearchExercise:
         elif step == 2:
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
@@ -431,9 +406,7 @@ class StressSearchExercise:
         elif step == 3:
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 3/4:\n"
@@ -445,9 +418,7 @@ class StressSearchExercise:
         elif step == 4:
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
@@ -489,9 +460,7 @@ class StressSearchExercise:
 
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
@@ -524,9 +493,7 @@ class StressSearchExercise:
 
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {percent}%\n\n"
                 f"❓ Вопрос 3/4:\n"
@@ -543,9 +510,7 @@ class StressSearchExercise:
 
             self.send_message(
                 user_id,
-                f"╔══════════════════════════════════╗\n"
-                f"║    🔦 ОБРАЗ {index + 1}/{total}          ║\n"
-                f"╚══════════════════════════════════╝\n\n"
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 *«{item_text}»* — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
@@ -614,9 +579,7 @@ class StressSearchExercise:
 
         self.send_message(
             user_id,
-            "╔══════════════════════════════════╗\n"
-            "║        ✨ ПУТЬ ЗАВЕРШЁН         ║\n"
-            "╚══════════════════════════════════╝\n\n"
+            "✨ ПУТЬ ЗАВЕРШЁН\n\n"
             f"· 🔦 Ты осветил {total} образов в тумане\n"
             f"· 🧠 Разобрано: {analyzed}\n"
             f"· 📊 Реалистичность твоей карты: {avg_percent}%"
