@@ -63,10 +63,13 @@ def test_fresh_start_shows_three_button_keyboard():
 def test_advance_button_is_not_swallowed_as_data():
     """Кнопка 'Продолжить'/'Стоп'/'Завершить' должна распознаваться, а не
     записываться как обычный ответ пользователя."""
-    # my_roles: пустая фаза 'social' сразу принимает "Продолжить" без блокировки
+    # my_roles: пустая фаза 'social' переспрашивает перед переходом дальше
+    # (см. test_my_roles_empty_phase_asks_for_confirmation), но сама кнопка
+    # "Продолжить" в любом случае не должна попасть в список ролей.
     ex, vk, api = make(MyRolesExercise)
     ex.start(UID)
     ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "✅ Да, дальше")
     session = ex.user_sessions[UID]
     assert session["phase"] == "interpersonal", "Кнопка «Продолжить» не перевела на след. фазу"
     assert session["social_roles"] == [], "Текст кнопки не должен попасть в список ролей"
@@ -176,20 +179,27 @@ def test_resume_prompt_continue_and_restart():
 # ---------------------------------------------------------------------------
 
 def test_my_roles_no_minimum_items_restriction():
+    """Нет ЖЁСТКОГО минимума ролей на раздел — но, в отличие от раньше,
+    переход с 0 ролей требует подтверждения (см.
+    test_my_roles_empty_phase_asks_for_confirmation), после «Да» переход
+    происходит нормально."""
     ex, vk, api = make(MyRolesExercise)
     ex.start(UID)
     session = ex.user_sessions[UID]
     assert session["phase"] == "social"
 
-    ex.handle_message(UID, "➡️ Продолжить")  # 0 ролей введено
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 ролей введено -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")
     assert ex.user_sessions[UID]["phase"] == "interpersonal", (
-        "Переход должен происходить даже с 0 ролей в разделе"
+        "После подтверждения переход должен произойти даже с 0 ролей в разделе"
     )
 
-    ex.handle_message(UID, "➡️ Продолжить")  # снова 0 ролей
+    ex.handle_message(UID, "➡️ Продолжить")  # снова 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")
     assert ex.user_sessions[UID]["phase"] == "intrapersonal"
 
-    ex.handle_message(UID, "➡️ Продолжить")  # снова 0 ролей -> фаза 'analyze'
+    ex.handle_message(UID, "➡️ Продолжить")  # снова 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> фаза 'analyze'
     # список ролей пуст -> анализировать нечего, упражнение сразу завершается
     assert UID not in ex.user_sessions, "С пустым списком ролей анализ должен сразу завершить упражнение"
     assert len(api.results) == 1
@@ -197,6 +207,54 @@ def test_my_roles_no_minimum_items_restriction():
     assert result["social_roles"] == []
     assert result["interpersonal_roles"] == []
     assert result["intrapersonal_roles"] == []
+
+
+def test_my_roles_empty_phase_asks_for_confirmation():
+    """Нажатие «Продолжить» с 0 ролей в разделе должно переспросить, а не
+    сразу перейти дальше (запрошено пользователем: 'спросить его он
+    действительно хочет оставить пустым')."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["phase"] == "social", "Фаза не должна была смениться до подтверждения"
+    assert "оставить его пустым" in vk.last_message.lower()
+    assert vk.last_buttons == ["✅ Да, дальше", "✏️ Нет, буду писать"]
+
+    # непонятный ответ — просто напоминание про кнопки, ничего не ломается
+    ex.handle_message(UID, "не знаю")
+    assert ex.user_sessions[UID]["phase"] == "social"
+    assert "Да, дальше" in vk.last_message and "буду писать" in vk.last_message
+
+    ex.handle_message(UID, "✅ Да, дальше")
+    assert ex.user_sessions[UID]["phase"] == "interpersonal"
+
+
+def test_my_roles_empty_phase_no_keeps_writing():
+    """Ответ «Нет, буду писать» должен вернуть к тому же разделу без
+    сброса прогресса, и дать возможность реально дописать роль."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["_confirm_empty_phase"] is True
+
+    ex.handle_message(UID, "✏️ Нет, буду писать")
+    assert ex.user_sessions[UID]["phase"] == "social"
+    assert "_confirm_empty_phase" not in ex.user_sessions[UID]
+
+    ex.handle_message(UID, "Продавец")
+    assert ex.user_sessions[UID]["social_roles"] == ["Продавец"]
+
+
+def test_my_roles_non_empty_phase_advances_without_confirmation():
+    """Если в разделе уже есть хотя бы одна роль, «Продолжить» переходит
+    сразу, без переспроса."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert ex.user_sessions[UID]["phase"] == "interpersonal", "С непустым разделом переспрос не нужен"
+    assert "_confirm_empty_phase" not in ex.user_sessions[UID]
 
 
 def test_my_roles_shows_progress_and_nudges_at_20():
@@ -218,12 +276,166 @@ def test_my_roles_shows_progress_and_nudges_at_20():
     assert len(ex.user_sessions[UID]["social_roles"]) == 21
 
 
+def test_my_roles_legacy_bundled_role_self_heals_during_analysis():
+    """Живой баг: роль, сохранённая ДО того, как появилась разбивка списков
+    (одна строка-'простыня' из нескольких ролей через ';'), не должна
+    анализироваться как ОДНА огромная роль — _all_roles должен на лету
+    разложить её на отдельные атомарные роли."""
+    ex, vk, api = make(MyRolesExercise)
+    bundled = "посетитель выставки;\nпокупатель на ярмарке;\nпешеход, который придерживает дверь;"
+    session = ex._fresh_session()
+    session.update({
+        'phase': 'analyze',
+        'social_roles': [bundled],
+        'analysis_index': 0,
+        'analysis_results': [],
+    })
+    ex.user_sessions[UID] = session
+
+    ex._analyze_roles(UID, session)
+
+    assert "АНАЛИЗ РОЛИ 1/3" in vk.last_message, "Старая 'простыня' должна была разложиться на 3 отдельные роли"
+    assert "Роль: посетитель выставки" in vk.last_message
+    assert "покупатель на ярмарке" not in vk.last_message, "В карточке роли не должно быть остальных ролей из простыни"
+
+
+def test_my_roles_legacy_bundled_role_counts_correctly_in_progress_summary():
+    """Сводка 'Всего записано' тоже должна честно считать атомарные роли,
+    а не одну строку-простыню как одну роль."""
+    ex, vk, api = make(MyRolesExercise)
+    bundled = "роль раз;\nроль два;\nроль три;"
+    session = ex._fresh_session()
+    session.update({'phase': 'interpersonal', 'social_roles': [bundled]})
+
+    summary = ex._progress_summary(session)
+    assert "Всего записано: 3 ролей" in summary
+    assert "Социальных: 3" in summary
+
+
+def test_my_roles_pasted_multiline_list_splits_into_separate_roles():
+    """Баг из живого использования: пользователь вставляет сразу список
+    ролей одним сообщением (каждая роль на своей строке, с ';' на конце) —
+    раньше это сохранялось как ОДНА роль ('1/20'). Должно разложиться на
+    отдельные пункты."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+
+    pasted = (
+        "посетитель аптеки;\n"
+        "зритель на автобусной остановке (тот, кто спокойно ждёт транспорт);\n"
+        "участник очереди в МФЦ;\n"
+        "прохожий, который подскажет дорогу;\n"
+        "слушатель уличного музыканта;"
+    )
+    ex.handle_message(UID, pasted)
+
+    roles = ex.user_sessions[UID]["social_roles"]
+    assert len(roles) == 5, "Каждая строка списка должна была стать отдельной ролью"
+    assert roles[0] == "посетитель аптеки"
+    assert roles[1] == "зритель на автобусной остановке (тот, кто спокойно ждёт транспорт)"
+    assert roles[4] == "слушатель уличного музыканта"
+    assert "(1/20)" not in vk.last_message
+    assert "Добавлено ролей: 5" in vk.last_message
+    assert "Всего в этом разделе: 5/20" in vk.last_message
+
+
+def test_my_roles_semicolon_list_on_one_line_also_splits():
+    """Список из нескольких ролей через ';' в ОДНОЙ строке (без переноса)
+    тоже должен разложиться на отдельные пункты, а не сохраниться как одна
+    длинная роль."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "сосед; коллега; попутчик в метро")
+
+    roles = ex.user_sessions[UID]["social_roles"]
+    assert roles == ["сосед", "коллега", "попутчик в метро"]
+
+
+def test_my_roles_single_role_message_unchanged():
+    """Обычная одна роль без ';' и переносов — поведение и текст
+    сообщения не должны были измениться после добавления разбивки списков."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    assert ex.user_sessions[UID]["social_roles"] == ["Продавец"]
+    assert "✅ Добавлено: Продавец (1/20)" in vk.last_message
+
+
+def test_my_roles_blank_message_does_not_add_empty_role():
+    """Сообщение, в котором после разбивки не нашлось ни одной роли
+    (например только пробелы/точки с запятой), не должно добавлять
+    пустую роль и не должно падать."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "   ;  ; \n ")
+    assert ex.user_sessions[UID]["social_roles"] == []
+    assert "не нашёл" in vk.last_message.lower()
+
+
+def test_my_roles_resume_screen_shows_detailed_breakdown():
+    """Экран 'Продолжим с того места?' должен показывать не только общее
+    число ролей, а разбивку по частям и текущий этап (запрошено
+    пользователем: 'можно больше информации?')."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Друг для Саши")
+    ex.handle_message(UID, "💾 Сохранить и выйти")
+
+    ex2, vk2, _ = make(MyRolesExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+
+    msg = vk.last_message
+    assert "Всего записано: 2" in msg
+    assert "Социальных: 1" in msg
+    assert "Межличностных: 1" in msg
+    assert "Внутриличностных: 0" in msg
+    assert "Часть 2: Межличностные роли" in msg
+
+
+def test_my_roles_resume_screen_shows_analysis_progress_and_today_status():
+    """На этапе разбора экран возобновления должен показывать, сколько
+    ролей уже разобрано и разобрана ли сегодняшняя роль."""
+    ex, vk, api = make(MyRolesExercise)
+    ex._today_str = lambda: "2026-08-31"
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")   # social(1) -> interpersonal, без переспроса
+    ex.handle_message(UID, "➡️ Продолжить")   # interpersonal(0) -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> intrapersonal
+    ex.handle_message(UID, "➡️ Продолжить")   # intrapersonal(0) -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> analyze, роль 1, шаг 1
+
+    ex2, vk2, _ = make(MyRolesExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    assert "Сейчас: Разбор ролей" in vk.last_message
+    assert "Разобрано ролей: 0 из 1" in vk.last_message
+    assert "Сегодня ещё не разбирал" in vk.last_message
+
+    ex2.handle_message(UID, "Продолжить ✅")
+    ex2.handle_message(UID, "идеально")
+    ex2.handle_message(UID, "ужасно")  # роль разобрана сегодня
+
+    ex3, vk3, _ = make(MyRolesExercise)
+    ex3.vk, ex3.api = ex.vk, api
+    # роль уже разобрана и была последней -> упражнение завершилось,
+    # сохранённого прогресса больше нет — start() покажет инструкцию, а не
+    # экран возобновления
+    ex3.start(UID)
+    assert "Продолжим с того места" not in vk.last_message
+
+
 def test_my_roles_intrapersonal_target_is_10_not_20():
     """Часть 3 (внутриличностные роли) — цель 10, в отличие от частей 1 и 2 (по 20)."""
     ex, vk, api = make(MyRolesExercise)
     ex.start(UID)
     ex.handle_message(UID, "➡️ Продолжить")  # social -> interpersonal, 0 ролей
+    ex.handle_message(UID, "✅ Да, дальше")
     ex.handle_message(UID, "➡️ Продолжить")  # interpersonal -> intrapersonal, 0 ролей
+    ex.handle_message(UID, "✅ Да, дальше")
     assert ex.user_sessions[UID]["phase"] == "intrapersonal"
 
     ex.handle_message(UID, "Смелый")
@@ -595,7 +807,8 @@ def test_my_roles_daily_limit_blocks_second_role_same_day():
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "Роль Б")
     ex.handle_message(UID, "➡️ Продолжить")
-    ex.handle_message(UID, "➡️ Продолжить")  # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "➡️ Продолжить")  # intrapersonal: 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "идеально 1")
     ex.handle_message(UID, "ужасно 1")        # роль 1 разобрана сегодня
 
@@ -700,8 +913,10 @@ def test_my_roles_resume_mid_analysis_does_not_lose_ideal_answer():
     ex.start(UID)
     ex.handle_message(UID, "Продавец")
     ex.handle_message(UID, "➡️ Продолжить")
-    ex.handle_message(UID, "➡️ Продолжить")  # 0 interpersonal ролей -> intrapersonal
-    ex.handle_message(UID, "➡️ Продолжить")  # 0 intrapersonal ролей -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 interpersonal ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> intrapersonal
+    ex.handle_message(UID, "➡️ Продолжить")  # 0 intrapersonal ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "всё отлично")     # -> шаг 2 ('current_ideal' сохранён)
 
     # "перезапуск бота": новый объект, тот же api (тот же сохранённый прогресс)

@@ -2,7 +2,9 @@ from datetime import date
 from .base import BaseExercise
 from keyboards import (
     exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard, continue_keyboard,
+    confirm_skip_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS,
 )
 
 
@@ -49,15 +51,11 @@ class MyRolesExercise(BaseExercise):
             session['_resume_prompt'] = True
             self.user_sessions[user_id] = session
 
-            total = (len(session.get('social_roles', [])) +
-                      len(session.get('interpersonal_roles', [])) +
-                      len(session.get('intrapersonal_roles', [])))
-
             self.send_message(
                 user_id,
-                "🎭 МОИ РОЛИ\n\n"
-                f"· Ты уже записал: {total} ролей\n\n"
-                "🕯️ Продолжим с того места, где остановился?",
+                "🎭 МОИ РОЛИ\n\n" +
+                self._progress_summary(session) +
+                "\n\n🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
             )
             return
@@ -65,6 +63,45 @@ class MyRolesExercise(BaseExercise):
         session = self._fresh_session()
         self.user_sessions[user_id] = session
         self._show_instruction(user_id, session)
+
+    PHASE_LABELS = {
+        'social': 'Часть 1: Социальные роли',
+        'interpersonal': 'Часть 2: Межличностные роли',
+        'intrapersonal': 'Часть 3: Внутриличностные роли',
+        'analyze': 'Разбор ролей',
+    }
+
+    def _progress_summary(self, session):
+        """Подробная сводка для экрана 'Продолжим с того места?' — сколько
+        ролей записано по каждой части, на каком этапе сейчас пользователь,
+        и (для этапа разбора) сколько ролей разобрано и разобрана ли уже
+        сегодняшняя."""
+        social = self._count_roles(session.get('social_roles', []))
+        interpersonal = self._count_roles(session.get('interpersonal_roles', []))
+        intrapersonal = self._count_roles(session.get('intrapersonal_roles', []))
+        total = social + interpersonal + intrapersonal
+
+        phase = session.get('phase', 'social')
+        phase_label = self.PHASE_LABELS.get(phase, phase)
+
+        lines = [
+            f"· Всего записано: {total} ролей",
+            f"  — Социальных: {social}",
+            f"  — Межличностных: {interpersonal}",
+            f"  — Внутриличностных: {intrapersonal}",
+            f"· Сейчас: {phase_label}",
+        ]
+
+        if phase == 'analyze':
+            all_roles_count = social + interpersonal + intrapersonal
+            analyzed = len(session.get('analysis_results', []))
+            lines.append(f"· Разобрано ролей: {analyzed} из {all_roles_count}")
+            if self._used_analysis_today(session):
+                lines.append("· Сегодняшняя роль уже разобрана ✅")
+            else:
+                lines.append("· Сегодня ещё не разбирал(а) роль")
+
+        return "\n".join(lines)
 
     def _show_instruction(self, user_id, session):
         phase = session.get('phase', 'social')
@@ -81,6 +118,7 @@ class MyRolesExercise(BaseExercise):
                 "· Продавец, гуляющий в парке\n"
                 "· Смотрящий на деревья\n\n"
                 "📝 Пиши по одной роли за раз (до 20, можно и меньше)\n"
+                "Или вставь сразу список — каждая роль с новой строки, я разложу по пунктам\n"
                 "💡 Спешить некуда: комфортнее добавлять не больше одной роли в день,\n"
                 "чтобы каждую успеть прочувствовать\n\n"
                 "Когда закончишь раздел — жми «➡️ Продолжить»",
@@ -96,6 +134,7 @@ class MyRolesExercise(BaseExercise):
                 "· Отец для Алины\n"
                 "· Рабочий для начальника Александра\n\n"
                 "📝 Пиши по одной роли за раз (до 20, можно и меньше)\n"
+                "Или вставь сразу список — каждая роль с новой строки, я разложу по пунктам\n"
                 "💡 Одной роли в день вполне достаточно",
                 exercise_keyboard()
             )
@@ -108,6 +147,7 @@ class MyRolesExercise(BaseExercise):
                 "· Злой, Ленивый, Застенчивый\n"
                 "· Щедрый, Тревожный, Смелый\n\n"
                 "📝 Пиши по одной роли за раз (до 10, можно и меньше)\n"
+                "Или вставь сразу список — каждая роль с новой строки, я разложу по пунктам\n"
                 "💡 Одной роли в день вполне достаточно",
                 exercise_keyboard()
             )
@@ -149,31 +189,72 @@ class MyRolesExercise(BaseExercise):
             self._handle_cancel(user_id, session)
             return
 
+        if session.get('_confirm_empty_phase'):
+            if text_lower in CONFIRM_YES_TEXTS:
+                session.pop('_confirm_empty_phase', None)
+                self._advance_phase(user_id, session)
+                return
+            if text_lower in CONFIRM_NO_TEXTS:
+                session.pop('_confirm_empty_phase', None)
+                self._show_instruction(user_id, session)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «✅ Да, дальше» или «✏️ Нет, буду писать».",
+                confirm_skip_keyboard()
+            )
+            return
+
         if text_lower in ADVANCE_TEXTS:
             self._handle_phase_complete(user_id, session)
             return
 
         phase = session.get('phase')
-        
+
         if phase == 'social':
-            session['social_roles'].append(text)
+            items = self._split_roles(text)
+            session['social_roles'].extend(items)
             self.save_progress(user_id, session)
-            self._send_role_added(user_id, text, len(session['social_roles']))
+            self._send_roles_added(user_id, items, self._count_roles(session['social_roles']))
 
         elif phase == 'interpersonal':
-            session['interpersonal_roles'].append(text)
+            items = self._split_roles(text)
+            session['interpersonal_roles'].extend(items)
             self.save_progress(user_id, session)
-            self._send_role_added(user_id, text, len(session['interpersonal_roles']))
+            self._send_roles_added(user_id, items, self._count_roles(session['interpersonal_roles']))
 
         elif phase == 'intrapersonal':
-            session['intrapersonal_roles'].append(text)
+            items = self._split_roles(text)
+            session['intrapersonal_roles'].extend(items)
             self.save_progress(user_id, session)
-            self._send_role_added(user_id, text, len(session['intrapersonal_roles']), target=10)
+            self._send_roles_added(user_id, items, self._count_roles(session['intrapersonal_roles']), target=10)
 
         elif phase == 'analyze':
             self._handle_analysis(user_id, text, session)
 
-    def _send_role_added(self, user_id, text, count, target=20):
+    def _split_roles(self, text):
+        """Разбивает вставленный текст на отдельные роли — по переносам
+        строк, а внутри каждой строки ещё и по ';' (частый случай: человек
+        вставляет сразу целый список одним сообщением, каждая роль на
+        своей строке и/или через точку с запятой). Пустые куски и висящие
+        знаки препинания по краям убираются."""
+        items = []
+        for line in text.split('\n'):
+            for part in line.split(';'):
+                cleaned = part.strip(' \t;,.-—•·')
+                if cleaned:
+                    items.append(cleaned)
+        return items
+
+    def _send_roles_added(self, user_id, items, count, target=20):
+        if not items:
+            self.send_message(
+                user_id,
+                "🤔 Не нашёл в этом сообщении ни одной роли — попробуй ещё раз.",
+                exercise_keyboard()
+            )
+            return
+
         if count >= target:
             self.send_message(
                 user_id,
@@ -181,17 +262,56 @@ class MyRolesExercise(BaseExercise):
                 "Нажми «➡️ Продолжить», чтобы перейти дальше.",
                 exercise_keyboard()
             )
-        else:
+            return
+
+        if len(items) == 1:
             self.send_message(
                 user_id,
-                f"✅ Добавлено: {text} ({count}/{target})\n\n"
+                f"✅ Добавлено: {items[0]} ({count}/{target})\n\n"
                 "Пиши следующую роль, а когда закончишь раздел — жми «➡️ Продолжить»",
                 exercise_keyboard()
             )
+        else:
+            listed = "\n".join(f"{i+1}. {item}" for i, item in enumerate(items))
+            self.send_message(
+                user_id,
+                f"✅ Добавлено ролей: {len(items)}\n"
+                f"{listed}\n\n"
+                f"Всего в этом разделе: {count}/{target}\n\n"
+                "Можешь писать по одной роли или сразу списком (каждая — с новой строки) — "
+                "а когда закончишь раздел, жми «➡️ Продолжить»",
+                exercise_keyboard()
+            )
+
+    PHASE_ROLE_KEY = {
+        'social': 'social_roles',
+        'interpersonal': 'interpersonal_roles',
+        'intrapersonal': 'intrapersonal_roles',
+    }
 
     def _handle_phase_complete(self, user_id, session):
         phase = session.get('phase')
-        
+        role_key = self.PHASE_ROLE_KEY.get(phase)
+
+        if role_key is not None and len(session.get(role_key, [])) == 0:
+            # Пользователь жмёт "Продолжить", ничего не записав в этом
+            # разделе — переспрашиваем перед тем, как оставить раздел
+            # пустым, вместо того чтобы молча пропускать его.
+            session['_confirm_empty_phase'] = True
+            self.save_progress(user_id, session)
+            self.send_message(
+                user_id,
+                "🤔 Ты пока ничего не написал(а) в этом разделе.\n"
+                "Точно хочешь оставить его пустым и пойти дальше?",
+                confirm_skip_keyboard()
+            )
+            return
+
+        self._advance_phase(user_id, session)
+
+    def _advance_phase(self, user_id, session):
+        phase = session.get('phase')
+
         if phase == 'social':
             session['phase'] = 'interpersonal'
             self.save_progress(user_id, session)
@@ -210,9 +330,25 @@ class MyRolesExercise(BaseExercise):
             self._analyze_roles(user_id, session)
 
     def _all_roles(self, session):
-        return (session.get('social_roles', []) +
-                session.get('interpersonal_roles', []) +
-                session.get('intrapersonal_roles', []))
+        """Собирает роли из всех 3 частей в один список для анализа.
+
+        Каждый элемент дополнительно прогоняется через _split_roles — это
+        самовосстановление для старых записей, сохранённых ДО того, как
+        появилась разбивка вставленного списка на пункты (если пользователь
+        когда-то вставил сразу несколько ролей одним сообщением, и это
+        сохранилось как одна строка-'простыня' с ';' и переносами строк).
+        Для уже нормальных (атомарных) ролей это no-op — _split_roles
+        вернёт список из одного того же элемента."""
+        roles = []
+        for key in ('social_roles', 'interpersonal_roles', 'intrapersonal_roles'):
+            for item in session.get(key, []):
+                roles.extend(self._split_roles(item))
+        return roles
+
+    def _count_roles(self, roles):
+        """Число атомарных ролей в списке — так же самовосстанавливается
+        для старых 'простынёй' (см. _all_roles)."""
+        return sum(len(self._split_roles(item)) for item in roles)
 
     def _today_str(self):
         return date.today().isoformat()
@@ -260,7 +396,8 @@ class MyRolesExercise(BaseExercise):
             f"📌 Роль: {role}\n\n"
             f"Немного игры: представь, что тебе заплатят $100,000,000 —\n"
             f"но только если сыграешь эту роль просто идеально.\n\n"
-            f"✨ Как это будет выглядеть, если сыграть её идеально?",
+            f"✨ Как это будет выглядеть, если сыграть её идеально?\n\n"
+            f"💬 Напиши свой ответ обычным сообщением — кнопка ниже нужна, только если хочешь сохранить и выйти",
             cancel_keyboard()
         )
 
@@ -280,7 +417,8 @@ class MyRolesExercise(BaseExercise):
             self.send_message(
                 user_id,
                 f"📌 Роль: {role}\n\n"
-                f"А теперь наоборот 😄 Как это будет выглядеть, если сыграть роль просто ужасно?",
+                f"А теперь наоборот 😄 Как это будет выглядеть, если сыграть роль просто ужасно?\n\n"
+                f"💬 Напиши свой ответ обычным сообщением — кнопка ниже нужна, только если хочешь сохранить и выйти",
                 cancel_keyboard()
             )
         else:
@@ -306,7 +444,8 @@ class MyRolesExercise(BaseExercise):
             self.send_message(
                 user_id,
                 f"📌 Роль: {role}\n\n"
-                f"А теперь наоборот 😄 Как это будет выглядеть, если сыграть роль просто ужасно?",
+                f"А теперь наоборот 😄 Как это будет выглядеть, если сыграть роль просто ужасно?\n\n"
+                f"💬 Напиши свой ответ обычным сообщением — кнопка ниже нужна, только если хочешь сохранить и выйти",
                 cancel_keyboard()
             )
             return
