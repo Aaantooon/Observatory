@@ -514,6 +514,31 @@ def test_my_roles_full_flow_with_analysis_parsing():
     assert result["analysis"][0]["terrible"] == "провал"
 
 
+def test_two_users_do_not_share_session_state():
+    """Один и тот же объект упражнения (как в реальном боте — один
+    HappinessListExercise на всех пользователей) не должен путать данные
+    двух разных user_id, идущих параллельно."""
+    ex, vk, api = make(HappinessListExercise)
+    UID_A, UID_B = 111, 222
+
+    ex.start(UID_A)
+    ex.start(UID_B)
+    ex.handle_message(UID_A, "Кофе утром — 8")
+    ex.handle_message(UID_B, "Прогулка — 9")
+    ex.handle_message(UID_A, "Музыка — 7")
+
+    assert [i["text"] for i in ex.user_sessions[UID_A]["items"]] == ["Кофе утром —", "Музыка —"]
+    assert [i["text"] for i in ex.user_sessions[UID_B]["items"]] == ["Прогулка —"]
+
+    ex.handle_message(UID_B, "💾 Сохранить и начать заново")
+    assert UID_A in ex.user_sessions, "Действие пользователя B не должно закрывать сессию пользователя A"
+    assert len(ex.user_sessions[UID_A]["items"]) == 2, "Данные пользователя A не должны были пострадать"
+
+    result_for_b = [r for r in api.results if r["user_vk_id"] == UID_B]
+    assert len(result_for_b) == 1
+    assert result_for_b[0]["result_data"]["items"][0]["text"] == "Прогулка —"
+
+
 def test_stress_search_saves_result_with_correct_exercise_type():
     """Результат должен сохраняться под exercise_type='stress_search',
     как и остальные 5 упражнений — иначе он не попадёт в 'Мои результаты'

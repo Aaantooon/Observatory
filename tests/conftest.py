@@ -52,6 +52,9 @@ class FakeAPIClient:
         self.active_reviews = {}
         self.comments = []
         self.sent_for_review = []
+        self.created_notifications = []
+        self.marked_notifications_sent = []
+        self.marked_comments_sent = []
 
     def save_progress(self, user_vk_id, exercise_type, data):
         self.progress_store[(user_vk_id, exercise_type)] = dict(data)
@@ -115,10 +118,20 @@ class FakeAPIClient:
         return []
 
     def mark_notification_sent(self, notification_id):
+        self.marked_notifications_sent.append(notification_id)
         return True
 
     def mark_comment_sent(self, review_id, comment_index):
+        self.marked_comments_sent.append((review_id, comment_index))
         return None
+
+    def create_notification(self, user_vk_id, exercise_type, schedule_type, schedule_data):
+        entry = {
+            "user_vk_id": user_vk_id, "exercise_type": exercise_type,
+            "schedule_type": schedule_type, "schedule_data": schedule_data,
+        }
+        self.created_notifications.append(entry)
+        return {"id": len(self.created_notifications), **entry}
 
 
 class FakeNotificationSystem:
