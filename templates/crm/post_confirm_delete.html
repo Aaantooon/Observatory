@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <h1 style="color: #e2c044; font-weight: 300;">Удалить пост?</h1>
+    <div class="card-glass" style="margin-bottom:16px;">
+        <strong style="color: #e2c044;">{{ post.get_platform_display }}</strong>
+        <span style="color: #8a9aaa;"> · {{ post.publish_date|date:"d.m.Y H:i" }}</span>
+        <p style="color: #d4d9e6;">{{ post.text }}</p>
+    </div>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary-custom" style="background:#e05a5a;">Да, удалить</button>
+        <a href="{% url 'crm_post_list' %}" style="margin-left:10px;color:#aab3c9;">Отмена</a>
+    </form>
+</div>
+{% endblock %}

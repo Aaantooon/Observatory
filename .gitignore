@@ -88,3 +88,6 @@ docker-compose.override.yml
 project_code.txt
 structure.txt
 observatory.db.env
+
+# Бэкапы БД (scripts/backup_db.sh) — не в git, только на сервере
+backups/

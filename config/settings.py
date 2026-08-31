@@ -18,6 +18,67 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['']:
         ALLOWED_HOSTS = ['localhost', '127.0.0.1', '5.42.103.203', 'putnabludatel.ru', 'www.putnabludatel.ru']
 
+# ===== Мониторинг ошибок (Sentry) =====
+# Полностью опционально: без SENTRY_DSN в .env — просто ничего не делает.
+# Чтобы включить: добавить SENTRY_DSN=<адрес из sentry.io> в .env и
+# установить пакет sentry-sdk (pip install sentry-sdk).
+SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            traces_sample_rate=0.1,
+            send_default_pii=False,
+        )
+    except ImportError:
+        pass  # sentry-sdk не установлен — просто работаем без мониторинга
+
+# ===== Логирование =====
+# Без этого блока Django всё равно выводит logger.exception(...) в stderr
+# (который systemd/journalctl перехватывает), но с явным форматом и
+# уровнями — понятнее искать проблему в логах.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'myapp': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'crm': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
 # ===== INSTALLED_APPS =====
 INSTALLED_APPS = [
     # Стандартные приложения Django
@@ -192,6 +253,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Защита от перебора/шторма запросов к bot_api. Лимиты щедрые — бот
+    # опрашивает несколько эндпоинтов на каждое событие VK longpoll — это
+    # просто верхняя граница, а не рабочий предел обычной нагрузки.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/minute',
+        'user': '300/minute',
+    },
 }
 
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
@@ -218,6 +290,12 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 3600
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Верхняя граница на размер одной загрузки (аватар и т.п.) — защита от
+# заполнения диска повторными большими файлами. Отдельная явная проверка
+# размера/типа для аватара — в myapp/views.py: edit_profile.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 МБ
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 МБ
 
 ADMIN_SITE_HEADER = "Путь Наблюдателя - Панель управления"
 ADMIN_SITE_TITLE = "Путь Наблюдателя"

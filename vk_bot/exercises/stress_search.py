@@ -33,6 +33,32 @@ class StressSearchExercise:
     def _get_separator(self):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
+    def _score_emoji(self, score):
+        """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""
+        if not isinstance(score, (int, float)):
+            return "⚪"
+        if score <= 3:
+            return "🔴"
+        elif score <= 6:
+            return "🟡"
+        return "🟢"
+
+    def _milestone_line(self, count, target):
+        """Поздравление на четверти/половине/трёх четвертях пути к target —
+        None, если count не попадает ни на одну из этих отметок."""
+        if not target:
+            return None
+        checkpoints = sorted(set(x for x in (target // 4, target // 2, target * 3 // 4) if x))
+        if count not in checkpoints:
+            return None
+        idx = checkpoints.index(count)
+        phrases = [
+            "🌟 Четверть пути позади!",
+            "🔥 Уже половина пути!",
+            "🚀 Три четверти позади — почти у цели!",
+        ]
+        return phrases[idx] if idx < len(phrases) else f"🌟 {count}/{target} позади!"
+
     def _get_question1_hint(self):
         return (
             "· Как должно быть? Это противоположность тому, что раздражает.\n\n"
@@ -185,6 +211,9 @@ class StressSearchExercise:
             "· Что выводит из себя, забирает энергию?\n"
             "· Запиши это и поставь оценку от 1 до 10\n\n"
             "📌 Пример: Работа 8\n\n"
+            "💡 Можно и списком — по одному на строке, или всё сразу одной строкой "
+            "(тогда каждая оценка от 1 до 10 закрывает фразу перед собой):\n"
+            "Рецепт не выходит 8 вода не фильтруется 7 шум мешает думать 6\n\n"
             f"{self._get_separator()}\n"
             "➡️ «Продолжить» — когда запишешь все образы стресса, перейти к разбору\n"
             "💾 «Сохранить и начать заново» — сохранить как есть и начать новый путь",
@@ -338,12 +367,15 @@ class StressSearchExercise:
         reply = random.choice(replies)
 
         progress = self._get_progress_bar(count, target=100)
+        milestone = self._milestone_line(count, target=100)
+        milestone_text = f"{milestone}\n" if milestone else ""
 
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ #{count}\n\n"
-            f"📌 «{item}» — {rate}/10\n\n"
-            f"· {progress}\n\n"
+            f"📌 {self._score_emoji(rate)} «{item}» — {rate}/10\n\n"
+            f"· {progress}\n"
+            f"{milestone_text}\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
             f"· Пиши следующий образ, а когда закончишь — жми «Продолжить»",
@@ -420,8 +452,9 @@ class StressSearchExercise:
 
         count = len(session['items'])
         progress = self._get_progress_bar(count, target=100)
+        milestone = self._milestone_line(count, target=100)
         listed = "\n".join(
-            f"{i + 1}. «{item_text}» — {rate}/10"
+            f"{i + 1}. {self._score_emoji(rate)} «{item_text}» — {rate}/10"
             for i, (item_text, rate) in enumerate(parsed_items)
         )
 
@@ -431,6 +464,8 @@ class StressSearchExercise:
             f"· {progress}\n"
             f"Всего: {count}/100\n"
         )
+        if milestone:
+            message += f"{milestone}\n"
         if note:
             message += f"\n⚠️ {note}\n"
         message += (
@@ -523,7 +558,7 @@ class StressSearchExercise:
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ {index + 1}/{len(items)}\n\n"
-            f"📌 «{item['text']}» — {item['rate']}/10\n\n"
+            f"📌 {self._score_emoji(item['rate'])} «{item['text']}» — {item['rate']}/10\n\n"
             f"❓ Вопрос 1/4:\n"
             f"{self._get_question1_hint()}\n\n"
             f"{self._get_separator()}\n"
@@ -552,7 +587,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 1/4:\n"
                 f"· Как должно быть?\n\n"
                 f"{self._get_separator()}\n"
@@ -563,7 +598,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -574,7 +609,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
@@ -586,7 +621,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
@@ -628,7 +663,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -661,7 +696,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {percent}%\n\n"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
@@ -678,7 +713,7 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 «{item_text}» — {item_rate}/10\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
                 f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
@@ -737,7 +772,7 @@ class StressSearchExercise:
 
         total = len(session.get('items', []))
         top = sorted(session.get('items', []), key=lambda x: x['rate'], reverse=True)[:3]
-        top_text = "\n".join([f"  · {b['text']} ({b['rate']}/10)" for b in top])
+        top_text = "\n".join([f"  · {self._score_emoji(b['rate'])} {b['text']} ({b['rate']}/10)" for b in top])
 
         analyzed = len(session.get('answers', []))
         avg_percent = 0

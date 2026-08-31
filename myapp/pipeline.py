@@ -1,5 +1,3 @@
-cd /root/Observatory
-cat > myapp/pipeline.py << 'EOF'
 import requests
 from django.core.files.base import ContentFile
 from django.contrib.auth.models import User
@@ -25,4 +23,3 @@ def save_vk_avatar(backend, user, response, *args, **kwargs):
                     )
             except Exception:
                 pass
-EOF

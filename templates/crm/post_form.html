@@ -1,17 +1,25 @@
 {% extends 'base.html' %}
 {% block content %}
 <div style="max-width: 600px; margin: 0 auto;">
-    <h1 style="color: #e2c044; font-weight: 300;">Новый пост</h1>
+    <h1 style="color: #e2c044; font-weight: 300;">{% if post %}Редактировать пост{% else %}Новый пост{% endif %}</h1>
     <form method="post">
         {% csrf_token %}
         <select name="platform" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
-            <option value="vk">VK</option>
-            <option value="telegram">Telegram</option>
-            <option value="site">Сайт</option>
+            {% for value, label in platform_choices %}
+            <option value="{{ value }}" {% if post.platform == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
         </select>
-        <textarea name="text" rows="5" placeholder="Текст поста" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;"></textarea>
-        <input type="datetime-local" name="publish_date" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
+        <textarea name="text" rows="5" placeholder="Текст поста" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">{% if post %}{{ post.text }}{% endif %}</textarea>
+        <input type="datetime-local" name="publish_date" value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
+        <select name="status" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if post.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" class="btn-primary-custom">Сохранить</button>
+        {% if post %}
+        <a href="{% url 'crm_post_delete' post.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>
+        {% endif %}
     </form>
 </div>
 {% endblock %}

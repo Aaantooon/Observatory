@@ -9,6 +9,8 @@
             <strong style="color: #e2c044;">{{ p.get_platform_display }}</strong>
             <span style="color: #8a9aaa;"> · {{ p.get_status_display }} · {{ p.publish_date|date:"d.m.Y H:i" }}</span>
             <p style="color: #d4d9e6;">{{ p.text|truncatewords:20 }}</p>
+            <a href="{% url 'crm_post_edit' p.id %}" style="color:#e2c044;">Редактировать</a>
+            <a href="{% url 'crm_post_delete' p.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>
         </div>
     {% empty %}<p style="color:#5a6a7e;">Постов пока нет.</p>{% endfor %}
     </div>

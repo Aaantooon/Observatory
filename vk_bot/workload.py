@@ -88,6 +88,35 @@ def _active_days_last_week(results, today=None):
     return len(days)
 
 
+def _week_activity_strip(results, today=None):
+    """Полоса из 7 клеток (старый день → сегодня): ✅, если в этот день
+    было завершено хотя бы одно упражнение, иначе ⬜."""
+    today = today or date.today()
+    active = set()
+    for r in results or []:
+        completed_at = r.get('completed_at')
+        if not completed_at:
+            continue
+        try:
+            d = datetime.fromisoformat(str(completed_at).replace('Z', '+00:00')).date()
+        except (ValueError, TypeError):
+            continue
+        active.add(d)
+
+    days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    return "".join("✅" if d in active else "⬜" for d in days)
+
+
+def format_progress_map(results):
+    """🗺️ Какие из 6 упражнений пользователь уже проходил хотя бы раз."""
+    done = set(r.get('exercise_type') for r in results or [])
+    lines = ["🗺️ Твой путь:"]
+    for ex in EXERCISE_PLAN:
+        icon = "✅" if ex['type'] in done else "⬜"
+        lines.append(f"{icon} {ex['title']}")
+    return "\n".join(lines)
+
+
 def compute_load_level(results, today=None):
     """Гибкая нагрузка: новый или редко занимающийся пользователь получает
     спокойный темп, регулярно занимающийся — более насыщенный."""
@@ -144,5 +173,9 @@ def format_daily_plan_message(results, today=None):
     lines.append(f"⏱️ Итого примерно: ~{total_minutes} мин")
     lines.append("")
     lines.append("💡 Темп подстраивается сам: чем регулярнее занимаешься — тем больше бот предлагает")
+    lines.append("")
+    lines.append(f"📆 Неделя: {_week_activity_strip(results, today=today)}")
+    lines.append("")
+    lines.append(format_progress_map(results))
 
     return "\n".join(lines)

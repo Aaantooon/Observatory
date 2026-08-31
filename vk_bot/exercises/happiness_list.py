@@ -66,7 +66,7 @@ class HappinessListExercise(BaseExercise):
     def _show_items(self, user_id, items):
         message = "📋 Твой список счастья:\n\n"
         for i, item in enumerate(items, 1):
-            message += f"{i}. {item.get('text')} — {item.get('score')}/10\n"
+            message += f"{i}. {self._score_emoji(item.get('score', 0))} {item.get('text')} — {item.get('score')}/10\n"
         
         message += f"\nВсего: {len(items)}/20 пунктов\n"
         message += f"{self._get_progress_bar(len(items), target=20)}\n\n"
@@ -147,6 +147,8 @@ class HappinessListExercise(BaseExercise):
 
         count = len(session['items'])
         progress = self._get_progress_bar(count, target=20)
+        milestone = self._milestone_line(count, target=20)
+        milestone_text = f"{milestone}\n" if milestone else ""
 
         if count >= 20:
             self.send_message(
@@ -160,8 +162,9 @@ class HappinessListExercise(BaseExercise):
             self.send_message(
                 user_id,
                 f"✅ Добавлено! {count}/20\n"
-                f"{progress}\n\n"
-                f"📌 {item_text} — {score}/10\n\n"
+                f"{progress}\n"
+                f"{milestone_text}\n"
+                f"📌 {self._score_emoji(score)} {item_text} — {score}/10\n\n"
                 "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
                 exercise_keyboard()
             )
@@ -188,7 +191,7 @@ class HappinessListExercise(BaseExercise):
             f"📋 Собрано: {len(items)} пунктов счастья\n"
             f"📊 Средняя оценка: {avg_score:.1f}/10\n\n"
             f"Топ-3:\n" + "\n".join(
-                f"  · {i['text']} ({i['score']}/10)" 
+                f"  · {self._score_emoji(i['score'])} {i['text']} ({i['score']}/10)"
                 for i in sorted(items, key=lambda x: x['score'], reverse=True)[:3]
             ) + "\n\n✨ Сохраняй этот список и дополняй!",
             main_menu()

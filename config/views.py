@@ -26,9 +26,9 @@ def home(request):
     
     return render(request, 'home.html', context)
 
-def about(request):
-    return render(request, 'about.html', {
-        'title': 'О проекте — Путь наблюдателя'
+def privacy_policy_view(request):
+    return render(request, 'privacy_policy.html', {
+        'title': 'Политика конфиденциальности — Путь наблюдателя'
     })
 
 def map_reactflow_view(request):

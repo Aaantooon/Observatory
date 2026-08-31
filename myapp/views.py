@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
@@ -7,6 +8,8 @@ from .models import Observation, Module, UserCourseProgress, GameAssociation, Us
 import json
 import csv
 from datetime import date
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -144,8 +147,9 @@ def complete_module_api(request):
         })
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception("Ошибка при завершении модуля курса (user=%s)", request.user.id)
+        return JsonResponse({'error': 'Внутренняя ошибка сервера'}, status=500)
 
 
 @login_required
@@ -175,8 +179,9 @@ def association_api(request):
                 'created_at': assoc.created_at.isoformat()
             }
         })
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+    except Exception:
+        logger.exception("Ошибка при сохранении ассоциации (user=%s)", request.user.id)
+        return JsonResponse({'error': 'Не удалось сохранить'}, status=400)
 
 
 @login_required
@@ -249,8 +254,16 @@ def edit_profile(request):
         profile.notifications_enabled = request.POST.get('notifications') == 'on'
         
         if request.FILES.get('avatar'):
-            profile.avatar = request.FILES['avatar']
-        
+            avatar_file = request.FILES['avatar']
+            max_avatar_size = 5 * 1024 * 1024  # 5 МБ
+            if avatar_file.size > max_avatar_size:
+                messages.error(request, '❌ Файл слишком большой (максимум 5 МБ)')
+                return render(request, 'edit_profile.html', {'profile': profile})
+            if not (avatar_file.content_type or '').startswith('image/'):
+                messages.error(request, '❌ Аватар должен быть изображением')
+                return render(request, 'edit_profile.html', {'profile': profile})
+            profile.avatar = avatar_file
+
         profile.save()
         messages.success(request, '✅ Профиль обновлён')
         return redirect('profile')
@@ -385,5 +398,6 @@ def mindmap_save_position(request):
         )
 
         return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+    except Exception:
+        logger.exception("Ошибка при сохранении позиции узла карты (user=%s)", request.user.id)
+        return JsonResponse({'error': 'Не удалось сохранить позицию'}, status=400)

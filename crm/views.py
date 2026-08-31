@@ -1,8 +1,11 @@
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from bot_api.models import User, Result, Review, Post
 from myapp.models import UserCourseProgress
+
+logger = logging.getLogger(__name__)
 
 
 @staff_member_required
@@ -20,7 +23,7 @@ def client_detail(request, user_id):
     try:
         course_progress = UserCourseProgress.objects.filter(user__vk_id=client.vk_id).first()
     except Exception:
-        pass
+        logger.exception("Не удалось загрузить прогресс курса для клиента vk_id=%s", client.vk_id)
     return render(request, 'crm/client_detail.html', {
         'client': client,
         'results': results,
@@ -73,7 +76,33 @@ def post_create(request):
             platform=request.POST.get('platform'),
             text=request.POST.get('text'),
             publish_date=request.POST.get('publish_date'),
-            status='scheduled'
+            status=request.POST.get('status', 'draft'),
         )
         return redirect('crm_post_list')
-    return render(request, 'crm/post_form.html')
+    return render(request, 'crm/post_form.html', {'platform_choices': Post.PLATFORM_CHOICES, 'status_choices': Post.STATUS_CHOICES})
+
+
+@staff_member_required
+def post_edit(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    if request.method == 'POST':
+        post.platform = request.POST.get('platform')
+        post.text = request.POST.get('text')
+        post.publish_date = request.POST.get('publish_date')
+        post.status = request.POST.get('status', post.status)
+        post.save()
+        return redirect('crm_post_list')
+    return render(request, 'crm/post_form.html', {
+        'post': post,
+        'platform_choices': Post.PLATFORM_CHOICES,
+        'status_choices': Post.STATUS_CHOICES,
+    })
+
+
+@staff_member_required
+def post_delete(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    if request.method == 'POST':
+        post.delete()
+        return redirect('crm_post_list')
+    return render(request, 'crm/post_confirm_delete.html', {'post': post})

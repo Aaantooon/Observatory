@@ -58,3 +58,29 @@ class BaseExercise(ABC):
         filled = "▰" * (percent // 5)
         empty = "▱" * (20 - len(filled))
         return f"▰{filled}{empty}▱ {percent}%"
+
+    def _score_emoji(self, score):
+        """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""
+        if not isinstance(score, (int, float)):
+            return "⚪"
+        if score <= 3:
+            return "🔴"
+        elif score <= 6:
+            return "🟡"
+        return "🟢"
+
+    def _milestone_line(self, count, target):
+        """Поздравление на четверти/половине/трёх четвертях пути к target —
+        None, если count не попадает ни на одну из этих отметок."""
+        if not target:
+            return None
+        checkpoints = sorted(set(x for x in (target // 4, target // 2, target * 3 // 4) if x))
+        if count not in checkpoints:
+            return None
+        idx = checkpoints.index(count)
+        phrases = [
+            "🌟 Четверть пути позади!",
+            "🔥 Уже половина пути!",
+            "🚀 Три четверти позади — почти у цели!",
+        ]
+        return phrases[idx] if idx < len(phrases) else f"🌟 {count}/{target} позади!"

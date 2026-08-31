@@ -263,10 +263,11 @@
         <div id="testResult" style="margin-top:16px;display:none;padding:16px;border-radius:10px;text-align:center;"></div>
     </div>
 
+    {{ module.test_questions|json_script:"test-questions-data" }}
     <script>
     document.getElementById('testForm')?.addEventListener('submit', function(e) {
         e.preventDefault();
-        const questions = {{ module.test_questions|safe }};
+        const questions = JSON.parse(document.getElementById('test-questions-data').textContent);
         let correct = 0;
         const total = questions.length;
 
