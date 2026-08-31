@@ -195,6 +195,21 @@ def test_selecting_exercise_starts_each_exercise_by_number():
         assert bh.user_states[UID] == "main"
 
 
+def test_selecting_exercise_sends_clear_spacer_before_starting():
+    """VK не даёт боту стирать чужие сообщения — вместо этого перед стартом
+    упражнения шлём одно длинное 'пустое' сообщение, которое выталкивает
+    хвост старого диалога за пределы экрана (см. _send_clear_spacer)."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Упражнения", "Аня", "И")
+    before = len(vk.sent)
+    bh.handle_message(UID, "2", "Аня", "И")  # список счастья
+    sent_after = vk.sent[before:]
+    assert len(sent_after) >= 2, "Ожидались спейсер + стартовое сообщение упражнения"
+    assert sent_after[0]["message"].count("\n") >= 20, "Спейсер должен быть длинным (много пустых строк)"
+    assert sent_after[0]["message"] != sent_after[-1]["message"]
+
+
 def test_selecting_exercise_stress_search_opens_parts_submenu():
     bh, vk, api = make_handlers()
     _greet(bh)

@@ -89,6 +89,14 @@ class BotHandlers:
         self.notifications = NotificationSystem(vk_session, self.api)
         self.notifications.start()
 
+    def _send_clear_spacer(self, user_id):
+        """VK не даёт боту стереть/скрыть сообщения пользователя — это
+        ограничение платформы. Вместо этого перед стартом нового упражнения
+        шлём одно длинное 'пустое' сообщение: оно выталкивает хвост старой
+        переписки за пределы экрана, и открытие чата выглядит как чистый
+        старт."""
+        self.send_message(user_id, "🌫️" + "\n" * 40)
+
     def send_message(self, user_id, message, keyboard=None):
         self.vk.method('messages.send', {
             'user_id': user_id,
@@ -192,18 +200,23 @@ class BotHandlers:
                 )
             elif "список счастья" in text_clean or "счасть" in text_clean or text_clean == "2":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.happiness_list.start(user_id)
             elif "роли" in text_clean or text_clean == "3":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.my_roles.start(user_id)
             elif "осознанный выбор" in text_clean or "выбор" in text_clean or text_clean == "4":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.conscious_choice.start(user_id)
             elif "дневник" in text_clean or text_clean == "5":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.diary.start(user_id)
             elif "стоп" in text_clean or text_clean == "6":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.stop_technique.start(user_id)
             else:
                 self.send_message(
@@ -222,9 +235,11 @@ class BotHandlers:
                 )
             elif "часть 1" in text_clean or "собрать" in text_clean or text_clean == "1":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.stress_search.start(user_id)
             elif "часть 2" in text_clean or "разобрать" in text_clean or text_clean == "2":
                 self.user_states[user_id] = 'main'
+                self._send_clear_spacer(user_id)
                 self.stress_search.start_part2(user_id)
             else:
                 self.send_message(
