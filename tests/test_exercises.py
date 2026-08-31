@@ -99,7 +99,7 @@ def test_substring_bug_regression_happiness_list():
     ex.handle_message(UID, "Заново начать жизнь — 8")
     session = ex.user_sessions[UID]
     assert len(session["items"]) == 1, "Ответ со словом 'заново' должен был сохраниться как пункт"
-    assert session["items"][0]["text"] == "Заново начать жизнь —"
+    assert session["items"][0]["text"] == "Заново начать жизнь"
     assert session["items"][0]["score"] == 8
 
 
@@ -614,6 +614,28 @@ def test_happiness_list_rejects_invalid_input_without_losing_progress():
     assert len(ex.user_sessions[UID]["items"]) == 1
 
 
+def test_happiness_list_no_duplicate_dash_in_stored_text_and_display():
+    """Живой баг: пользователь пишет 'Текст — 8' (с тире перед оценкой),
+    rsplit оставлял тире внутри item_text, а при показе добавлялось ещё
+    одно ' — {score}/10' — получалось 'Текст — — 8/10'. Тире на конце
+    введённого текста должно срезаться."""
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кофе утром — 8")
+
+    assert ex.user_sessions[UID]["items"][0]["text"] == "Кофе утром"
+    assert "— —" not in vk.last_message, "Не должно быть задвоенного тире в подтверждении"
+    assert "Кофе утром — 8/10" in vk.last_message
+
+    # без тире вообще (просто пробел перед оценкой) — тоже должно работать
+    ex.handle_message(UID, "Прогулка в парке 9")
+    assert ex.user_sessions[UID]["items"][1]["text"] == "Прогулка в парке"
+
+    # дефис вместо длинного тире — тоже срезается
+    ex.handle_message(UID, "Чтение книги - 7")
+    assert ex.user_sessions[UID]["items"][2]["text"] == "Чтение книги"
+
+
 def test_stress_search_rejects_invalid_input_without_losing_progress():
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
@@ -758,16 +780,19 @@ def test_my_roles_full_flow_two_step_analysis():
     assert "ужасно" in vk.last_message.lower()
 
     # шаг 2: "Ужасно" — завершает роль 1, переходит к роли 2, снова шаг 1
-    # (но роль 2 в тот же день заблокирована дневным лимитом — см. ниже)
+    # (но роль 2 в тот же день заблокирована дневным лимитом — сразу
+    # показывается сообщение о лимите, см. ниже)
     ex.handle_message(UID, "провал")
     assert ex.user_sessions[UID]["analysis_index"] == 1
     assert ex.user_sessions[UID]["analysis_step"] == 1
     assert "current_ideal" not in ex.user_sessions[UID]
+    assert "уже разобрана" in vk.last_message.lower()
 
-    # та же дата — роль 2 должна быть заблокирована дневным лимитом
+    # та же дата, обычный текст (не кнопка) — просто напоминание про кнопки,
+    # роль 2 без явного подтверждения "Всё равно продолжить" не начинается
     ex.handle_message(UID, "дружба")
     assert ex.user_sessions[UID]["analysis_index"] == 1, "В тот же день вторая роль не должна начинаться"
-    assert "уже разобрана" in vk.last_message.lower()
+    assert "всё равно продолжить" in vk.last_message.lower()
 
     # новый день — роль 2 (Друг для Саши)
     ex._today_str = lambda: "2026-08-30"
@@ -794,6 +819,68 @@ def test_my_roles_full_flow_two_step_analysis():
     assert result["analysis"][0] == {"role": "Продавец", "ideal": "всё отлично", "terrible": "провал"}
     assert result["analysis"][1] == {"role": "Друг для Саши", "ideal": "дружба", "terrible": "ссора"}
     assert result["analysis"][2] == {"role": "Смелый", "ideal": "смелость", "terrible": "трусость"}
+
+
+def test_my_roles_daily_limit_can_be_overridden_for_one_extra_role():
+    """Пользователь может настоять и разобрать ещё одну роль в тот же день
+    через кнопку «⚠️ Всё равно продолжить» — лимит становится мягким
+    предупреждением, а не жёсткой блокировкой."""
+    ex, vk, api = make(MyRolesExercise)
+    ex._today_str = lambda: "2026-08-31"
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль Б")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль В")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "идеально 1")
+    ex.handle_message(UID, "ужасно 1")        # роль 1 разобрана сегодня
+
+    assert ex.user_sessions[UID]["analysis_index"] == 1
+    assert "снижает" in vk.last_message.lower(), "Должно быть предупреждение об эффективности"
+    assert vk.last_buttons == ["⚠️ Всё равно продолжить", "💾 Сохранить и выйти"]
+
+    ex.handle_message(UID, "⚠️ Всё равно продолжить")
+    assert ex.user_sessions[UID]["analysis_step"] == 1
+    assert "идеально" in vk.last_message.lower(), "После подтверждения роль 2 должна начать разбор"
+    assert ex.user_sessions[UID]["_daily_override_active"] is True
+
+    ex.handle_message(UID, "идеально 2")
+    ex.handle_message(UID, "ужасно 2")        # роль 2 разобрана в переопределённом режиме
+
+    assert ex.user_sessions[UID]["analysis_index"] == 2
+    assert "_daily_override_active" not in ex.user_sessions[UID], "Override не должен переноситься на роль 3"
+
+    # роль 3 в тот же день — лимит снова спрашивает подтверждение, override
+    # не переносится молча на все последующие роли
+    assert "снижает" in vk.last_message.lower()
+    ex.handle_message(UID, "идеально 3")
+    assert ex.user_sessions[UID]["analysis_index"] == 2, "Без нового подтверждения роль 3 не должна начаться"
+
+
+def test_my_roles_daily_limit_prompt_becomes_stale_after_midnight():
+    """Если сообщение о лимите ещё висит на экране, а календарный день уже
+    сменился, следующий текст должен обработаться как обычный ответ, а не
+    как устаревшее напоминание про кнопки."""
+    ex, vk, api = make(MyRolesExercise)
+    ex._today_str = lambda: "2026-08-31"
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль Б")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Продолжить")  # intrapersonal: 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "идеально 1")
+    ex.handle_message(UID, "ужасно 1")
+    assert ex.user_sessions[UID]["_daily_limit_prompt"] is True
+
+    ex._today_str = lambda: "2026-09-01"  # наступил новый день
+    ex.handle_message(UID, "новый идеальный ответ")
+    assert ex.user_sessions[UID]["analysis_step"] == 2, "Должно было обработаться как ответ 'Идеально', а не как нажатие кнопки"
+    assert ex.user_sessions[UID]["current_ideal"] == "новый идеальный ответ"
+    assert "_daily_limit_prompt" not in ex.user_sessions[UID]
 
 
 def test_my_roles_daily_limit_blocks_second_role_same_day():
@@ -950,8 +1037,8 @@ def test_two_users_do_not_share_session_state():
     ex.handle_message(UID_B, "Прогулка — 9")
     ex.handle_message(UID_A, "Музыка — 7")
 
-    assert [i["text"] for i in ex.user_sessions[UID_A]["items"]] == ["Кофе утром —", "Музыка —"]
-    assert [i["text"] for i in ex.user_sessions[UID_B]["items"]] == ["Прогулка —"]
+    assert [i["text"] for i in ex.user_sessions[UID_A]["items"]] == ["Кофе утром", "Музыка"]
+    assert [i["text"] for i in ex.user_sessions[UID_B]["items"]] == ["Прогулка"]
 
     ex.handle_message(UID_B, "💾 Сохранить и начать заново")
     assert UID_A in ex.user_sessions, "Действие пользователя B не должно закрывать сессию пользователя A"
@@ -959,7 +1046,7 @@ def test_two_users_do_not_share_session_state():
 
     result_for_b = [r for r in api.results if r["user_vk_id"] == UID_B]
     assert len(result_for_b) == 1
-    assert result_for_b[0]["result_data"]["items"][0]["text"] == "Прогулка —"
+    assert result_for_b[0]["result_data"]["items"][0]["text"] == "Прогулка"
 
 
 def test_stress_search_question_step2_validates_percent():

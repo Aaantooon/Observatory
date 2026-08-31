@@ -2,9 +2,9 @@ from datetime import date
 from .base import BaseExercise
 from keyboards import (
     exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard, continue_keyboard,
-    confirm_skip_keyboard,
+    confirm_skip_keyboard, daily_limit_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
-    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS,
+    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, OVERRIDE_LIMIT_TEXTS,
 )
 
 
@@ -205,6 +205,26 @@ class MyRolesExercise(BaseExercise):
             )
             return
 
+        if session.get('_daily_limit_prompt'):
+            if not self._used_analysis_today(session):
+                # день сменился, пока сообщение о лимите ещё висело —
+                # лимит больше не действует, обрабатываем сообщение как
+                # обычный ответ (не показываем устаревшее напоминание)
+                session.pop('_daily_limit_prompt', None)
+            elif text_lower in OVERRIDE_LIMIT_TEXTS:
+                session.pop('_daily_limit_prompt', None)
+                session['_daily_override_active'] = True
+                self.save_progress(user_id, session)
+                self._analyze_roles(user_id, session, force=True)
+                return
+            else:
+                self.send_message(
+                    user_id,
+                    "🕯️ Нажми «⚠️ Всё равно продолжить» или «💾 Сохранить и выйти».",
+                    daily_limit_keyboard()
+                )
+                return
+
         if text_lower in ADVANCE_TEXTS:
             self._handle_phase_complete(user_id, session)
             return
@@ -364,15 +384,19 @@ class MyRolesExercise(BaseExercise):
             user_id,
             "✅ Сегодняшняя роль уже разобрана — большего за день и не нужно.\n"
             "🌙 Возвращайся завтра, чтобы продолжить разбор следующей роли.\n\n"
+            "⚠️ Если очень хочется — можно продолжить и сегодня, но учти: это снижает "
+            "эффективность упражнения, каждую роль лучше \"проживать\" в свой день.\n\n"
             "Хочешь остановиться здесь — жми «💾 Сохранить и выйти».",
-            cancel_keyboard()
+            daily_limit_keyboard()
         )
 
-    def _analyze_roles(self, user_id, session):
+    def _analyze_roles(self, user_id, session, force=False):
         """Начинает анализ следующей роли (или завершает упражнение, если роли
         закончились) — всегда с шага 1 ('Идеально'). Не больше одной роли
         (Идеально + Ужасно) в день — если сегодня уже разобрана роль,
-        показывает статус вместо новой роли."""
+        показывает статус вместо новой роли (пользователь может настоять и
+        продолжить всё равно через кнопку «⚠️ Всё равно продолжить»,
+        см. handle_message — тогда сюда приходит force=True)."""
         all_roles = self._all_roles(session)
         index = session.get('analysis_index', 0)
 
@@ -380,10 +404,13 @@ class MyRolesExercise(BaseExercise):
             self._finish(user_id, session)
             return
 
-        if self._used_analysis_today(session):
+        if not force and self._used_analysis_today(session):
+            session['_daily_limit_prompt'] = True
+            self.save_progress(user_id, session)
             self._send_daily_limit_message(user_id, session)
             return
 
+        session.pop('_daily_limit_prompt', None)
         role = all_roles[index]
         session['analysis_step'] = 1
         session.pop('current_ideal', None)
@@ -431,12 +458,12 @@ class MyRolesExercise(BaseExercise):
         step = session.get('analysis_step', 1)
 
         if step == 1:
-            if self._used_analysis_today(session):
-                # подстраховка: пользователь всё же написал текст, пока
-                # заблокировано (например, не заметил статус) — не даём
-                # начать новую роль сегодня
-                self._send_daily_limit_message(user_id, session)
-                return
+            # Примечание: отдельная проверка дневного лимита тут не нужна —
+            # handle_message перехватывает любой текст ДО того, как он сюда
+            # попадёт, пока висит session['_daily_limit_prompt'] (см. выше),
+            # и снимает флаг только когда лимит на самом деле уже не
+            # действует (новый день) или пользователь явно подтвердил
+            # «Всё равно продолжить» (тогда стоит _daily_override_active).
             session['current_ideal'] = text
             session['analysis_step'] = 2
             self._mark_analysis_today(session)
@@ -456,6 +483,10 @@ class MyRolesExercise(BaseExercise):
             'terrible': text
         })
         session.pop('current_ideal', None)
+        # Override действует только на ОДНУ роль сверх дневного лимита — для
+        # следующей роли, если до неё тоже дойдёт очередь сегодня, лимит
+        # снова должен спросить подтверждение, а не пропустить его молча.
+        session.pop('_daily_override_active', None)
 
         session['analysis_index'] = index + 1
         # Сбрасываем шаг сразу, а не только внутри _analyze_roles — иначе,

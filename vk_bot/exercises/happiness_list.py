@@ -135,7 +135,11 @@ class HappinessListExercise(BaseExercise):
             )
             return
 
-        item_text = parts[0].strip()
+        # Пользователь обычно пишет "Текст — 8" — rsplit оставляет тире в
+        # конце item_text ("Текст —"), а дальше при показе добавляется ещё
+        # одно " — {score}/10" — получалось двойное тире ("Текст — — 8/10").
+        # Убираем висящее тире/дефис на конце, чтобы не дублировалось.
+        item_text = parts[0].strip().rstrip('-—–').strip()
         session['items'].append({'text': item_text, 'score': score})
         
         self.save_progress(user_id, {'items': session['items']})

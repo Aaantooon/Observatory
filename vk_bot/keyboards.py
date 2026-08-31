@@ -14,6 +14,7 @@ CANCEL_TEXTS = {"отмена", "❌ отмена", "cancel", "сохранит�
 ADVANCE_TEXTS = {"стоп", "⏹️ стоп", "завершить", "✅ завершить"} | CONTINUE_TEXTS
 CONFIRM_YES_TEXTS = {"да", "да, дальше", "да, дальше ✅", "✅ да, дальше"}
 CONFIRM_NO_TEXTS = {"нет", "нет, буду писать", "нет, буду писать ✏️", "✏️ нет, буду писать"}
+OVERRIDE_LIMIT_TEXTS = {"всё равно продолжить", "⚠️ всё равно продолжить"}
 
 
 def exercises_menu():
@@ -45,6 +46,13 @@ def analysis_keyboard():
     keyboard.add_button("➡️ Далее", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
+    return keyboard.get_keyboard()
+
+def daily_limit_keyboard():
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("⚠️ Всё равно продолжить", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
 def confirm_skip_keyboard():
