@@ -517,8 +517,12 @@ def test_conscious_choice_full_flow_to_finish():
 def test_my_roles_full_flow_two_step_analysis():
     """Разбор каждой роли — два отдельных шага: сначала 'Идеально', потом
     'Ужасно' (заменили хрупкий формат 'Идеально: ..., Ужасно: ...' одной
-    строкой на последовательные вопросы, см. СВОДКА_ПРОЕКТА.md)."""
+    строкой на последовательные вопросы, см. СВОДКА_ПРОЕКТА.md).
+
+    Не больше одной роли (Идеально + Ужасно) в день — роли 2 и 3
+    разбираются "в другие дни" через подмену _today_str."""
     ex, vk, api = make(MyRolesExercise)
+    ex._today_str = lambda: "2026-08-29"
     ex.start(UID)
 
     ex.handle_message(UID, "Продавец")             # social role
@@ -542,17 +546,29 @@ def test_my_roles_full_flow_two_step_analysis():
     assert "ужасно" in vk.last_message.lower()
 
     # шаг 2: "Ужасно" — завершает роль 1, переходит к роли 2, снова шаг 1
+    # (но роль 2 в тот же день заблокирована дневным лимитом — см. ниже)
     ex.handle_message(UID, "провал")
     assert ex.user_sessions[UID]["analysis_index"] == 1
     assert ex.user_sessions[UID]["analysis_step"] == 1
     assert "current_ideal" not in ex.user_sessions[UID]
 
-    # роль 2 (Друг для Саши)
+    # та же дата — роль 2 должна быть заблокирована дневным лимитом
+    ex.handle_message(UID, "дружба")
+    assert ex.user_sessions[UID]["analysis_index"] == 1, "В тот же день вторая роль не должна начинаться"
+    assert "уже разобрана" in vk.last_message.lower()
+
+    # новый день — роль 2 (Друг для Саши)
+    ex._today_str = lambda: "2026-08-30"
     ex.handle_message(UID, "дружба")
     ex.handle_message(UID, "ссора")
     assert ex.user_sessions[UID]["analysis_index"] == 2
 
-    # роль 3 (Смелый) — последняя, после шага 2 упражнение завершается
+    # тот же день — роль 3 заблокирована
+    ex.handle_message(UID, "смелость")
+    assert ex.user_sessions[UID]["analysis_index"] == 2
+
+    # ещё один новый день — роль 3 (Смелый), последняя, упражнение завершается
+    ex._today_str = lambda: "2026-08-31"
     ex.handle_message(UID, "смелость")
     ex.handle_message(UID, "трусость")
     assert UID not in ex.user_sessions, "После анализа всех ролей упражнение должно завершиться"
@@ -566,6 +582,114 @@ def test_my_roles_full_flow_two_step_analysis():
     assert result["analysis"][0] == {"role": "Продавец", "ideal": "всё отлично", "terrible": "провал"}
     assert result["analysis"][1] == {"role": "Друг для Саши", "ideal": "дружба", "terrible": "ссора"}
     assert result["analysis"][2] == {"role": "Смелый", "ideal": "смелость", "terrible": "трусость"}
+
+
+def test_my_roles_daily_limit_blocks_second_role_same_day():
+    """После разбора одной роли (Идеально+Ужасно) в один день — попытка
+    начать анализ следующей роли в тот же день должна показать сообщение
+    о дневном лимите, а не новую роль."""
+    ex, vk, api = make(MyRolesExercise)
+    ex._today_str = lambda: "2026-08-31"
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль Б")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "идеально 1")
+    ex.handle_message(UID, "ужасно 1")        # роль 1 разобрана сегодня
+
+    assert ex.user_sessions[UID]["analysis_index"] == 1
+    assert "выйти" in vk.last_buttons[0].lower() or any("выйти" in b.lower() for b in vk.last_buttons)
+
+    # заново вызов _show_instruction/_resume_analyze (например, при возврате
+    # в упражнение в тот же день) тоже должен показать лимит, а не роль 2
+    ex._show_instruction(UID, ex.user_sessions[UID])
+    assert "уже разобрана" in vk.last_message.lower()
+
+    # подстраховка в _handle_analysis: если пользователь всё же пишет текст,
+    # пока заблокировано, роль 2 не должна начаться
+    ex.handle_message(UID, "случайный текст")
+    assert ex.user_sessions[UID]["analysis_index"] == 1
+    assert "current_ideal" not in ex.user_sessions[UID]
+
+
+def test_my_roles_used_analysis_today_helpers():
+    """_used_analysis_today/_mark_analysis_today корректно отражают
+    'сделал сегодня или нет' по сохранённой дате."""
+    ex, vk, api = make(MyRolesExercise)
+    session = {}
+    assert ex._used_analysis_today(session) is False
+
+    ex._today_str = lambda: "2026-08-31"
+    ex._mark_analysis_today(session)
+    assert session["last_analysis_date"] == "2026-08-31"
+    assert ex._used_analysis_today(session) is True
+
+    ex._today_str = lambda: "2026-09-01"
+    assert ex._used_analysis_today(session) is False
+
+
+def test_my_roles_message_without_session_restarts():
+    """Сообщение без активной сессии (например, после рестарта бота) должно
+    молча запускать start() заново, а не падать."""
+    ex, vk, api = make(MyRolesExercise)
+    assert UID not in ex.user_sessions
+    ex.handle_message(UID, "что угодно")
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["phase"] == "social"
+
+
+def test_my_roles_resume_prompt_rejects_unrecognized_text():
+    """На экране 'продолжить с того места?' любой текст, кроме кнопок
+    Продолжить/Начать заново, должен просто напомнить про кнопки, не теряя
+    _resume_prompt и не трогая сохранённые роли."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "💾 Сохранить и выйти")
+
+    ex2, vk2, _ = make(MyRolesExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    assert ex2.user_sessions[UID]["_resume_prompt"] is True
+
+    ex2.handle_message(UID, "непонятный ответ")
+    assert ex2.user_sessions[UID]["_resume_prompt"] is True, "Неизвестный текст не должен снимать resume_prompt"
+    assert "Продолжить" in vk.last_message and "Начать заново" in vk.last_message
+    assert ex2.user_sessions[UID]["social_roles"] == ["Роль А"], "Сохранённые роли не должны были пострадать"
+
+
+def test_my_roles_plain_restart_text_without_resume_prompt():
+    """'Начать заново' вне экрана resume_prompt (например, во время сбора
+    ролей) тоже должно сбрасывать прогресс, как и '💾 Сохранить и начать заново'."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    assert ex.user_sessions[UID]["social_roles"] == ["Роль А"]
+
+    ex.handle_message(UID, "начать заново")
+    assert ex.user_sessions[UID]["social_roles"] == [], "Роли должны были сброситься"
+    assert ex.user_sessions[UID]["phase"] == "social"
+
+
+def test_my_roles_resume_analyze_finishes_when_all_roles_already_analyzed():
+    """_resume_analyze — защитная ветка: если analysis_index уже указывает
+    за пределы списка ролей (например, восстановленный прогресс), должен
+    сразу завершить упражнение, а не упасть или показать пустую роль."""
+    ex, vk, api = make(MyRolesExercise)
+    session = ex._fresh_session()
+    session.update({
+        'phase': 'analyze',
+        'social_roles': ['Роль А'],
+        'analysis_index': 1,
+        'analysis_results': [{'role': 'Роль А', 'ideal': 'и', 'terrible': 'у'}],
+    })
+    ex.user_sessions[UID] = session
+
+    ex._resume_analyze(UID, session)
+    assert UID not in ex.user_sessions
+    assert len(api.results) == 1
 
 
 def test_my_roles_resume_mid_analysis_does_not_lose_ideal_answer():

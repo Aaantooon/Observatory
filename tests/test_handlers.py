@@ -139,6 +139,15 @@ def test_main_menu_keyword_routes_to_reminders():
     assert "НАПОМИНАНИЯ" in vk.last_message
 
 
+def test_main_menu_keyword_routes_to_daily_plan():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "📅 Мой план на день", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+    assert "МОЙ ПЛАН НА ДЕНЬ" in vk.last_message
+    assert "Итого примерно" in vk.last_message
+
+
 def test_main_menu_unrecognized_text_shows_hint_and_stays_in_main():
     bh, vk, api = make_handlers()
     _greet(bh)

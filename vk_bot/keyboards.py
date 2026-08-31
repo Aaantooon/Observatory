@@ -95,4 +95,6 @@ def main_menu():
     keyboard.add_line()
     keyboard.add_button("⏰ Напоминания", color=VkKeyboardColor.PRIMARY)
     keyboard.add_button("📨 Проверка", color=VkKeyboardColor.SECONDARY)
+    keyboard.add_line()
+    keyboard.add_button("📅 Мой план на день", color=VkKeyboardColor.PRIMARY)
     return keyboard.get_keyboard()

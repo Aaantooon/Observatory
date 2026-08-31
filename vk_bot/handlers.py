@@ -10,6 +10,7 @@ from exercises.diary import DiaryExercise
 from exercises.stop_technique import StopTechniqueExercise
 from admin_check import AdminCheck
 from notifications import NotificationSystem
+from workload import format_daily_plan_message
 from datetime import datetime
 import re
 
@@ -38,6 +39,10 @@ class BotHandlers:
                 message += f"{name}\n"
         message += "\nНапиши номер упражнения, чтобы отправить."
         self.send_message(user_id, message, back_keyboard())
+
+    def show_daily_plan(self, user_id):
+        results = self.api.get_user_results(user_id) or []
+        self.send_message(user_id, format_daily_plan_message(results), main_menu())
 
     def handle_send_review(self, user_id, text_clean):
         results = self.api.get_user_results(user_id)
@@ -161,6 +166,8 @@ class BotHandlers:
                 self.show_review_menu(user_id)
             elif "напомина" in text_clean:
                 self.show_reminders(user_id)
+            elif "план" in text_clean:
+                self.show_daily_plan(user_id)
             else:
                 self.send_message(
                     user_id,

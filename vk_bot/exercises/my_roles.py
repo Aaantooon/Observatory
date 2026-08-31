@@ -1,3 +1,4 @@
+from datetime import date
 from .base import BaseExercise
 from keyboards import (
     exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard, continue_keyboard,
@@ -213,14 +214,38 @@ class MyRolesExercise(BaseExercise):
                 session.get('interpersonal_roles', []) +
                 session.get('intrapersonal_roles', []))
 
+    def _today_str(self):
+        return date.today().isoformat()
+
+    def _used_analysis_today(self, session):
+        return session.get('last_analysis_date') == self._today_str()
+
+    def _mark_analysis_today(self, session):
+        session['last_analysis_date'] = self._today_str()
+
+    def _send_daily_limit_message(self, user_id, session):
+        self.send_message(
+            user_id,
+            "✅ Сегодняшняя роль уже разобрана — большего за день и не нужно.\n"
+            "🌙 Возвращайся завтра, чтобы продолжить разбор следующей роли.\n\n"
+            "Хочешь остановиться здесь — жми «💾 Сохранить и выйти».",
+            cancel_keyboard()
+        )
+
     def _analyze_roles(self, user_id, session):
         """Начинает анализ следующей роли (или завершает упражнение, если роли
-        закончились) — всегда с шага 1 ('Идеально')."""
+        закончились) — всегда с шага 1 ('Идеально'). Не больше одной роли
+        (Идеально + Ужасно) в день — если сегодня уже разобрана роль,
+        показывает статус вместо новой роли."""
         all_roles = self._all_roles(session)
         index = session.get('analysis_index', 0)
 
         if index >= len(all_roles):
             self._finish(user_id, session)
+            return
+
+        if self._used_analysis_today(session):
+            self._send_daily_limit_message(user_id, session)
             return
 
         role = all_roles[index]
@@ -231,6 +256,7 @@ class MyRolesExercise(BaseExercise):
         self.send_message(
             user_id,
             f"🎭 АНАЛИЗ РОЛИ {index+1}/{len(all_roles)}\n\n"
+            f"📅 Роль на сегодня\n"
             f"📌 Роль: {role}\n\n"
             f"Немного игры: представь, что тебе заплатят $100,000,000 —\n"
             f"но только если сыграешь эту роль просто идеально.\n\n"
@@ -267,8 +293,15 @@ class MyRolesExercise(BaseExercise):
         step = session.get('analysis_step', 1)
 
         if step == 1:
+            if self._used_analysis_today(session):
+                # подстраховка: пользователь всё же написал текст, пока
+                # заблокировано (например, не заметил статус) — не даём
+                # начать новую роль сегодня
+                self._send_daily_limit_message(user_id, session)
+                return
             session['current_ideal'] = text
             session['analysis_step'] = 2
+            self._mark_analysis_today(session)
             self.save_progress(user_id, session)
             self.send_message(
                 user_id,
@@ -286,6 +319,12 @@ class MyRolesExercise(BaseExercise):
         session.pop('current_ideal', None)
 
         session['analysis_index'] = index + 1
+        # Сбрасываем шаг сразу, а не только внутри _analyze_roles — иначе,
+        # если следующая роль заблокирована дневным лимитом, session
+        # останется со старым analysis_step == 2 от только что завершённой
+        # роли, и _resume_analyze ошибочно решит, что это "недописанный
+        # шаг 2" новой роли, и пропустит проверку лимита.
+        session['analysis_step'] = 1
         self.save_progress(user_id, session)
         self._analyze_roles(user_id, session)
 
