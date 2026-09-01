@@ -221,8 +221,7 @@
             </div>
             <div class="label">связи между темами курса</div>
         </div>
-        <!-- ✅ КНОПКА ИСПРАВЛЕНА: ведёт на /flashlight/ -->
-        <a href="{% url 'flashlight' %}" class="btn-secondary-custom" style="text-align:center;">🗺️ Открыть карту</a>
+        <a href="{% url 'map' %}" class="btn-secondary-custom" style="text-align:center;">🗺️ Открыть карту</a>
     </div>
 
     <div class="course-block">
@@ -270,6 +269,7 @@
                 <span class="badge">интеграция</span>
             </div>
         </div>
+        <a href="{% url 'course_index' %}" class="btn-primary-custom" style="text-align:center;">📚 К модулям курса</a>
     </div>
 
 </div>
