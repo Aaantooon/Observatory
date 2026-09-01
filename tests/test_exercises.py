@@ -1850,6 +1850,91 @@ def test_stress_search_save_result_failure_is_reported_honestly():
 
 
 # ---------------------------------------------------------------------------
+# Досрочное завершение разбора «Поиска стресса»: после того как разобрано
+# минимум MIN_ANALYZED_TO_FINISH_EARLY (3) образов, между образами
+# появляется кнопка «✅ Завершить и отправить», позволяющая отправить
+# упражнение наблюдателю на проверку, не разбирая остальные записанные
+# образы — не нужно ждать разбора всех.
+# ---------------------------------------------------------------------------
+
+def _stress_do_item(ex, ideal, percent, why, reflection, new_rate):
+    ex.handle_message(UID, ideal)
+    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, str(percent))
+    ex.handle_message(UID, why)
+    ex.handle_message(UID, reflection)
+    ex.handle_message(UID, str(new_rate))
+
+
+def test_stress_search_no_early_finish_button_before_3_analyzed():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "A 5")
+    ex.handle_message(UID, "B 5")
+    ex.handle_message(UID, "C 5")
+    ex.handle_message(UID, "D 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    _stress_do_item(ex, "i1", 10, "w1", "r1", 3)  # разобран 1 — кнопки ещё нет
+    assert "✅ Завершить и отправить" not in vk.last_buttons
+    ex.handle_message(UID, "➡️ Продолжить")
+
+    _stress_do_item(ex, "i2", 10, "w2", "r2", 3)  # разобрано 2 — кнопки всё ещё нет
+    assert "✅ Завершить и отправить" not in vk.last_buttons
+    ex.handle_message(UID, "➡️ Продолжить")
+
+    _stress_do_item(ex, "i3", 10, "w3", "r3", 3)  # разобрано 3 — кнопка должна появиться
+    assert "✅ Завершить и отправить" in vk.last_buttons
+    assert ex.user_sessions[UID]["_between_items"] is True
+    assert len(api.results) == 0, "Само по себе появление кнопки ничего не завершает"
+
+
+def test_stress_search_finish_and_send_text_ignored_before_3_analyzed():
+    """Текст «Завершить и отправить», написанный раньше 3 разобранных
+    образов (когда кнопки такой ещё нет), не должен досрочно завершать
+    упражнение — это просто нераспознанный текст паузы между образами."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "A 5")
+    ex.handle_message(UID, "B 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    _stress_do_item(ex, "i1", 10, "w1", "r1", 3)  # разобран только 1
+    ex.handle_message(UID, "✅ Завершить и отправить")
+
+    assert len(api.results) == 0
+    assert ex.user_sessions[UID]["_between_items"] is True
+
+
+def test_stress_search_finish_early_after_3_analyzed_skips_remaining_items():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "A 5")
+    ex.handle_message(UID, "B 5")
+    ex.handle_message(UID, "C 5")
+    ex.handle_message(UID, "D 5")  # 4 образа записано, разберём только 3
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    _stress_do_item(ex, "i1", 10, "w1", "r1", 3)
+    ex.handle_message(UID, "➡️ Продолжить")
+    _stress_do_item(ex, "i2", 10, "w2", "r2", 3)
+    ex.handle_message(UID, "➡️ Продолжить")
+    _stress_do_item(ex, "i3", 10, "w3", "r3", 3)
+
+    assert "✅ Завершить и отправить" in vk.last_buttons
+    ex.handle_message(UID, "✅ Завершить и отправить")
+
+    assert UID not in ex.user_sessions, "Упражнение должно полностью завершиться"
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 4, "Все 4 записанных образа остаются в items"
+    assert len(result["analysis"]) == 3, "Но разобрано (analysis) только 3, четвёртый не трогали"
+
+
+# ---------------------------------------------------------------------------
 # send_message() не должен ронять вызывающий код (баг #4б) — актуально
 # особенно для _finish(), где save_result()/delete_progress() уже
 # отработали к моменту отправки завершающего сообщения.

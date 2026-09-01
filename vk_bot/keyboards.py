@@ -18,6 +18,14 @@ CANCEL_TEXTS = {
     "выйти и сохранить", "💾 выйти и сохранить",
 }
 ADVANCE_TEXTS = {"стоп", "⏹️ стоп", "завершить", "✅ завершить"} | CONTINUE_TEXTS
+# Досрочное завершение разбора «Поиска стресса» между образами (когда уже
+# разобрано минимум 3 из них) — специально другая формулировка, чтобы не
+# путаться с обычным ADVANCE_TEXTS "завершить" в других местах упражнения.
+FINISH_AND_SEND_TEXTS = {
+    "завершить и отправить",
+    "✅ завершить и отправить",
+    "завершить и отправить на проверку",
+}
 CONFIRM_YES_TEXTS = {"да", "да, дальше", "да, дальше ✅", "✅ да, дальше"}
 CONFIRM_NO_TEXTS = {"нет", "нет, буду писать", "нет, буду писать ✏️", "✏️ нет, буду писать"}
 OVERRIDE_LIMIT_TEXTS = {"всё равно продолжить", "⚠️ всё равно продолжить"}
@@ -55,6 +63,22 @@ def stress_search_parts_keyboard():
 def exercise_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
+    keyboard.add_line()
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
+    return keyboard.get_keyboard()
+
+def between_items_keyboard(can_finish=False):
+    """Клавиатура между образами в разборе «Поиска стресса». Кнопка
+    «Завершить и отправить» показывается только когда уже разобрано
+    достаточно образов (см. вызывающий код), чтобы не звать отправлять
+    на проверку то, что психологу ещё не имеет смысла смотреть."""
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    if can_finish:
+        keyboard.add_line()
+        keyboard.add_button("✅ Завершить и отправить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
     keyboard.add_line()

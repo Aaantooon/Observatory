@@ -4,10 +4,15 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    confirm_skip_keyboard,
+    confirm_skip_keyboard, between_items_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
-    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS,
+    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, FINISH_AND_SEND_TEXTS,
 )
+
+# Сколько образов нужно полностью разобрать (все 4 вопроса + переоценка),
+# прежде чем можно закончить путь досрочно и отправить его наблюдателю на
+# проверку, не разбирая остальные записанные образы.
+MIN_ANALYZED_TO_FINISH_EARLY = 3
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +287,9 @@ class StressSearchExercise:
             "💡 Можно списком — по пункту на строке, или всё в одну строку (тогда каждая оценка "
             "закрывает фразу перед собой):\n"
             "«Рецепт не выходит 8 вода не фильтруется 7 шум мешает думать 6»\n\n"
+            "🩺 Не обязательно ждать всех 100: уже после ~10 записанных и 3 разобранных "
+            "образов можно отправить упражнение наблюдателю на проверку (пункт «Отправить "
+            "на проверку» в меню) — получишь комментарий, не дожидаясь конца.\n\n"
             f"{self._get_separator()}\n"
             "➡️ «Продолжить» — к разбору, когда наберёшь все образы\n"
             "💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля",
@@ -317,9 +325,15 @@ class StressSearchExercise:
             return
 
         if session.get('_between_items'):
+            analyzed = len(session.get('answers', []))
+            can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
             if text_lower in CONTINUE_TEXTS:
                 session.pop('_between_items', None)
                 self._show_current_question(user_id, session)
+                return
+            if can_finish and text_lower in FINISH_AND_SEND_TEXTS:
+                session.pop('_between_items', None)
+                self._finish_exercise(user_id, session)
                 return
             if text_lower in CANCEL_TEXTS:
                 self._handle_cancel(user_id, session)
@@ -327,11 +341,13 @@ class StressSearchExercise:
             if text_lower in RESTART_TEXTS:
                 self._handle_start_over(user_id)
                 return
-            self.send_message(
-                user_id,
-                "🕯️ Нажми «➡️ Продолжить», «💾 Сохранить и начать заново» или «💾 Сохранить и выйти».",
-                exercise_keyboard()
+            hint = (
+                "🕯️ Нажми «➡️ Продолжить», «✅ Завершить и отправить», "
+                "«💾 Сохранить и начать заново» или «💾 Сохранить и выйти»."
+                if can_finish else
+                "🕯️ Нажми «➡️ Продолжить», «💾 Сохранить и начать заново» или «💾 Сохранить и выйти»."
             )
+            self.send_message(user_id, hint, between_items_keyboard(can_finish))
             return
 
         if text_lower in RESTART_TEXTS:
@@ -940,13 +956,21 @@ class StressSearchExercise:
             else:
                 session['_between_items'] = True
                 self._save_progress(user_id, session)
+                analyzed = len(session.get('answers', []))
+                can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
+                finish_line = (
+                    f"✅ «Завершить и отправить» — разобрано уже {analyzed}, этого достаточно, "
+                    f"можно отправить наблюдателю на проверку прямо сейчас, остальное разбирать не обязательно\n"
+                    if can_finish else ""
+                )
                 self.send_message(
                     user_id,
                     f"{self._get_separator()}\n"
                     f"➡️ «Продолжить» — к следующему образу\n"
+                    f"{finish_line}"
                     f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
                     f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
-                    exercise_keyboard()
+                    between_items_keyboard(can_finish)
                 )
 
     def _finish_exercise(self, user_id, session):
