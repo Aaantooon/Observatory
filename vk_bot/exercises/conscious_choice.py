@@ -4,6 +4,7 @@ from keyboards import (
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     BACK_TEXTS, TO_START_TEXTS, TO_END_TEXTS,
 )
+from config import MAX_EXERCISE_ITEMS
 
 
 class ConsciousChoiceExercise(BaseExercise):
@@ -90,7 +91,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 "· Кормить детей\n"
                 "· Ходить на работу\n"
                 "· Заботиться о родителях\n\n"
-                "🎯 Нужно набрать 20 пунктов.\n"
+                f"🎯 Нужно набрать {MAX_EXERCISE_ITEMS} пунктов.\n"
                 "Можешь нажать «➡️ Продолжить» и раньше — прогресс сохранится.\n\n"
                 "📝 Пиши по одному пункту:",
                 conscious_choice_keyboard()
@@ -206,16 +207,28 @@ class ConsciousChoiceExercise(BaseExercise):
 
         step = session.get('step', 1)
 
+        # Стикер/фото/голосовое приходят из main.py как text="" — не
+        # записывать пустой ответ и не продвигать шаг молча. Шаги 4 и 7 —
+        # чисто подтверждающие (текст туда не пишется вообще), поэтому их
+        # не трогаем.
+        if not text_lower and step in (1, 2, 3, 5, 6, 8, 9):
+            self.send_message(
+                user_id,
+                "Пожалуйста, напиши текстом — я не могу обработать стикер/фото здесь.",
+                conscious_choice_keyboard()
+            )
+            return
+
         if step == 1:
             session['must_items'].append(text)
             session['must_index'] = len(session['must_items']) - 1
             self.save_progress(user_id, session)
             count = len(session['must_items'])
-            progress = self._get_progress_bar(count, target=20)
-            milestone = self._milestone_line(count, target=20)
+            progress = self._get_progress_bar(count, target=MAX_EXERCISE_ITEMS)
+            milestone = self._milestone_line(count, target=MAX_EXERCISE_ITEMS)
             milestone_text = f"{milestone}\n" if milestone else ""
 
-            if count >= 20:
+            if count >= MAX_EXERCISE_ITEMS:
                 self.send_message(
                     user_id,
                     f"🎉 Отлично! Ты собрал {count} пунктов.\n"
@@ -226,7 +239,7 @@ class ConsciousChoiceExercise(BaseExercise):
             else:
                 self.send_message(
                     user_id,
-                    f"✅ Добавлено: {text} ({count}/20)\n"
+                    f"✅ Добавлено: {text} ({count}/{MAX_EXERCISE_ITEMS})\n"
                     f"{progress}\n"
                     f"{milestone_text}\n"
                     "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",

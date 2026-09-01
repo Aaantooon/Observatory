@@ -343,6 +343,52 @@ def test_my_roles_empty_phase_no_keeps_writing():
     assert ex.user_sessions[UID]["social_roles"] == ["Продавец"]
 
 
+def test_my_roles_confirm_empty_phase_does_not_survive_save_and_exit_resume():
+    """Баг #2: '_confirm_empty_phase' — транзитный флаг "жду да/нет"; если
+    он буквально сохранится через 'Сохранить и выйти' и потом молча
+    восстановится при возобновлении (session.update(data) в start()), то
+    следующий реальный ответ пользователя проглатывается мёртвой проверкой
+    _confirm_empty_phase, и человек застревает без видимой причины и без
+    выхода (кроме 'Начать заново', которое стирает все роли)."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")       # social: 1 роль -> has_saved=True при resume
+    ex.handle_message(UID, "➡️ Продолжить")  # social непустой -> сразу interpersonal
+    assert ex.user_sessions[UID]["phase"] == "interpersonal"
+
+    ex.handle_message(UID, "➡️ Продолжить")  # interpersonal пуст -> ставит _confirm_empty_phase
+    assert ex.user_sessions[UID]["_confirm_empty_phase"] is True
+
+    # Пользователь вместо да/нет жмёт "Сохранить и выйти" — сессия
+    # персистится (_handle_cancel -> save_progress) с флагом ещё активным.
+    ex.handle_message(UID, "💾 Сохранить и выйти")
+    assert UID not in ex.user_sessions
+
+    # Флаг не должен был буквально попасть в персистентное хранилище.
+    saved = api.progress_store.get((UID, "my_roles"))
+    assert saved is not None
+    assert "_confirm_empty_phase" not in saved, (
+        "'_confirm_empty_phase' — транзитный флаг, не должен переживать save/exit"
+    )
+
+    # "Перезапуск бота": новый объект упражнения, тот же сохранённый прогресс.
+    vk2 = FakeVK()
+    ex2 = MyRolesExercise(vk2, api)  # тот же backend (то же хранилище прогресса)
+    ex2.start(UID)
+    assert ex2.user_sessions[UID].get("_resume_prompt") is True
+    ex2.handle_message(UID, "✅ Продолжить")  # закрывает resume-prompt
+
+    # Флаг отсутствует -> обычный ответ должен нормально обработаться как
+    # роль, а НЕ быть проглочен мёртвой confirm-проверкой.
+    assert "_confirm_empty_phase" not in ex2.user_sessions[UID]
+    assert ex2.user_sessions[UID]["phase"] == "interpersonal"
+    ex2.handle_message(UID, "Друг")
+    assert "Друг" in ex2.user_sessions[UID]["interpersonal_roles"], (
+        "Реальный ответ должен был добавиться как роль, а не быть проглочен "
+        "застрявшим _confirm_empty_phase"
+    )
+
+
 def test_my_roles_non_empty_phase_advances_without_confirmation():
     """Если в разделе уже есть хотя бы одна роль, «Продолжить» переходит
     сразу, без переспроса."""
@@ -589,6 +635,28 @@ def test_happiness_list_20_items_uses_exercise_keyboard():
     assert api.results[0]["result_data"]["total"] == 20
 
 
+def test_happiness_list_show_items_truncates_long_entries_to_avoid_vk_limit():
+    """Баг #4: список пунктов на экране resume ('Продолжим?' -> 'Продолжить')
+    конкатенирует текст ВСЕХ пунктов без ограничения — с длинными пунктами
+    сообщение легко превышает лимит VK ~4096 символов."""
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    long_text = "Б" * 500
+    for i in range(10):
+        ex.handle_message(UID, f"{long_text}{i} — 5")
+
+    # "перезапуск бота" — новый объект, тот же сохранённый прогресс,
+    # чтобы дойти до _show_items() через resume-flow.
+    ex2, vk2, _ = make(HappinessListExercise)
+    ex2.api = api
+    ex2.start(UID)
+    ex2.handle_message(UID, "➡️ Продолжить")  # закрывает resume-prompt -> _show_items()
+
+    assert len(vk2.last_message) < 4096, (
+        f"Список из 10 длинных пунктов должен был обрезаться, длина={len(vk2.last_message)}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # stop_technique — счётчик попыток
 # ---------------------------------------------------------------------------
@@ -781,6 +849,23 @@ def test_stress_search_pasted_multiline_list_splits_into_separate_items():
     assert "Добавлено образов: 3" in vk.last_message
 
 
+def test_stress_search_pasted_long_multiline_list_does_not_exceed_vk_limit():
+    """Баг #4: вставленный многострочный список эхается целиком без
+    ограничения — с длинными строками (или их большим числом) сообщение
+    легко превышает лимит VK ~4096 символов."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    long_word = "В" * 300
+    pasted = "\n".join(f"{long_word}{i} {5 + (i % 5)}" for i in range(20))
+    ex.handle_message(UID, pasted)
+
+    assert len(ex.user_sessions[UID]["items"]) == 20
+    assert len(vk.last_message) < 4096, (
+        f"Подтверждение вставки должно было обрезаться, длина={len(vk.last_message)}"
+    )
+
+
 def test_stress_search_run_on_single_line_splits_by_embedded_scores():
     """Пользователь может вставить список одной строкой без переносов —
     "Фраза N Фраза N Фраза N ..." — каждая оценка 1-10 закрывает фразу
@@ -905,6 +990,33 @@ def test_diary_full_flow_to_finish():
         "differences": "Солнечный день",
     }
     assert "None" not in vk.last_message
+
+
+def test_diary_finish_with_very_long_answers_does_not_crash_and_truncates():
+    """Баг #4: dream/mood/body/differences эхались в _finish() без
+    ограничения длины — с очень длинным ответом сообщение легко превышает
+    ~4096-символьный лимит VK. Упражнение должно завершиться нормально
+    (сохранить результат ПОЛНОСТЬЮ, без обрезки) и показать ОБРЕЗАННОЕ
+    эхо, а не упасть/зависнуть."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    long_text = "А" * 5000
+    ex.handle_message(UID, long_text)       # dream
+    ex.handle_message(UID, "Спокойное")     # mood
+    ex.handle_message(UID, "Лёгкость")      # body
+    ex.handle_message(UID, "Мысли")         # thoughts
+    ex.handle_message(UID, "Хочу кофе")     # wants
+    ex.handle_message(UID, long_text)       # differences -> _finish()
+
+    assert UID not in ex.user_sessions, "Упражнение должно было завершиться, а не упасть"
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    # Сохранённый результат — полный, без обрезки (обрезается только эхо)
+    assert result["dream"] == long_text
+    assert result["differences"] == long_text
+    # А вот в сообщении-эхе длинный текст должен быть обрезан
+    assert len(vk.last_message) < 4096
+    assert long_text not in vk.last_message
 
 
 def test_conscious_choice_step1_shows_progress_and_target_nudge():
@@ -1114,13 +1226,11 @@ def test_my_roles_daily_limit_can_be_overridden_for_one_extra_role():
     ex.handle_message(UID, "⚠️ Всё равно продолжить")
     assert ex.user_sessions[UID]["analysis_step"] == 1
     assert "идеально" in vk.last_message.lower(), "После подтверждения роль 2 должна начать разбор"
-    assert ex.user_sessions[UID]["_daily_override_active"] is True
 
     ex.handle_message(UID, "идеально 2")
     ex.handle_message(UID, "ужасно 2")        # роль 2 разобрана в переопределённом режиме
 
     assert ex.user_sessions[UID]["analysis_index"] == 2
-    assert "_daily_override_active" not in ex.user_sessions[UID], "Override не должен переноситься на роль 3"
 
     # роль 3 в тот же день — лимит снова спрашивает подтверждение, override
     # не переносится молча на все последующие роли
@@ -1405,12 +1515,43 @@ def test_diary_advance_without_answer_shows_error_and_does_not_advance():
     assert "Напиши настроение" in vk.last_message
 
 
+def test_diary_blank_text_from_sticker_does_not_advance():
+    """Баг #3: main.py превращает стикер/фото/голосовое в text="" — такой
+    пустой ответ не должен молча записываться и продвигать шаг."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    assert ex.user_sessions[UID]["phase"] == "dream"
+
+    ex.handle_message(UID, "")  # "стикер"
+    assert ex.user_sessions[UID]["phase"] == "dream", "Пустой текст не должен продвигать фазу"
+    assert ex.user_sessions[UID]["dream"] == "", "Пустой текст не должен был записаться"
+    assert "не могу обработать стикер" in vk.last_message
+
+    ex.handle_message(UID, "   ")  # только пробелы — тоже "пусто"
+    assert ex.user_sessions[UID]["phase"] == "dream"
+
+    ex.handle_message(UID, "Гулял по парку")  # настоящий ответ работает как обычно
+    assert ex.user_sessions[UID]["phase"] == "mood"
+
+
 def test_stop_technique_advance_without_answer_shows_error_and_does_not_advance():
     ex, vk, api = make(StopTechniqueExercise)
     ex.start(UID)
     ex.handle_message(UID, "➡️ Продолжить")
     assert ex.user_sessions[UID]["phase"] == "thoughts"
     assert "Напиши, о чём думаешь" in vk.last_message
+
+
+def test_stop_technique_blank_text_from_sticker_does_not_advance():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "")  # "стикер"
+    assert ex.user_sessions[UID]["phase"] == "thoughts"
+    assert ex.user_sessions[UID]["thoughts"] == ""
+    assert "не могу обработать стикер" in vk.last_message
+
+    ex.handle_message(UID, "Думаю о работе")
+    assert ex.user_sessions[UID]["phase"] == "feelings"
 
 
 def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step():
@@ -1442,6 +1583,28 @@ def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step(
     assert "Напиши свой ответ" in vk.last_message
 
 
+def test_conscious_choice_blank_text_from_sticker_does_not_advance():
+    """Баг #3: пустой текст (стикер/фото/голосовое) не должен молча
+    записываться и продвигать шаг — проверяем на нескольких из
+    затронутых шагов (2, 3, 5, 6, 8, 9)."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")   # step 1 -> запись первого пункта
+    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2
+
+    ex.handle_message(UID, "")  # "стикер" на шаге 2
+    assert ex.user_sessions[UID]["step"] == 2
+    assert "current_answer" not in ex.user_sessions[UID]
+    assert "не могу обработать стикер" in vk.last_message
+
+    ex.handle_message(UID, "Никто")           # step 2 -> 3 (реальный ответ)
+    assert ex.user_sessions[UID]["step"] == 3
+
+    ex.handle_message(UID, "   ")  # "стикер" на шаге 3 (только пробелы)
+    assert ex.user_sessions[UID]["step"] == 3
+    assert "who_greater" not in ex.user_sessions[UID]
+
+
 def test_happiness_list_finish_with_empty_list_shows_error_and_does_not_finish():
     ex, vk, api = make(HappinessListExercise)
     ex.start(UID)
@@ -1466,6 +1629,76 @@ def test_stress_search_saves_result_with_correct_exercise_type():
         f"Результат сохранён с exercise_type={api.results[0]['exercise_type']!r}, "
         f"а не 'stress_search' — см. _finish_exercise(), там 'exercise_id = 1'"
     )
+
+
+# ---------------------------------------------------------------------------
+# save_result() возвращает falsy при сбое сети/сервера (баг #1) — упражнение
+# должно честно сообщить об ошибке, НЕ удалять прогресс и НЕ закрывать сессию.
+# ---------------------------------------------------------------------------
+
+def test_happiness_list_save_result_failure_is_reported_honestly():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Пункт1 — 5")
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "➡️ Продолжить")  # -> _finish() -> save_result() падает
+
+    assert "Не получилось сохранить результат" in vk.last_message
+    assert len(api.results) == 0, "Результат не должен был сохраниться при сбое"
+    assert UID in ex.user_sessions, "Сессия должна пережить сбой сохранения — для повторной попытки"
+    # прогресс сохранён как резервная копия (см. _report_save_failure)
+    assert api.progress_store.get((UID, "happiness_list")) is not None
+
+    # повторная попытка после восстановления сервиса должна отработать штатно
+    api.fail_save_result = False
+    ex.handle_message(UID, "➡️ Продолжить")
+    assert len(api.results) == 1
+    assert UID not in ex.user_sessions
+
+
+def test_stress_search_save_result_failure_is_reported_honestly():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> analysis
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "✅ Завершить")     # -> _finish_exercise() -> save_result() падает
+
+    assert "Не получилось сохранить результат" in vk.last_message
+    assert len(api.results) == 0, "Результат не должен был сохраниться при сбое"
+    assert UID in ex.user_sessions, "Сессия должна пережить сбой сохранения — для повторной попытки"
+
+    api.fail_save_result = False
+    ex.handle_message(UID, "✅ Завершить")
+    assert len(api.results) == 1
+    assert UID not in ex.user_sessions
+
+
+# ---------------------------------------------------------------------------
+# send_message() не должен ронять вызывающий код (баг #4б) — актуально
+# особенно для _finish(), где save_result()/delete_progress() уже
+# отработали к моменту отправки завершающего сообщения.
+# ---------------------------------------------------------------------------
+
+def test_happiness_list_finish_survives_send_message_failure():
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Пункт1 — 5")
+
+    def broken_method(name, params):
+        raise RuntimeError("VK API недоступен")
+
+    vk.method = broken_method
+
+    ex.handle_message(UID, "➡️ Продолжить")  # -> _finish() -> send_message() падает внутри
+
+    # save_result()/delete_progress() уже успели отработать до отправки
+    # сообщения — упражнение должно было нормально завершиться, а не
+    # упасть с необработанным исключением.
+    assert len(api.results) == 1
+    assert UID not in ex.user_sessions
 
 
 # ---------------------------------------------------------------------------

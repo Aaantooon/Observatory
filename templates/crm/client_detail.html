@@ -26,8 +26,10 @@
         {% if course_progress %}
             <p style="color: #d4d9e6;">Прогресс: {{ course_progress.get_progress_percent }}%</p>
             <p style="color: #8a9aaa;">Пройдено модулей: {{ course_progress.completed_modules.count }}</p>
+        {% elif site_user %}
+            <p style="color: #5a6a7e;">Вошёл на сайт, но курс ещё не начат.</p>
         {% else %}
-            <p style="color: #5a6a7e;">Курс ещё не начат.</p>
+            <p style="color: #5a6a7e;">Ещё не входил на сайт — курс недоступен.</p>
         {% endif %}
     </div>
 

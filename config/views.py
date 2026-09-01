@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from myapp.models import Module, UserCourseProgress, UserStreak
 
 def home(request):
@@ -30,6 +31,23 @@ def privacy_policy_view(request):
     return render(request, 'privacy_policy.html', {
         'title': 'Политика конфиденциальности — Путь наблюдателя'
     })
+
+def terms_of_service_view(request):
+    return render(request, 'terms_of_service.html', {
+        'title': 'Пользовательское соглашение — Путь наблюдателя'
+    })
+
+def robots_txt(request):
+    # Разрешаем всё, кроме служебных разделов (админка, CRM психолога, API).
+    lines = [
+        'User-agent: *',
+        'Disallow: /admin/',
+        'Disallow: /crm/',
+        'Disallow: /api/',
+        '',
+        'Sitemap: https://putnabludatel.ru/sitemap.xml',
+    ]
+    return HttpResponse('\n'.join(lines), content_type='text/plain')
 
 def map_reactflow_view(request):
     """Страница с ментальной картой (React Flow)"""

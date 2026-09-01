@@ -1,11 +1,18 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.contrib.sitemaps.views import sitemap
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from . import views
 from .admin import admin_site  # Импортируем кастомную админку
 from myapp.vk_id_auth import vk_login_start, vk_login_callback
+from myapp.sitemaps import StaticViewSitemap, ModuleSitemap
+
+sitemaps = {
+    'static': StaticViewSitemap,
+    'modules': ModuleSitemap,
+}
 
 urlpatterns = [
     path('admin/', admin_site.urls),  # Используем кастомную админку
@@ -19,14 +26,23 @@ urlpatterns = [
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('vk/login/', vk_login_start, name='vk_login_start'),
     path('vk/callback/', vk_login_callback, name='vk_login_callback'),
-    
-    # VK OAuth через social_django
-    path('', include('social_django.urls', namespace='social')),
-    
+
+    # ВАЖНО: URL-маршруты social_django (path('', include('social_django.urls', ...)))
+    # намеренно НЕ подключаются. Это старый параллельный вход через VK OAuth,
+    # который создавал бы отдельные, не связанные с ботом аккаунты User
+    # (по другой схеме именования, чем vk_{vk_user_id} у настоящего входа
+    # myapp/vk_id_auth.py). Ни один шаблон на него не ссылается — реальный
+    # вход только через /vk/login/. Приложение social_django, миддлварь и
+    # AUTHENTICATION_BACKENDS в settings.py оставлены как есть (решение
+    # не трогать миграции/таблицы social_django) — закрыт только сам маршрут.
+
     # Основные страницы
     path('', views.home, name='home'),
     path('map/', views.map_reactflow_view, name='map'),
     path('privacy/', views.privacy_policy_view, name='privacy_policy'),
+    path('terms/', views.terms_of_service_view, name='terms_of_service'),
+    path('robots.txt', views.robots_txt, name='robots_txt'),
+    path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
     path('observer/', views.observer_view, name='observer'),
     path('put/', views.put_view, name='put'),
     path('flashlight/', views.flashlight_view, name='flashlight'),

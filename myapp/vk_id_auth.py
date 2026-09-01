@@ -10,6 +10,7 @@ from django.contrib.auth import login
 from django.contrib.auth.models import User
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 
 VK_ID_AUTHORIZE_URL = "https://id.vk.com/authorize"
 VK_ID_TOKEN_URL = "https://id.vk.com/oauth2/auth"
@@ -31,6 +32,18 @@ def vk_login_start(request):
 
     request.session["vk_code_verifier"] = code_verifier
     request.session["vk_oauth_state"] = state
+
+    # Куда вернуть пользователя после входа (например, его туда отправил
+    # @login_required с защищённой страницы). Проверяем через
+    # url_has_allowed_host_and_scheme, чтобы нельзя было подсунуть внешний
+    # адрес в ?next= и увести пользователя после входа на чужой сайт.
+    next_url = request.GET.get("next")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        request.session["vk_login_next"] = next_url
+    else:
+        request.session.pop("vk_login_next", None)
 
     redirect_uri = request.build_absolute_uri("/")
 
@@ -123,4 +136,6 @@ def vk_login_callback(request):
         user.save()
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    return redirect("home")
+
+    next_url = request.session.pop("vk_login_next", None)
+    return redirect(next_url) if next_url else redirect("home")

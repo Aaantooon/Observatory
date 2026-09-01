@@ -20,6 +20,18 @@
             </a>
         {% endfor %}
         </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:24px; color:#8a9aaa;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" style="color:#e2c044; text-decoration:none;">← Назад</a>
+            {% endif %}
+            <span>Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" style="color:#e2c044; text-decoration:none;">Вперёд →</a>
+            {% endif %}
+        </div>
+        {% endif %}
     {% else %}
         <p style="color: #5a6a7e;">Нет активных проверок.</p>
     {% endif %}

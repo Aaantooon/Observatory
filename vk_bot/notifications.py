@@ -2,8 +2,15 @@ import threading
 import time
 from datetime import datetime, timedelta
 import logging
+from vk_api.exceptions import ApiError
 
 logger = logging.getLogger(__name__)
+
+# Коды ошибок VK API для флуд-контроля: 6 — "Too many requests per second",
+# 9 — "Flood control". При них нет смысла долбить дальше в этом же цикле —
+# следующие сообщения только упрутся в ту же стену; следующий цикл (через
+# ~60с) сам подхватит оставшиеся due-уведомления/комментарии заново.
+FLOOD_CONTROL_CODES = (6, 9)
 
 
 class NotificationSystem:
@@ -12,15 +19,34 @@ class NotificationSystem:
         self.api = api_client
         self.running = False
         self.thread = None
-    
+        self._last_send_flood_control = False
+
     def send_message(self, user_id, message):
+        """Никогда не бросает исключение наружу — вызывающий код (рассылка
+        напоминаний) не должен падать из-за сбоя одной отправки. Возвращает
+        True/False; при флуд-контроле VK дополнительно взводит
+        self._last_send_flood_control, чтобы вызывающий код мог отличить его
+        от обычного сбоя и не долбить дальше в этом же цикле."""
         from vk_api.utils import get_random_id
-        self.vk.method('messages.send', {
-            'user_id': user_id,
-            'message': message,
-            'random_id': get_random_id()
-        })
-    
+        self._last_send_flood_control = False
+        try:
+            self.vk.method('messages.send', {
+                'user_id': user_id,
+                'message': message,
+                'random_id': get_random_id()
+            })
+            return True
+        except ApiError as e:
+            if getattr(e, 'code', None) in FLOOD_CONTROL_CODES:
+                self._last_send_flood_control = True
+                logger.error(f"Флуд-контроль VK (code={e.code}) при отправке пользователю {user_id} — придётся подождать: {e}")
+            else:
+                logger.error(f"Send message error to {user_id}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Send message error to {user_id}: {e}")
+            return False
+
     def start(self):
         if self.running:
             return
@@ -46,35 +72,71 @@ class NotificationSystem:
     
     def _check_notifications(self):
         due = self.api.get_due_notifications()
+        # Защита от повторной отправки ОДНОГО И ТОГО ЖЕ пункта дважды в
+        # рамках одного цикла (баг #6), даже если backend вернул его
+        # повторно или mark_notification_sent не подтвердится ниже.
+        sent_ids_this_cycle = set()
+
         for notif in due:
             # Используем user_vk_id из сериализатора
             user_vk_id = notif.get('user_vk_id')
-            
+            notif_id = notif.get('id')
+
             if not user_vk_id:
                 logger.warning(f"Не найден user_vk_id в уведомлении: {notif}")
                 continue
-            
-            text = self._get_reminder_text(notif.get('exercise_type'))
-            try:
-                self.send_message(int(user_vk_id), text)
-                logger.info(f"Отправлено уведомление пользователю {user_vk_id}: {notif.get('exercise_type')}")
-            except Exception as e:
-                logger.error(f"Send reminder error to {user_vk_id}: {e}")
-                continue
-            
-            self.api.mark_notification_sent(notif.get('id'))
 
+            if notif_id in sent_ids_this_cycle:
+                continue
+
+            text = self._get_reminder_text(notif.get('exercise_type'))
+            sent = self.send_message(int(user_vk_id), text)
+            if not sent:
+                if self._last_send_flood_control:
+                    logger.error(
+                        "Флуд-контроль VK — прекращаю рассылку уведомлений в этом цикле, "
+                        "остальные попробуем в следующем цикле (~60с)"
+                    )
+                    return
+                logger.error(f"Send reminder error to {user_vk_id}")
+                continue
+
+            sent_ids_this_cycle.add(notif_id)
+            logger.info(f"Отправлено уведомление пользователю {user_vk_id}: {notif.get('exercise_type')}")
+
+            if not self.api.mark_notification_sent(notif_id):
+                logger.error(
+                    f"КОМАНДЕ: возможен повторный показ, mark_sent не подтвердился "
+                    f"(уведомление id={notif_id}, пользователь={user_vk_id})"
+                )
+
+        sent_keys_this_cycle = set()
         pending_comments = self.api.get_pending_admin_comments()
         for c in pending_comments:
-            try:
-                self.send_message(
-                    int(c['user_vk_id']),
-                    f"💬 Комментарий наблюдателя по упражнению «{c['exercise_type']}»:\n\n{c['text']}"
-                )
-            except Exception as e:
-                logger.error(f"Send admin comment error: {e}")
+            key = (c.get('review_id'), c.get('comment_index'))
+            if key in sent_keys_this_cycle:
+                continue
+
+            sent = self.send_message(
+                int(c['user_vk_id']),
+                f"💬 Комментарий наблюдателя по упражнению «{c['exercise_type']}»:\n\n{c['text']}"
+            )
+            if not sent:
+                if self._last_send_flood_control:
+                    logger.error(
+                        "Флуд-контроль VK — прекращаю рассылку комментариев в этом цикле, "
+                        "остальные попробуем в следующем цикле (~60с)"
+                    )
+                    return
+                logger.error(f"Send admin comment error to {c.get('user_vk_id')}")
                 continue  # не помечать отправленным — иначе комментарий психолога потеряется навсегда
-            self.api.mark_comment_sent(c['review_id'], c['comment_index'])
+
+            sent_keys_this_cycle.add(key)
+            if not self.api.mark_comment_sent(c['review_id'], c['comment_index']):
+                logger.error(
+                    f"КОМАНДЕ: возможен повторный показ, mark_sent не подтвердился "
+                    f"(комментарий review_id={c['review_id']} comment_index={c['comment_index']})"
+                )
 
     def _get_reminder_text(self, exercise_type):
         texts = {

@@ -12,6 +12,9 @@ from notifications import NotificationSystem
 from workload import format_daily_plan_message
 from datetime import datetime
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Кризисный протокол: фразы, при которых бот показывает контакты
 # бесплатной круглосуточной психологической помощи. Список сознательно
@@ -110,12 +113,15 @@ class BotHandlers:
         self.notifications.start()
 
     def send_message(self, user_id, message, keyboard=None):
-        self.vk.method('messages.send', {
-            'user_id': user_id,
-            'message': message,
-            'random_id': get_random_id(),
-            'keyboard': keyboard
-        })
+        try:
+            self.vk.method('messages.send', {
+                'user_id': user_id,
+                'message': message,
+                'random_id': get_random_id(),
+                'keyboard': keyboard
+            })
+        except Exception as e:
+            logger.error(f"Send message error to {user_id}: {e}")
 
     def _normalize_text(self, text):
         emoji_pattern = re.compile("["
@@ -231,7 +237,13 @@ class BotHandlers:
                 self.show_exercises(user_id)
             elif "истори" in text_clean:
                 self.show_full_history(user_id)
-            elif "результат" in text_clean or "мои" in text_clean:
+            elif "результат" in text_clean or ("мои" in text_clean and "роли" not in text_clean):
+                # "мои" сам по себе слишком широкий — ловит и "мои роли"
+                # (название упражнения «Мои роли», набранное текстом), уводя
+                # его на экран результатов вместо старта упражнения. Кнопка
+                # «📊 Мои результаты» (и просто "мои результаты") всё равно
+                # матчится через "результат" выше — эта ветка нужна только
+                # для голого "мои" без слова "результат".
                 self.show_results(user_id)
             elif "проверк" in text_clean:
                 self.show_review_menu(user_id)

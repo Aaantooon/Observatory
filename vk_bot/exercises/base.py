@@ -1,5 +1,8 @@
+import logging
 from abc import ABC, abstractmethod
 from vk_api.utils import get_random_id
+
+logger = logging.getLogger(__name__)
 
 
 class BaseExercise(ABC):
@@ -25,12 +28,19 @@ class BaseExercise(ABC):
         pass
 
     def send_message(self, user_id, message, keyboard=None):
-        self.vk.method('messages.send', {
-            'user_id': user_id,
-            'message': message,
-            'random_id': get_random_id(),
-            'keyboard': keyboard
-        })
+        try:
+            self.vk.method('messages.send', {
+                'user_id': user_id,
+                'message': message,
+                'random_id': get_random_id(),
+                'keyboard': keyboard
+            })
+        except Exception as e:
+            # Отправка не должна ронять вызывающий код (например, _finish()
+            # после того, как save_result()/delete_progress() уже отработали)
+            # — иначе сбой самого сообщения оставит пользователя без
+            # завершающего экрана и клавиатуры.
+            logger.error(f"Send message error to {user_id}: {e}")
 
     def save_progress(self, user_id, data):
         return self.api.save_progress(user_id, self.get_exercise_type(), data)

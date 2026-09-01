@@ -17,12 +17,15 @@ class StressSearchExercise:
         self.user_sessions = {}
 
     def send_message(self, user_id, message, keyboard=None):
-        self.vk.method('messages.send', {
-            'user_id': user_id,
-            'message': message,
-            'random_id': get_random_id(),
-            'keyboard': keyboard
-        })
+        try:
+            self.vk.method('messages.send', {
+                'user_id': user_id,
+                'message': message,
+                'random_id': get_random_id(),
+                'keyboard': keyboard
+            })
+        except Exception as e:
+            logger.error(f"Send message error to {user_id}: {e}")
 
     def _get_progress_bar(self, count, target=100):
         percent = min(100, int((count / target) * 100))
@@ -456,6 +459,16 @@ class StressSearchExercise:
         leftover = ' '.join(buffer).strip()
         return items, leftover
 
+    def _item_text_for_display(self, text, limit=150):
+        """Обрезает текст образа для показа в списке/сводке — сам текст не
+        ограничен по длине при вводе, а вставленный список может содержать
+        много строк сразу, так что без этого одно сообщение может легко
+        перевалить за ~4096-символьный лимит VK."""
+        text = text or ''
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "…"
+
     def _add_stress_items(self, user_id, session, parsed_items, note=None):
         """Добавляет распознанные (текст, оценка) пары в сессию и одним
         сообщением подтверждает добавление — используется и для
@@ -466,10 +479,18 @@ class StressSearchExercise:
         count = len(session['items'])
         progress = self._get_progress_bar(count, target=100)
         milestone = self._milestone_line(count, target=100)
+        # Помимо обрезки текста каждого образа — ограничиваем и число строк,
+        # реально показанных в подтверждении: одним сообщением можно
+        # вставить очень длинный список, и даже при обрезке каждой строки
+        # десятки строк всё равно легко перевалят за лимит VK.
+        MAX_LISTED = 30
+        shown_items = parsed_items[:MAX_LISTED]
         listed = "\n".join(
-            f"{i + 1}. {self._score_emoji(rate)} «{item_text}» — {rate}/10"
-            for i, (item_text, rate) in enumerate(parsed_items)
+            f"{i + 1}. {self._score_emoji(rate)} «{self._item_text_for_display(item_text)}» — {rate}/10"
+            for i, (item_text, rate) in enumerate(shown_items)
         )
+        if len(parsed_items) > MAX_LISTED:
+            listed += f"\n… и ещё {len(parsed_items) - MAX_LISTED}"
 
         message = (
             f"✅ Добавлено образов: {len(parsed_items)}\n"
@@ -794,7 +815,10 @@ class StressSearchExercise:
 
         total = len(session.get('items', []))
         top = sorted(session.get('items', []), key=lambda x: x['rate'], reverse=True)[:3]
-        top_text = "\n".join([f"  · {self._score_emoji(b['rate'])} {b['text']} ({b['rate']}/10)" for b in top])
+        top_text = "\n".join([
+            f"  · {self._score_emoji(b['rate'])} {self._item_text_for_display(b['text'])} ({b['rate']}/10)"
+            for b in top
+        ])
 
         analyzed = len(session.get('answers', []))
         avg_percent = 0

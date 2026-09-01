@@ -10,7 +10,7 @@
             {% endfor %}
         </select>
         <textarea name="text" rows="5" placeholder="Текст поста" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">{% if post %}{{ post.text }}{% endif %}</textarea>
-        <input type="datetime-local" name="publish_date" value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
+        <input type="datetime-local" name="publish_date" required value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
         <select name="status" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
             {% for value, label in status_choices %}
             <option value="{{ value }}" {% if post.status == value %}selected{% endif %}>{{ label }}</option>

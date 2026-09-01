@@ -56,8 +56,14 @@ class FakeAPIClient:
         self.marked_notifications_sent = []
         self.marked_comments_sent = []
         self.deleted_notification_ids = set()
+        self.fail_save_result = False
+        self.fail_save_progress = False
+        self.fail_mark_notification_sent = False
+        self.fail_mark_comment_sent = False
 
     def save_progress(self, user_vk_id, exercise_type, data):
+        if self.fail_save_progress:
+            return None
         self.progress_store[(user_vk_id, exercise_type)] = dict(data)
         return {"status": "ok"}
 
@@ -73,6 +79,8 @@ class FakeAPIClient:
         return True
 
     def save_result(self, user_vk_id, exercise_type, result_data):
+        if self.fail_save_result:
+            return None
         entry = {
             "user_vk_id": user_vk_id,
             "exercise_type": exercise_type,
@@ -120,11 +128,15 @@ class FakeAPIClient:
 
     def mark_notification_sent(self, notification_id):
         self.marked_notifications_sent.append(notification_id)
+        if self.fail_mark_notification_sent:
+            return False
         return True
 
     def mark_comment_sent(self, review_id, comment_index):
         self.marked_comments_sent.append((review_id, comment_index))
-        return None
+        if self.fail_mark_comment_sent:
+            return False
+        return True
 
     def create_notification(self, user_vk_id, exercise_type, schedule_type, schedule_data):
         entry = {

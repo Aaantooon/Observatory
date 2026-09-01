@@ -125,14 +125,23 @@ def test_save_result_success_returns_server_json():
     assert client.save_result("123", "diary", {}) == {"id": 1}
 
 
-def test_save_result_bad_status_returns_saved_local_fallback():
+def test_save_result_bad_status_returns_falsy_not_fake_success():
+    """Баг #1: сервер отверг сохранение (не 201), но раньше save_result()
+    всё равно возвращал truthy {"status": "saved_local"} — вызывающий код
+    (exercises/*) проверяет `if not self.save_result(...)` и это условие
+    никогда не срабатывало, скрывая реальный сбой от пользователя. Должен
+    возвращаться falsy (None), чтобы честная проверка отработала."""
     client, fake = make(FakeResponse(400, {"error": "bad"}))
-    assert client.save_result("123", "diary", {}) == {"status": "saved_local"}
+    result = client.save_result("123", "diary", {})
+    assert not result
+    assert result is None
 
 
-def test_save_result_network_exception_returns_saved_local_fallback():
+def test_save_result_network_exception_returns_falsy_not_fake_success():
     client, fake = make(TimeoutError("таймаут"))
-    assert client.save_result("123", "diary", {}) == {"status": "saved_local"}
+    result = client.save_result("123", "diary", {})
+    assert not result
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -241,22 +250,31 @@ def test_create_notification_requires_201_not_200():
 
 
 # ---------------------------------------------------------------------------
-# mark_comment_sent — не возвращает значения (fire-and-forget), но не
-# должен падать, даже если сеть отвалилась
+# mark_comment_sent — не должен падать, даже если сеть отвалилась; должен
+# возвращать True/False по статусу ответа (баг #6: notifications.py должен
+# уметь отличить подтверждённую отметку "отправлено" от неподтверждённой,
+# чтобы честно залогировать риск повторной отправки).
 # ---------------------------------------------------------------------------
 
 def test_mark_comment_sent_does_not_raise_on_network_exception():
     client, fake = make(RuntimeError("сеть упала"))
-    client.mark_comment_sent(1, 0)  # не должно бросить исключение
+    result = client.mark_comment_sent(1, 0)  # не должно бросить исключение
+    assert result is False
 
 
 def test_mark_comment_sent_posts_comment_index_in_body():
     client, fake = make(FakeResponse(200, None))
-    client.mark_comment_sent(7, 2)
+    result = client.mark_comment_sent(7, 2)
+    assert result is True
     verb, url, kwargs = fake.calls[0]
     assert verb == "POST"
     assert "7" in url
     assert kwargs["json"]["comment_index"] == 2
+
+
+def test_mark_comment_sent_returns_false_on_bad_status():
+    client, fake = make(FakeResponse(500, None))
+    assert client.mark_comment_sent(7, 2) is False
 
 
 # ---------------------------------------------------------------------------

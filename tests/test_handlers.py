@@ -150,6 +150,32 @@ def test_main_menu_keyword_routes_to_results():
     assert "ПУТЬ ПУСТ" in vk.last_message, "У нового пользователя результатов нет"
 
 
+def test_main_menu_typed_lowercase_moi_rezultaty_still_routes_to_results():
+    """'мои' в одиночку (без слова 'результат') всё ещё должен матчить
+    экран результатов — регрессия для бага #8 не должна ломать этот путь."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "мои", "Аня", "И")
+    assert "ПУТЬ ПУСТ" in vk.last_message
+
+
+def test_main_menu_typed_moi_roli_does_not_get_swallowed_by_results():
+    """Баг #8: "мои роли", набранное текстом из главного меню, раньше
+    маршрутизировалось на экран 'Мои результаты' из-за широкой проверки
+    "мои" in text_clean, проверяемой раньше названия упражнения. Свободный
+    ввод названия упражнения из состояния 'main' сегодня всё равно нигде не
+    запускает упражнение напрямую (это работает только через кнопки —
+    state == 'selecting_exercise'), так что здесь достаточно проверить, что
+    его больше не молча уводит на экран результатов."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "мои роли", "Аня", "И")
+    assert "ПУТЬ ПУСТ" not in vk.last_message, (
+        "'мои роли' не должно было маршрутизироваться на экран результатов"
+    )
+    assert bh.user_states[UID] == "main"
+
+
 def test_main_menu_keyword_routes_to_review_menu():
     bh, vk, api = make_handlers()
     _greet(bh)

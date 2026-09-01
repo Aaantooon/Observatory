@@ -120,9 +120,9 @@ INSTALLED_APPS = [
     'bot_api',
     'crm',
     'observer3d',
-    
-    # Авторизация вк
-    'sslserver',
+
+    # sitemap.xml (фреймворк, без своих моделей — миграция не нужна)
+    'django.contrib.sitemaps',
 ]
 
 # =======================================
@@ -303,6 +303,23 @@ ADMIN_INDEX_TITLE = "Добро пожаловать в панель управ�
 
 VK_TOKEN = os.getenv('VK_TOKEN')
 VK_GROUP_ID = os.getenv('VK_GROUP_ID')
+
+# ===== Почта =====
+# Ничего в проекте сейчас email не отправляет, но без EMAIL_BACKEND
+# Django по умолчанию пытается отправлять письма через настоящий SMTP
+# с пустыми настройками, что просто падает. Если в .env задан EMAIL_HOST —
+# используем настоящий SMTP; если нет — безопасный вариант по умолчанию:
+# письма печатаются в консоль/лог вместо реальной отправки.
+EMAIL_HOST = os.getenv('EMAIL_HOST', '')
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 MACHINA_FORUM_NAME = 'Путь наблюдателя'
 MACHINA_MAIN_CRISPY_TEMPLATE_PACK = 'bootstrap5'

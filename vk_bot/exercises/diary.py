@@ -229,6 +229,16 @@ class DiaryExercise(BaseExercise):
 
         phase = session.get('phase')
 
+        if not text_lower:
+            # Стикер/фото/голосовое приходят из main.py как text="" — не
+            # записывать пустой ответ и не продвигать шаг молча.
+            self.send_message(
+                user_id,
+                "Пожалуйста, напиши текстом — я не могу обработать стикер/фото здесь.",
+                step_nav_keyboard()
+            )
+            return
+
         if phase == 'dream':
             session['dream'] = text
             session['phase'] = 'mood'
@@ -367,6 +377,17 @@ class DiaryExercise(BaseExercise):
         self.save_progress(user_id, session)
         self._show_phase(user_id, session)
 
+    def _truncate_for_display(self, text, limit):
+        """Обрезает текст для сообщения-эхо, чтобы неограниченный ввод
+        пользователя (dream/mood/body/differences/thoughts/wants) не мог
+        разово превысить ~4096-символьный лимит сообщения VK и уронить
+        отправку ПОСЛЕ того, как save_result()/delete_progress() уже
+        отработали. '…' добавляется только если реально что-то обрезано."""
+        text = text or ''
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "…"
+
     def _finish(self, user_id, session):
         result = {
             'dream': session.get('dream') or '',
@@ -386,12 +407,12 @@ class DiaryExercise(BaseExercise):
         self.send_message(
             user_id,
             f"✨ ДНЕВНИК ЗАПИСАН\n\n"
-            f"📖 Сон: {result['dream']}\n\n"
-            f"😊 Настроение: {result['mood']}\n\n"
-            f"💪 Тело: {result['body']}\n\n"
-            f"💭 Мысли: {result['thoughts'][:100]}...\n\n"
-            f"🎯 Хочу: {result['wants'][:100]}...\n\n"
-            f"🌟 Особенность дня: {result['differences']}\n\n"
+            f"📖 Сон: {self._truncate_for_display(result['dream'], 300)}\n\n"
+            f"😊 Настроение: {self._truncate_for_display(result['mood'], 300)}\n\n"
+            f"💪 Тело: {self._truncate_for_display(result['body'], 300)}\n\n"
+            f"💭 Мысли: {self._truncate_for_display(result['thoughts'], 100)}\n\n"
+            f"🎯 Хочу: {self._truncate_for_display(result['wants'], 100)}\n\n"
+            f"🌟 Особенность дня: {self._truncate_for_display(result['differences'], 300)}\n\n"
             f"✨ Береги себя ❤️",
             main_menu()
         )

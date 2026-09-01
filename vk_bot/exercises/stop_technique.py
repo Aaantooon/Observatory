@@ -191,6 +191,16 @@ class StopTechniqueExercise(BaseExercise):
 
         phase = session.get('phase')
 
+        if not text_lower:
+            # Стикер/фото/голосовое приходят из main.py как text="" — не
+            # записывать пустой ответ и не продвигать шаг молча.
+            self.send_message(
+                user_id,
+                "Пожалуйста, напиши текстом — я не могу обработать стикер/фото здесь.",
+                step_nav_keyboard()
+            )
+            return
+
         if phase == 'thoughts':
             session['thoughts'] = text
             session['phase'] = 'feelings'

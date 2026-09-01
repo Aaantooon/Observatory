@@ -6,6 +6,7 @@ from keyboards import (
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, OVERRIDE_LIMIT_TEXTS,
 )
+from config import MAX_EXERCISE_ITEMS
 
 
 class MyRolesExercise(BaseExercise):
@@ -24,6 +25,21 @@ class MyRolesExercise(BaseExercise):
             'current_type': 'social',
             'step': 1
         }
+
+    def save_progress(self, user_id, data):
+        """Как и BaseExercise.save_progress, но никогда не персистит
+        '_confirm_empty_phase' — это чисто транзитный флаг "жду да/нет"
+        внутри текущего разговора, а не часть настоящего прогресса. Если
+        сохранить его буквально (например, через 'Сохранить и выйти' пока
+        висит вопрос-подтверждение), start() при возобновлении молча
+        восстановит флаг без повторного показа вопроса — и следующий
+        реальный ответ пользователя будет проглочен мёртвой проверкой
+        _confirm_empty_phase, человек застрянет без видимой причины. Раз
+        флаг просто отсутствует после resume, обычный поток продолжается
+        как обычно — потерян только сам вопрос "точно оставить пустым?",
+        а это не страшно потерять."""
+        data_to_persist = {k: v for k, v in data.items() if k != '_confirm_empty_phase'}
+        return super().save_progress(user_id, data_to_persist)
 
     def _handle_start_over(self, user_id):
         self.delete_progress(user_id)
@@ -119,7 +135,7 @@ class MyRolesExercise(BaseExercise):
                 "· Повар, прохожий, пешеход\n"
                 "· Продавец, гуляющий в парке\n"
                 "· Смотрящий на деревья\n\n"
-                "📝 Пиши по одной роли за раз (до 20, можно и меньше)\n"
+                f"📝 Пиши по одной роли за раз (до {MAX_EXERCISE_ITEMS}, можно и меньше)\n"
                 "Или вставь сразу список — каждая роль с новой строки, я разложу по пунктам\n"
                 "💡 Спешить некуда: комфортнее добавлять не больше одной роли в день,\n"
                 "чтобы каждую успеть прочувствовать\n\n"
@@ -135,7 +151,7 @@ class MyRolesExercise(BaseExercise):
                 "· Друг для Серёжи\n"
                 "· Отец для Алины\n"
                 "· Рабочий для начальника Александра\n\n"
-                "📝 Пиши по одной роли за раз (до 20, можно и меньше)\n"
+                f"📝 Пиши по одной роли за раз (до {MAX_EXERCISE_ITEMS}, можно и меньше)\n"
                 "Или вставь сразу список — каждая роль с новой строки, я разложу по пунктам\n"
                 "💡 Одной роли в день вполне достаточно",
                 exercise_keyboard()
@@ -215,7 +231,6 @@ class MyRolesExercise(BaseExercise):
                 session.pop('_daily_limit_prompt', None)
             elif text_lower in OVERRIDE_LIMIT_TEXTS:
                 session.pop('_daily_limit_prompt', None)
-                session['_daily_override_active'] = True
                 self.save_progress(user_id, session)
                 self._analyze_roles(user_id, session, force=True)
                 return
@@ -268,7 +283,7 @@ class MyRolesExercise(BaseExercise):
                     items.append(cleaned)
         return items
 
-    def _send_roles_added(self, user_id, items, count, target=20):
+    def _send_roles_added(self, user_id, items, count, target=MAX_EXERCISE_ITEMS):
         if not items:
             self.send_message(
                 user_id,
@@ -474,7 +489,7 @@ class MyRolesExercise(BaseExercise):
             # попадёт, пока висит session['_daily_limit_prompt'] (см. выше),
             # и снимает флаг только когда лимит на самом деле уже не
             # действует (новый день) или пользователь явно подтвердил
-            # «Всё равно продолжить» (тогда стоит _daily_override_active).
+            # «Всё равно продолжить».
             session['current_ideal'] = text
             session['analysis_step'] = 2
             self._mark_analysis_today(session)
@@ -494,10 +509,11 @@ class MyRolesExercise(BaseExercise):
             'terrible': text
         })
         session.pop('current_ideal', None)
-        # Override действует только на ОДНУ роль сверх дневного лимита — для
-        # следующей роли, если до неё тоже дойдёт очередь сегодня, лимит
-        # снова должен спросить подтверждение, а не пропустить его молча.
-        session.pop('_daily_override_active', None)
+        # Override (сила force=True из «Всё равно продолжить») действует
+        # только на ОДНУ роль сверх дневного лимита — она не хранится в
+        # session вообще, поэтому для следующей роли, если до неё тоже
+        # дойдёт очередь сегодня, лимит снова спросит подтверждение, а не
+        # пропустит его молча.
 
         session['analysis_index'] = index + 1
         # Сбрасываем шаг сразу, а не только внутри _analyze_roles — иначе,

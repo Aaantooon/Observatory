@@ -3,6 +3,7 @@ from keyboards import (
     exercise_keyboard, finish_keyboard, back_keyboard, main_menu, continue_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
 )
+from config import MAX_EXERCISE_ITEMS
 
 
 class HappinessListExercise(BaseExercise):
@@ -59,19 +60,30 @@ class HappinessListExercise(BaseExercise):
             "· Кофе утром — 8\n"
             "· Прогулка в парке — 9\n"
             "· Общение с друзьями — 10\n\n"
-            "Нужно набрать до 20 пунктов.\n"
+            f"Нужно набрать до {MAX_EXERCISE_ITEMS} пунктов.\n"
             "Ты можешь завершить в любой момент — я сохраню прогресс.\n\n"
             "✏️ Напиши первый пункт и оценку:",
             exercise_keyboard()
         )
 
+    def _item_text_for_display(self, text, limit=150):
+        """Обрезает текст пункта для показа в списке — сам пункт не
+        ограничен по длине при вводе, а список может содержать до 20
+        пунктов, так что без этого одно сообщение может легко перевалить
+        за ~4096-символьный лимит VK."""
+        text = text or ''
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "…"
+
     def _show_items(self, user_id, items):
         message = "📋 Твой список счастья:\n\n"
         for i, item in enumerate(items, 1):
-            message += f"{i}. {self._score_emoji(item.get('score', 0))} {item.get('text')} — {item.get('score')}/10\n"
-        
-        message += f"\nВсего: {len(items)}/20 пунктов\n"
-        message += f"{self._get_progress_bar(len(items), target=20)}\n\n"
+            item_text = self._item_text_for_display(item.get('text'))
+            message += f"{i}. {self._score_emoji(item.get('score', 0))} {item_text} — {item.get('score')}/10\n"
+
+        message += f"\nВсего: {len(items)}/{MAX_EXERCISE_ITEMS} пунктов\n"
+        message += f"{self._get_progress_bar(len(items), target=MAX_EXERCISE_ITEMS)}\n\n"
         message += "✏️ Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»."
         
         self.send_message(user_id, message, exercise_keyboard())
@@ -148,11 +160,11 @@ class HappinessListExercise(BaseExercise):
         self.save_progress(user_id, {'items': session['items']})
 
         count = len(session['items'])
-        progress = self._get_progress_bar(count, target=20)
-        milestone = self._milestone_line(count, target=20)
+        progress = self._get_progress_bar(count, target=MAX_EXERCISE_ITEMS)
+        milestone = self._milestone_line(count, target=MAX_EXERCISE_ITEMS)
         milestone_text = f"{milestone}\n" if milestone else ""
 
-        if count >= 20:
+        if count >= MAX_EXERCISE_ITEMS:
             self.send_message(
                 user_id,
                 f"🎉 Отлично! Ты собрал {count} пунктов счастья!\n"
@@ -163,7 +175,7 @@ class HappinessListExercise(BaseExercise):
         else:
             self.send_message(
                 user_id,
-                f"✅ Добавлено! {count}/20\n"
+                f"✅ Добавлено! {count}/{MAX_EXERCISE_ITEMS}\n"
                 f"{progress}\n"
                 f"{milestone_text}\n"
                 f"📌 {self._score_emoji(score)} {item_text} — {score}/10\n\n"
@@ -195,7 +207,7 @@ class HappinessListExercise(BaseExercise):
             f"📋 Собрано: {len(items)} пунктов счастья\n"
             f"📊 Средняя оценка: {avg_score:.1f}/10\n\n"
             f"Топ-3:\n" + "\n".join(
-                f"  · {self._score_emoji(i['score'])} {i['text']} ({i['score']}/10)"
+                f"  · {self._score_emoji(i['score'])} {self._item_text_for_display(i['text'])} ({i['score']}/10)"
                 for i in sorted(items, key=lambda x: x['score'], reverse=True)[:3]
             ) + "\n\n✨ Сохраняй этот список и дополняй!",
             main_menu()

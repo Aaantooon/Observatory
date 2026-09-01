@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse, FileResponse, Http404
 from django.contrib import messages
 from django.db.models import Q
+from django.core.validators import URLValidator
+from django.core.exceptions import ValidationError
 from .models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
 import json
 import csv
@@ -19,25 +21,32 @@ def course_index(request):
         user=request.user,
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
-    modules = Module.objects.filter(is_published=True).order_by('number')
+    modules = list(Module.objects.filter(is_published=True).order_by('number'))
+    # Раньше is_module_completed() и get_prev() внутри цикла делали по
+    # отдельному запросу на каждый модуль (N+1). Вместо этого один раз
+    # достаём id пройденных модулей и строим словарь "номер -> модуль"
+    # из уже загруженного списка, дальше — просто поиск в памяти.
+    completed_ids = set(progress.completed_modules.values_list('id', flat=True))
+    modules_by_number = {m.number: m for m in modules}
     modules_data = []
     for module in modules:
-        is_completed = progress.is_module_completed(module)
-        is_unlocked = module.number == 1 or (module.get_prev() and progress.is_module_completed(module.get_prev())) or is_completed
+        is_completed = module.id in completed_ids
+        prev = modules_by_number.get(module.number - 1)
+        is_unlocked = module.number == 1 or (prev and prev.id in completed_ids) or is_completed
         modules_data.append({
             'module': module,
             'is_completed': is_completed,
             'is_unlocked': is_unlocked,
             'is_current': progress.current_module and module.id == progress.current_module.id
         })
-    
+
     streak, _ = UserStreak.objects.get_or_create(user=request.user)
-    
+
     return render(request, 'myapp/course/index.html', {
         'modules': modules_data,
         'progress_percent': progress.get_progress_percent(),
         'completed_count': progress.completed_modules.count(),
-        'total_count': modules.count(),
+        'total_count': len(modules),
         'streak': streak.current_streak,
         'max_streak': streak.max_streak,
     })
@@ -143,7 +152,7 @@ def complete_module_api(request):
         module_id = data.get('module_id')
         if not module_id:
             return JsonResponse({'error': 'module_id required'}, status=400)
-        module = get_object_or_404(Module, id=module_id)
+        module = get_object_or_404(Module, id=module_id, is_published=True)
         progress, _ = UserCourseProgress.objects.get_or_create(
             user=request.user,
             defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
@@ -171,6 +180,10 @@ def complete_module_api(request):
         })
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Http404:
+        # Несуществующий/неопубликованный модуль — настоящий 404, а не
+        # проглоченная "внутренняя ошибка сервера".
+        raise
     except Exception:
         logger.exception("Ошибка при завершении модуля курса (user=%s)", request.user.id)
         return JsonResponse({'error': 'Внутренняя ошибка сервера'}, status=500)
@@ -187,7 +200,7 @@ def association_api(request):
         association = data.get('association', '').strip()
         if not all([module_id, object_name, association]):
             return JsonResponse({'error': 'Все поля обязательны'}, status=400)
-        module = get_object_or_404(Module, id=module_id)
+        module = get_object_or_404(Module, id=module_id, is_published=True)
         assoc = GameAssociation.objects.create(
             user=request.user,
             module=module,
@@ -203,6 +216,10 @@ def association_api(request):
                 'created_at': assoc.created_at.isoformat()
             }
         })
+    except Http404:
+        # Несуществующий/неопубликованный модуль — настоящий 404, а не
+        # проглоченная ошибка сохранения.
+        raise
     except Exception:
         logger.exception("Ошибка при сохранении ассоциации (user=%s)", request.user.id)
         return JsonResponse({'error': 'Не удалось сохранить'}, status=400)
@@ -212,7 +229,7 @@ def association_api(request):
 def add_comment(request, module_number):
     if request.method != 'POST':
         return redirect('course_index')
-    module = get_object_or_404(Module, number=module_number)
+    module = get_object_or_404(Module, number=module_number, is_published=True)
     text = request.POST.get('text', '').strip()
     if text:
         ModuleComment.objects.create(
@@ -224,17 +241,31 @@ def add_comment(request, module_number):
     return redirect('course_module', module_number=module_number)
 
 
+@login_required
 def search_course(request):
     query = request.GET.get('q', '').strip()
     results = []
     if query:
-        results = Module.objects.filter(
+        progress, _ = UserCourseProgress.objects.get_or_create(
+            user=request.user,
+            defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+        )
+        matched = Module.objects.filter(
             Q(title__icontains=query) |
             Q(subtitle__icontains=query) |
             Q(description__icontains=query) |
             Q(content__icontains=query) |
             Q(key_concepts__icontains=query)
         ).filter(is_published=True)
+        # Та же логика разблокировки, что и в module_detail: доступ закрыт,
+        # только если у модуля есть предыдущий и он ещё не пройден.
+        def is_unlocked(module):
+            if module.number <= 1:
+                return True
+            prev = module.get_prev()
+            return not (prev and not progress.is_module_completed(prev))
+
+        results = [module for module in matched if is_unlocked(module)]
     return render(request, 'search_results.html', {
         'query': query,
         'results': results,
@@ -271,10 +302,33 @@ def edit_profile(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     
     if request.method == 'POST':
+        # Поля с max_length режем до предела модели прямо тут — без этого
+        # Postgres кидает необработанный DataError (500) на слишком длинном
+        # значении. location/telegram — обычные CharField, поэтому обрезка
+        # достаточна. website — URLField: значение сначала обрезаем по длине,
+        # а затем, если оно не похоже на настоящий URL, просто не сохраняем
+        # и показываем понятную ошибку вместо того, чтобы упасть или молча
+        # сохранить мусор.
+        location_max = UserProfile._meta.get_field('location').max_length
+        telegram_max = UserProfile._meta.get_field('telegram').max_length
+        website_max = UserProfile._meta.get_field('website').max_length
+
         profile.bio = request.POST.get('bio', '')
-        profile.location = request.POST.get('location', '')
-        profile.website = request.POST.get('website', '')
-        profile.telegram = request.POST.get('telegram', '')
+        profile.location = request.POST.get('location', '')[:location_max]
+        profile.telegram = request.POST.get('telegram', '')[:telegram_max]
+
+        website = request.POST.get('website', '').strip()[:website_max]
+        if website:
+            validate_url = URLValidator()
+            try:
+                validate_url(website)
+                profile.website = website
+            except ValidationError:
+                messages.error(request, '❌ Некорректный адрес сайта — поле "Сайт" не сохранено')
+                profile.website = ''
+        else:
+            profile.website = ''
+
         profile.notifications_enabled = request.POST.get('notifications') == 'on'
         
         if request.FILES.get('avatar'):
@@ -314,7 +368,7 @@ def edit_profile(request):
 def toggle_bookmark(request, module_number):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    module = get_object_or_404(Module, number=module_number)
+    module = get_object_or_404(Module, number=module_number, is_published=True)
     bookmark, created = Bookmark.objects.get_or_create(user=request.user, module=module)
     if not created:
         bookmark.delete()
@@ -332,6 +386,10 @@ def mindmap_data(request):
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
     modules = Module.objects.filter(is_published=True).order_by('number')
+
+    # Один запрос вместо N: раньше progress.is_module_completed(module)
+    # внутри цикла ниже дёргал БД на каждый модуль.
+    completed_ids = set(progress.completed_modules.values_list('id', flat=True))
 
     # Позиции узлов, которые пользователь уже сам перетащил и сохранил —
     # если для узла есть сохранённая позиция, используем её вместо
@@ -361,7 +419,7 @@ def mindmap_data(request):
 
     # Модули
     for i, module in enumerate(modules):
-        is_completed = progress.is_module_completed(module)
+        is_completed = module.id in completed_ids
         is_current = progress.current_module and module.id == progress.current_module.id
 
         status = 'completed' if is_completed else ('current' if is_current else 'locked')

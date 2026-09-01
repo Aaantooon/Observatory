@@ -70,10 +70,10 @@ class APIClient:
             if response.status_code == 201:
                 return response.json()
             logger.warning(f"API Error saving result: {response.status_code}")
-            return {"status": "saved_local"}
+            return None
         except Exception as e:
             logger.error(f"API save error: {e}")
-            return {"status": "saved_local"}
+            return None
 
     def get_user_results(self, vk_id):
         try:
@@ -307,13 +307,17 @@ class APIClient:
 
     def mark_comment_sent(self, review_id, comment_index):
         try:
-            requests.post(
+            response = requests.post(
                 f"{self.base_url}/admin/review/{review_id}/mark_comment_sent/",
                 json={"comment_index": comment_index},
                 headers=self.headers, timeout=5
             )
+            if response.status_code == 200:
+                return True
+            logger.warning(f"API Error marking comment sent: {response.status_code}")
         except Exception as e:
             logger.error(f"Mark comment sent error: {e}")
+        return False
 
     def get_active_review(self, vk_id):
         try:
