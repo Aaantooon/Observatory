@@ -1,15 +1,19 @@
 import calendar
 import logging
 import re
+import secrets
 from collections import Counter
 from datetime import timedelta
+from django.conf import settings
 from django.contrib.auth.models import User as AuthUser
 from django.core.paginator import Paginator
+from django.http import Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
 from bot_api.models import User, Result, Review, Post, Channel, PostChannelStatus
 from myapp.models import UserCourseProgress
 from crm.ai_split import split_posts_with_ai, MANUAL_SPLIT_PROMPT_TEMPLATE
@@ -562,3 +566,38 @@ def post_bulk_assign_channel(request):
         messages.warning(request, f'ℹ️ У всех отмеченных постов канал «{channel.name}» уже был добавлен ранее.')
 
     return redirect('crm_post_list')
+
+
+@csrf_exempt
+def publish_due_webhook(request, secret):
+    """Вебхук для внешнего бесплатного сервиса-будильника (например
+    cron-job.org) — альтернатива cron на сервере для того, у кого нет
+    удобного доступа к консоли сервера. Делает ровно то же самое, что
+    management-команда publish_due_posts, только запускается по HTTP-заходу
+    вместо системного планировщика.
+
+    БЕЗ логина/staff-прав — внешний сервис не может пройти обычный вход в
+    CRM, поэтому единственная защита — секретная строка в самом URL
+    (settings.PUBLISH_CRON_SECRET, пользователь придумывает и вписывает её
+    сам в .env и в настройки сервиса-будильника, эта сессия её не видит).
+    Если секрет не настроен в .env вообще, или не совпадает с тем, что
+    пришло в URL — 404, как будто такой страницы не существует. Сравнение
+    через secrets.compare_digest — без утечки через разницу во времени
+    ответа. GET и POST оба ок (разные сервисы-будильники ходят по-разному),
+    CSRF отключён намеренно — запрос приходит не из браузера с сессией."""
+    configured_secret = getattr(settings, 'PUBLISH_CRON_SECRET', '')
+    if not configured_secret or not secrets.compare_digest(secret, configured_secret):
+        raise Http404()
+
+    due = (
+        PostChannelStatus.objects
+        .filter(status='scheduled', post__publish_date__lte=timezone.now(), channel__is_active=True)
+        .select_related('post', 'channel')
+    )
+    if not due:
+        return JsonResponse({'ok': True, 'published': 0, 'failed': 0, 'message': 'nothing due'})
+
+    results = publish_channel_statuses(due)
+    published = sum(1 for r in results if r['status'] == 'published')
+    failed = len(results) - published
+    return JsonResponse({'ok': True, 'published': published, 'failed': failed, 'total': len(results)})

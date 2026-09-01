@@ -329,6 +329,19 @@ VK_GROUP_ID = os.getenv('VK_GROUP_ID')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 AI_SPLIT_MODEL = os.getenv('AI_SPLIT_MODEL', 'claude-haiku-4-5')
 
+# ===== Публикация постов по внешнему будильнику (без cron на сервере) =====
+# Полностью опционально: если PUBLISH_CRON_SECRET не задан — URL-вебхук
+# /crm/cron/publish-due/<секрет>/ всегда отвечает 404, ничего не делает и
+# ничем не рискует. Чтобы включить: придумать длинную случайную строку
+# самостоятельно (например, командой `python3 -c "import secrets;
+# print(secrets.token_urlsafe(32))"` на сервере или любым генератором
+# паролей), вписать её сюда как PUBLISH_CRON_SECRET в .env — и туда же,
+# в URL внешнего сервиса-будильника (например cron-job.org), который будет
+# заходить на https://putnabludatel.ru/crm/cron/publish-due/<та же строка>/
+# каждые несколько минут. Секрет придумывает и вводит сам пользователь,
+# эта сессия его не видит и не подбирает.
+PUBLISH_CRON_SECRET = os.getenv('PUBLISH_CRON_SECRET', '')
+
 # ===== Почта =====
 # Ничего в проекте сейчас email не отправляет, но без EMAIL_BACKEND
 # Django по умолчанию пытается отправлять письма через настоящий SMTP

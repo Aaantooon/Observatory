@@ -13,4 +13,5 @@ urlpatterns = [
     path('posts/<int:post_id>/delete/', views.post_delete, name='crm_post_delete'),
     path('posts/<int:post_id>/publish/', views.post_publish_now, name='crm_post_publish_now'),
     path('posts/bulk-channel/', views.post_bulk_assign_channel, name='crm_post_bulk_assign_channel'),
+    path('cron/publish-due/<str:secret>/', views.publish_due_webhook, name='crm_publish_due_webhook'),
 ]
