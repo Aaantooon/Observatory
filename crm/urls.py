@@ -11,4 +11,5 @@ urlpatterns = [
     path('posts/bulk/', views.post_bulk_create, name='crm_post_bulk'),
     path('posts/<int:post_id>/edit/', views.post_edit, name='crm_post_edit'),
     path('posts/<int:post_id>/delete/', views.post_delete, name='crm_post_delete'),
+    path('posts/<int:post_id>/publish/', views.post_publish_now, name='crm_post_publish_now'),
 ]

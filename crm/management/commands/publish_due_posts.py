@@ -12,15 +12,16 @@
 повторный запуск (например, случайно запущенный вручную сразу после
 cron) не отправит уже обработанные посты повторно. 'failed' сама не
 повторяется — если токен истёк или была сетевая ошибка, статус нужно
-вручную вернуть в 'scheduled' через /admin/ (или поправить канал и
-пересоздать статус), чтобы не заспамить группу повторными попытками
-без присмотра.
+вручную вернуть в 'scheduled' через /admin/, либо воспользоваться кнопкой
+«Опубликовать сейчас» в CRM (crm/views.py: post_publish_now) — она, в
+отличие от этой команды, повторяет и 'failed' тоже, потому что это
+осознанный ручной клик, а не автоматический разлив по расписанию.
 """
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from bot_api.models import Post, PostChannelStatus
-from crm.publishers import PUBLISHERS
+from bot_api.models import PostChannelStatus
+from crm.publish_logic import publish_channel_statuses
 
 
 class Command(BaseCommand):
@@ -37,45 +38,19 @@ class Command(BaseCommand):
             self.stdout.write("Публиковать нечего.")
             return
 
-        for item in due:
-            publisher = PUBLISHERS.get(item.channel.platform)
-            if publisher is None:
-                item.status = 'failed'
-                item.error_message = f"Нет адаптера публикации для платформы «{item.channel.platform}»"
-                item.save(update_fields=['status', 'error_message'])
+        results = publish_channel_statuses(due)
+        for r in results:
+            item = r['item']
+            if r['status'] == 'published':
+                self.stdout.write(self.style.SUCCESS(
+                    f"  опубликовано: пост {item.post_id} -> «{item.channel.name}»"
+                ))
+            elif r['no_adapter']:
                 self.stdout.write(self.style.WARNING(
                     f"  пропущено: пост {item.post_id} -> «{item.channel.name}» "
                     f"({item.channel.platform}) — нет адаптера"
                 ))
-                continue
-
-            success, result = publisher.publish(item.channel, item.post)
-
-            if success:
-                item.status = 'published'
-                item.published_at = timezone.now()
-                item.external_post_id = result or ''
-                item.error_message = ''
-                self.stdout.write(self.style.SUCCESS(
-                    f"  опубликовано: пост {item.post_id} -> «{item.channel.name}»"
-                ))
             else:
-                item.status = 'failed'
-                item.error_message = result or 'Неизвестная ошибка'
                 self.stdout.write(self.style.ERROR(
-                    f"  ОШИБКА: пост {item.post_id} -> «{item.channel.name}»: {result}"
+                    f"  ОШИБКА: пост {item.post_id} -> «{item.channel.name}»: {r['message']}"
                 ))
-
-            item.save(update_fields=['status', 'published_at', 'external_post_id', 'error_message'])
-
-        # Пост в целом считается опубликованным, когда опубликован хотя бы
-        # в одном канале — статус на уровне Post нужен только для быстрого
-        # обзора в CRM-списке, точная картина — в channel_statuses.
-        touched_post_ids = {item.post_id for item in due}
-        for post in Post.objects.filter(id__in=touched_post_ids):
-            statuses = set(post.channel_statuses.values_list('status', flat=True))
-            if 'published' in statuses:
-                post.status = 'published'
-            elif statuses and statuses <= {'failed'}:
-                post.status = 'failed'
-            post.save(update_fields=['status'])

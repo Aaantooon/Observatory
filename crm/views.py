@@ -13,6 +13,7 @@ from django.utils.dateparse import parse_datetime
 from bot_api.models import User, Result, Review, Post, Channel, PostChannelStatus
 from myapp.models import UserCourseProgress
 from crm.ai_split import split_posts_with_ai, MANUAL_SPLIT_PROMPT_TEMPLATE
+from crm.publish_logic import publish_channel_statuses
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,16 @@ def review_detail(request, review_id):
 
 @staff_member_required
 def post_list(request):
-    posts = Post.objects.prefetch_related('channel_statuses__channel').all()
+    posts = list(Post.objects.prefetch_related('channel_statuses__channel').all())
+    # Сколько каналов у поста реально можно отправить прямо сейчас кнопкой
+    # «Опубликовать сейчас» — 'scheduled' (ещё не пробовали) или 'failed'
+    # (пробовали, но сорвалось — ручной клик осознанно повторяет и такие),
+    # у активного канала. channel_statuses уже prefetch'нуты — доп. запросов нет.
+    for post in posts:
+        post.publishable_count = sum(
+            1 for cs in post.channel_statuses.all()
+            if cs.status in ('scheduled', 'failed') and cs.channel.is_active
+        )
     return render(request, 'crm/post_list.html', {'posts': posts})
 
 
@@ -444,3 +454,39 @@ def post_delete(request, post_id):
         post.delete()
         return redirect('crm_post_list')
     return render(request, 'crm/post_confirm_delete.html', {'post': post})
+
+
+@staff_member_required
+def post_publish_now(request, post_id):
+    """Ручная отправка поста прямо сейчас, по клику из списка постов —
+    в отличие от cron-команды publish_due_posts, повторяет и 'failed'
+    каналы тоже (это осознанное действие человека, а не автоматика)."""
+    post = get_object_or_404(Post, id=post_id)
+    if request.method != 'POST':
+        return redirect('crm_post_list')
+
+    items = list(
+        post.channel_statuses
+        .filter(status__in=['scheduled', 'failed'], channel__is_active=True)
+        .select_related('post', 'channel')
+    )
+    if not items:
+        messages.warning(request, '⚠️ У этого поста нет активных каналов, ожидающих отправки.')
+        return redirect('crm_post_list')
+
+    results = publish_channel_statuses(items)
+    published = [r for r in results if r['status'] == 'published']
+    failed = [r for r in results if r['status'] != 'published']
+
+    if published and not failed:
+        names = ', '.join(r['item'].channel.name for r in published)
+        messages.success(request, f'✅ Опубликовано: {names}.')
+    elif published and failed:
+        ok_names = ', '.join(r['item'].channel.name for r in published)
+        bad_names = ', '.join(f"{r['item'].channel.name} ({r['message']})" for r in failed)
+        messages.warning(request, f'✅ Опубликовано: {ok_names}. ❌ Не удалось: {bad_names}.')
+    else:
+        bad_names = ', '.join(f"{r['item'].channel.name} ({r['message']})" for r in failed)
+        messages.error(request, f'❌ Не удалось опубликовать: {bad_names}.')
+
+    return redirect('crm_post_list')

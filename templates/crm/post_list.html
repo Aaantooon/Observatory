@@ -63,6 +63,26 @@
         text-decoration: none;
         margin-right: 16px;
     }
+    .post-list-page .post-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .post-list-page .publish-now-form {
+        display: inline;
+        margin-right: 16px;
+    }
+    .post-list-page .publish-now-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        font-size: 0.85rem;
+        color: #4ac06a;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .post-list-page .publish-now-btn:hover { text-decoration: underline; }
 </style>
 {% endblock %}
 {% block content %}
@@ -96,6 +116,13 @@
             {% endfor %}
             <p class="post-text">{{ p.text|truncatewords:20 }}</p>
             <div class="post-actions">
+                {% if p.publishable_count %}
+                <form method="post" action="{% url 'crm_post_publish_now' p.id %}" class="publish-now-form"
+                      onsubmit="return confirm('Опубликовать этот пост прямо сейчас во все ожидающие каналы?');">
+                    {% csrf_token %}
+                    <button type="submit" class="publish-now-btn">📤 Опубликовать сейчас ({{ p.publishable_count }})</button>
+                </form>
+                {% endif %}
                 <a href="{% url 'crm_post_edit' p.id %}" style="color:#e2c044;">Редактировать</a>
                 <a href="{% url 'crm_post_delete' p.id %}" style="color:#ff8a95;">Удалить</a>
             </div>
