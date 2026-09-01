@@ -1,24 +1,103 @@
 {% extends 'base.html' %}
+{% block extra_head %}
+<style>
+    .post-list-page .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 20px;
+        margin-bottom: 24px;
+    }
+    .post-list-page .btn-lantern-pill {
+        border: none;
+        padding: 10px 22px;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .post-list-page .btn-ghost-pill {
+        border: 1px solid rgba(226,192,68,0.25);
+        color: #aab3c9;
+        padding: 9px 20px;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-block;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .post-list-page .btn-ghost-pill:hover { border-color: #e2c044; color: #e2c044; }
+
+    .status-pill {
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+    .status-pill.status-draft { background: rgba(170,179,201,0.12); color: #aab3c9; }
+    .status-pill.status-scheduled { background: rgba(226,192,68,0.12); color: #e2c044; }
+    .status-pill.status-published { background: rgba(74,192,106,0.12); color: #4ac06a; }
+    .status-pill.status-failed { background: rgba(220,53,69,0.12); color: #ff8a95; }
+
+    .post-list-page .post-card { display: flex; flex-direction: column; gap: 8px; }
+    .post-list-page .post-card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+    .channel-tag {
+        font-size: 0.78rem;
+        color: #8a9aaa;
+        background: rgba(255,255,255,0.05);
+        padding: 2px 10px;
+        border-radius: 50px;
+    }
+    .post-list-page .post-date { color: #5a6a7e; font-size: 0.85rem; }
+    .post-list-page .post-text { color: #d4d9e6; margin: 2px 0; }
+    .post-list-page .post-actions a {
+        font-size: 0.85rem;
+        text-decoration: none;
+        margin-right: 16px;
+    }
+</style>
+{% endblock %}
 {% block content %}
-<div style="max-width: 900px; margin: 0 auto;">
+<div class="post-list-page" style="max-width: 900px; margin: 0 auto;">
     <h1 style="color: #e2c044; font-weight: 300;">📅 Контент-план</h1>
-    <a href="{% url 'crm_post_create' %}" class="btn-primary-custom">+ Новый пост</a>
-    <a href="/admin/bot_api/channel/" style="margin-left:10px; color:#8a9aaa;">⚙️ Каналы публикации</a>
-    <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+    <div class="toolbar">
+        <a href="{% url 'crm_post_create' %}" class="btn-lantern btn-lantern-pill">+ Новый пост</a>
+        <a href="/admin/bot_api/channel/" class="btn-ghost-pill">⚙️ Каналы публикации</a>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
     {% for p in posts %}
-        <div class="card-glass">
-            <strong style="color: #e2c044;">
-                {% for cs in p.channel_statuses.all %}{{ cs.channel.name }}{% if not forloop.last %}, {% endif %}{% empty %}Без канала{% endfor %}
-            </strong>
-            <span style="color: #8a9aaa;"> · {{ p.get_status_display }} · {{ p.publish_date|date:"d.m.Y H:i" }}</span>
+        <div class="card-glass post-card">
+            <div class="post-card-head">
+                <span class="status-pill status-{{ p.status }}">{{ p.get_status_display }}</span>
+                <span class="post-date">{{ p.publish_date|date:"d.m.Y H:i" }}</span>
+                {% for cs in p.channel_statuses.all %}
+                    <span class="channel-tag">
+                        {% if cs.channel.platform == 'vk' %}🔵{% elif cs.channel.platform == 'telegram' %}✈️{% else %}💬{% endif %}
+                        {{ cs.channel.name }}
+                    </span>
+                {% empty %}
+                    <span class="channel-tag">Без канала</span>
+                {% endfor %}
+            </div>
             {% for cs in p.channel_statuses.all %}
                 {% if cs.status == 'failed' %}
-                <div style="color:#e05a5a; font-size:0.85rem;">⚠️ {{ cs.channel.name }}: {{ cs.error_message }}</div>
+                <div style="color:#ff8a95; font-size:0.85rem;">⚠️ {{ cs.channel.name }}: {{ cs.error_message }}</div>
                 {% endif %}
             {% endfor %}
-            <p style="color: #d4d9e6;">{{ p.text|truncatewords:20 }}</p>
-            <a href="{% url 'crm_post_edit' p.id %}" style="color:#e2c044;">Редактировать</a>
-            <a href="{% url 'crm_post_delete' p.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>
+            <p class="post-text">{{ p.text|truncatewords:20 }}</p>
+            <div class="post-actions">
+                <a href="{% url 'crm_post_edit' p.id %}" style="color:#e2c044;">Редактировать</a>
+                <a href="{% url 'crm_post_delete' p.id %}" style="color:#ff8a95;">Удалить</a>
+            </div>
         </div>
     {% empty %}<p style="color:#5a6a7e;">Постов пока нет.</p>{% endfor %}
     </div>

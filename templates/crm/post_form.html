@@ -1,33 +1,161 @@
 {% extends 'base.html' %}
+{% block extra_head %}
+<style>
+    .post-form-page .field-label {
+        display: block;
+        color: #8a9aaa;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+    }
+    .post-form-page .field-input {
+        width: 100%;
+        background: rgba(11,14,20,0.55);
+        border: 1px solid rgba(226,192,68,0.15);
+        color: #e0d5c1;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 0.95rem;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .post-form-page .field-input:focus {
+        outline: none;
+        background: rgba(11,14,20,0.75);
+        border-color: #e2c044;
+        box-shadow: 0 0 0 3px rgba(226,192,68,0.12);
+    }
+    .post-form-page textarea.field-input {
+        min-height: 160px;
+        resize: vertical;
+        line-height: 1.5;
+    }
+    .post-form-page ::placeholder { color: #5a6a7e; }
+    .post-form-page .char-counter {
+        text-align: right;
+        font-size: 0.78rem;
+        color: #5a6a7e;
+        margin-top: 6px;
+    }
+
+    .channel-picker { display: flex; flex-direction: column; gap: 10px; }
+    .channel-option {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .channel-option:hover { border-color: rgba(226,192,68,0.3); }
+    .channel-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .channel-option:has(input:checked) {
+        border-color: rgba(226,192,68,0.5);
+        background: rgba(226,192,68,0.07);
+    }
+    .channel-option .platform-badge {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+        background: rgba(226,192,68,0.1);
+    }
+    .channel-option .channel-meta { flex: 1; min-width: 0; }
+    .channel-option .channel-name { color: #e0d5c1; font-weight: 500; }
+    .channel-option .channel-platform { color: #5a6a7e; font-size: 0.8rem; }
+    .channel-option .check-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.2);
+        flex-shrink: 0;
+        position: relative;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .channel-option input:checked ~ .check-dot {
+        border-color: #e2c044;
+        background: #e2c044;
+    }
+    .channel-option input:checked ~ .check-dot::after {
+        content: '';
+        position: absolute;
+        inset: 5px;
+        border-radius: 50%;
+        background: #16213e;
+    }
+    .channel-empty {
+        color: #5a6a7e;
+        padding: 16px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 14px;
+    }
+    .post-form-page .btn-lantern-pill {
+        border: none;
+        padding: 12px 28px;
+        border-radius: 50px;
+        font-size: 0.95rem;
+    }
+</style>
+{% endblock %}
 {% block content %}
-<div style="max-width: 600px; margin: 0 auto;">
-    <h1 style="color: #e2c044; font-weight: 300;">{% if post %}Редактировать пост{% else %}Новый пост{% endif %}</h1>
-    <form method="post">
-        {% csrf_token %}
-        <textarea name="text" rows="5" placeholder="Текст поста" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">{% if post %}{{ post.text }}{% endif %}</textarea>
-        <input type="datetime-local" name="publish_date" required value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
+<div class="post-form-page" style="max-width: 640px; margin: 0 auto;">
+    <a href="{% url 'crm_post_list' %}" style="color:#8a9aaa; text-decoration:none; font-size:0.9rem;">← Контент-план</a>
+    <h1 style="color: #e2c044; font-weight: 300; margin-top:8px;">{% if post %}Редактировать пост{% else %}Новый пост{% endif %}</h1>
 
-        <div style="margin-bottom:10px; color:#8a9aaa;">Куда опубликовать:</div>
-        <div style="margin-bottom:10px; display:flex; flex-direction:column; gap:6px;">
-            {% for channel in channels %}
-            <label style="color:#e0d5c1;">
-                <input type="checkbox" name="channels" value="{{ channel.id }}"
-                    {% if channel.id in selected_channel_ids %}checked{% endif %}>
-                {{ channel.get_platform_display }} — {{ channel.name }}
-            </label>
-            {% empty %}
-            <p style="color:#5a6a7e;">Каналов ещё нет. <a href="/admin/bot_api/channel/add/" style="color:#e2c044;">Добавить канал</a> — платформа, ID группы и токен доступа.</p>
-            {% endfor %}
-        </div>
-        <p style="color:#5a6a7e; font-size:0.85rem; margin-bottom:10px;">
-            Если не выбрать ни одного канала — пост сохранится как черновик и никуда не уйдёт.
-            С выбранным каналом пост автоматически опубликуется в указанную дату/время.
-        </p>
+    <div class="card-glass" style="margin-top: 20px;">
+        <form method="post">
+            {% csrf_token %}
 
-        <button type="submit" class="btn-primary-custom">Сохранить</button>
-        {% if post %}
-        <a href="{% url 'crm_post_delete' post.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>
-        {% endif %}
-    </form>
+            <label class="field-label" for="post-text">Текст поста</label>
+            <textarea name="text" id="post-text" class="field-input" placeholder="О чём хочешь рассказать?"
+                oninput="document.getElementById('char-count').textContent = this.value.length"
+            >{% if post %}{{ post.text }}{% endif %}</textarea>
+            <div class="char-counter"><span id="char-count">{% if post %}{{ post.text|length }}{% else %}0{% endif %}</span> символов</div>
+
+            <label class="field-label" style="margin-top: 18px;" for="post-date">Дата и время публикации</label>
+            <input type="datetime-local" name="publish_date" id="post-date" required class="field-input"
+                value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}">
+
+            <label class="field-label" style="margin-top: 22px;">Куда опубликовать</label>
+            <div class="channel-picker">
+                {% for channel in channels %}
+                <label class="channel-option">
+                    <input type="checkbox" name="channels" value="{{ channel.id }}"
+                        {% if channel.id in selected_channel_ids %}checked{% endif %}>
+                    <span class="platform-badge">
+                        {% if channel.platform == 'vk' %}🔵{% elif channel.platform == 'telegram' %}✈️{% else %}💬{% endif %}
+                    </span>
+                    <span class="channel-meta">
+                        <div class="channel-name">{{ channel.name }}</div>
+                        <div class="channel-platform">{{ channel.get_platform_display }}</div>
+                    </span>
+                    <span class="check-dot"></span>
+                </label>
+                {% empty %}
+                <div class="channel-empty">
+                    Каналов ещё нет. <a href="/admin/bot_api/channel/add/" style="color:#e2c044;">Добавить канал</a> — платформа, ID группы и токен доступа.
+                </div>
+                {% endfor %}
+            </div>
+            <p style="color:#5a6a7e; font-size:0.85rem; margin-top:12px;">
+                Без выбранного канала пост сохранится как черновик и никуда не уйдёт.
+                С выбранным каналом пост автоматически опубликуется в указанные дату и время.
+            </p>
+
+            <div style="display:flex; align-items:center; gap:18px; margin-top:26px;">
+                <button type="submit" class="btn-lantern btn-lantern-pill">Сохранить</button>
+                {% if post %}
+                <a href="{% url 'crm_post_delete' post.id %}" style="color:#e05a5a; font-size:0.9rem;">Удалить пост</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}
