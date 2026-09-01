@@ -232,6 +232,46 @@
         background: linear-gradient(90deg, #e2c044, #4ac06a);
         border-radius: 3px;
     }
+
+    .post-bulk-page .split-method {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 3px 12px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        background: rgba(74,192,106,0.1);
+        color: #4ac06a;
+    }
+    .post-bulk-page .split-method.split-method-warn {
+        background: rgba(226,192,68,0.12);
+        color: #e2c044;
+    }
+    .post-bulk-page .split-warn-text {
+        color: #e2c044;
+        font-size: 0.85rem;
+        margin-top: 10px;
+        line-height: 1.5;
+    }
+
+    .post-bulk-page .ai-template-card { margin-top: 20px; }
+    .post-bulk-page .ai-template-summary {
+        cursor: pointer;
+        color: #e0d5c1;
+        font-weight: 500;
+        list-style: none;
+    }
+    .post-bulk-page .ai-template-summary::-webkit-details-marker { display: none; }
+    .post-bulk-page .ai-template-summary::before { content: '▸ '; color: #5a6a7e; }
+    .post-bulk-page .ai-template-card[open] .ai-template-summary::before { content: '▾ '; }
+    .post-bulk-page .ai-template-textarea {
+        margin-top: 12px;
+        min-height: 220px;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: #aab3c9;
+        white-space: pre-wrap;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -277,6 +317,10 @@
             👁️ Предпросмотр{% if preview_week_label %} — {{ preview_week_label }}{% endif %}: будет добавлено {{ preview_count }}
         </div>
         <div class="progress-range">📅 С {{ preview_first_date|date:"d.m.Y H:i" }} по {{ preview_last_date|date:"d.m.Y H:i" }}</div>
+        {% if split_method_label %}<div class="split-method{% if split_method_warn %} split-method-warn{% endif %}">Способ разбора: {{ split_method_label }}</div>{% endif %}
+        {% if split_method_warn %}
+        <p class="split-warn-text">Не нашёл ни дней недели, ни строки ---, а ИИ-разбор недоступен (не настроен или не смог помочь) — весь текст добавится одним постом. Если это не то, что нужно: раздели текст вручную строкой <code>---</code>, или воспользуйся шаблоном для нейросети ниже.</p>
+        {% endif %}
         <div class="preview-list">
             {% for item in preview_items %}
             <details class="preview-item">
@@ -291,6 +335,15 @@
         <p style="color:#5a6a7e; font-size:0.82rem; margin-top:14px;">Ничего ещё не добавлено — это только проверка. Поправь текст или дату выше и нажми «Обновить предпросмотр», либо подтверди добавление.</p>
     </div>
     {% endif %}
+
+    <details class="card-glass ai-template-card">
+        <summary class="ai-template-summary">🤖 Нет своего ИИ-разбора? Разбей текст в любой нейросети сам — вот готовый шаблон</summary>
+        <p class="field-hint" style="margin-top:12px;">
+            Скопируй шаблон ниже, вставь его в ChatGPT, Claude.ai или любую другую нейросеть, допиши свой текст вместо строки <code>[ВСТАВЬ СЮДА СВОЙ ТЕКСТ]</code> и отправь. Готовый ответ (уже разделённый строкой <code>---</code>) вставь в поле «Тексты постов» ниже.
+        </p>
+        <textarea id="ai-template-text" class="field-input ai-template-textarea" readonly>{{ manual_prompt_template }}</textarea>
+        <button type="button" id="ai-template-copy-btn" class="btn-ghost-pill" style="margin-top:10px;">📋 Скопировать шаблон</button>
+    </details>
 
     <div class="card-glass" style="margin-top: 20px;">
         <form method="post" id="bulk-form">
@@ -457,6 +510,36 @@
     });
 
     updateSummary();
+})();
+
+(function() {
+    var copyBtn = document.getElementById('ai-template-copy-btn');
+    var templateText = document.getElementById('ai-template-text');
+    if (!copyBtn || !templateText) return;
+    var defaultLabel = copyBtn.textContent;
+    copyBtn.addEventListener('click', function() {
+        var done = function() {
+            copyBtn.textContent = '✅ Скопировано';
+            setTimeout(function() { copyBtn.textContent = defaultLabel; }, 2000);
+        };
+        var fallback = function() {
+            templateText.removeAttribute('readonly');
+            templateText.focus();
+            templateText.select();
+            try {
+                document.execCommand('copy');
+                done();
+            } catch (e) {
+                copyBtn.textContent = 'Не получилось — выдели и скопируй вручную';
+            }
+            templateText.setAttribute('readonly', 'readonly');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(templateText.value).then(done, fallback);
+        } else {
+            fallback();
+        }
+    });
 })();
 </script>
 {% endblock %}

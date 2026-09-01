@@ -321,6 +321,14 @@ ADMIN_INDEX_TITLE = "Добро пожаловать в панель управ�
 VK_TOKEN = os.getenv('VK_TOKEN')
 VK_GROUP_ID = os.getenv('VK_GROUP_ID')
 
+# ===== ИИ-разбор текста на посты (массовая загрузка в CRM) =====
+# Полностью опционально: без ANTHROPIC_API_KEY в .env — массовая загрузка
+# постов работает как раньше (по дням недели / по строке ---), просто без
+# ИИ-подстраховки для текста без чёткой разметки. Ключ — с console.anthropic.com,
+# вводится сюда самостоятельно, Claude Code его не видит и не запрашивает.
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+AI_SPLIT_MODEL = os.getenv('AI_SPLIT_MODEL', 'claude-haiku-4-5')
+
 # ===== Почта =====
 # Ничего в проекте сейчас email не отправляет, но без EMAIL_BACKEND
 # Django по умолчанию пытается отправлять письма через настоящий SMTP

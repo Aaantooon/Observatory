@@ -12,8 +12,16 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from bot_api.models import User, Result, Review, Post, Channel, PostChannelStatus
 from myapp.models import UserCourseProgress
+from crm.ai_split import split_posts_with_ai, MANUAL_SPLIT_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
+
+SPLIT_METHOD_LABELS = {
+    'weekly': '📆 по дням недели',
+    'separator': '➖ по разделителю ---',
+    'ai': '🤖 с помощью ИИ',
+    'single': '⚠️ не распознано — добавится одним постом',
+}
 
 MONTH_NAMES_RU = [
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -233,14 +241,27 @@ def _split_weekly_posts(raw_text):
 
 
 def _parse_bulk_text(raw_text):
-    """Выбирает формат разбора автоматически: если похоже на недельную
-    заготовку (дни недели + подписанные поля) — разбирает и чистит её;
-    иначе — обычное разделение строкой ---."""
+    """Выбирает формат разбора автоматически и возвращает (посты, метод).
+    Порядок попыток: недельная заготовка (дни недели + подписанные поля) →
+    разделитель --- → если и это не дало больше одного поста, а в .env
+    настроен ANTHROPIC_API_KEY — ИИ-разбор как подстраховка для текста без
+    чёткой разметки. Если ничего не сработало (в т.ч. ИИ выключен/недоступен)
+    — весь текст остаётся одним постом, как и раньше, но метод помечается
+    'single', чтобы предпросмотр честно предупредил об этом."""
     if _looks_like_weekly_format(raw_text):
         posts = _split_weekly_posts(raw_text)
         if posts:
-            return posts
-    return _split_bulk_posts(raw_text)
+            return posts, 'weekly'
+
+    posts = _split_bulk_posts(raw_text)
+    if len(posts) > 1:
+        return posts, 'separator'
+
+    ai_posts = split_posts_with_ai(raw_text)
+    if ai_posts:
+        return ai_posts, 'ai'
+
+    return posts, 'single'
 
 
 WEEKDAY_LABELS_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
@@ -292,12 +313,22 @@ def _month_progress(new_dates):
 @staff_member_required
 def post_bulk_create(request):
     channels = Channel.objects.filter(is_active=True)
+    # Общее для всех веток — шаблон-подсказка для внешней нейросети всегда
+    # доступен на странице, даже если свой ИИ-ключ (ANTHROPIC_API_KEY) не
+    # настроен: психолог может скопировать его в ChatGPT/Claude.ai сама,
+    # дописать свой текст и вставить результат обратно в форму.
+    base_context = {
+        'channels': channels,
+        'manual_prompt_template': MANUAL_SPLIT_PROMPT_TEMPLATE,
+    }
+
     if request.method == 'POST':
         # 'preview' по умолчанию — если поле action почему-то не пришло,
         # безопаснее показать разбор текста, чем сразу создать посты.
         action = request.POST.get('action', 'preview')
         raw_text = request.POST.get('bulk_text', '')
-        chunks = _parse_bulk_text(raw_text)
+        chunks, split_method = _parse_bulk_text(raw_text)
+        split_method_label = SPLIT_METHOD_LABELS.get(split_method, '')
         week_label = _extract_week_label(raw_text)
         start_date = _parse_publish_date(request, request.POST.get('start_date'))
         selected_channel_ids = _selected_channel_ids(request)
@@ -305,11 +336,11 @@ def post_bulk_create(request):
         if not chunks:
             messages.error(request, '❌ Не нашлось ни одного поста в тексте — раздели их строкой ---, либо пришли заготовку по дням недели')
             return render(request, 'crm/post_bulk.html', {
-                'channels': channels, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
+                **base_context, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
             })
         if start_date is None:
             return render(request, 'crm/post_bulk.html', {
-                'channels': channels, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
+                **base_context, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
             })
 
         dates = [start_date + timedelta(days=i) for i in range(len(chunks))]
@@ -320,7 +351,7 @@ def post_bulk_create(request):
             # или дату до реального добавления.
             local_start = timezone.localtime(start_date)
             return render(request, 'crm/post_bulk.html', {
-                'channels': channels,
+                **base_context,
                 'bulk_text': raw_text,
                 'selected_channel_ids': selected_channel_ids,
                 'preview_items': _build_preview_items(chunks, dates),
@@ -328,6 +359,8 @@ def post_bulk_create(request):
                 'preview_week_label': week_label,
                 'preview_first_date': dates[0],
                 'preview_last_date': dates[-1],
+                'split_method_label': split_method_label,
+                'split_method_warn': split_method == 'single',
                 'prefill_date': local_start.strftime('%d.%m.%Y'),
                 'prefill_time': local_start.strftime('%H:%M'),
             })
@@ -342,11 +375,13 @@ def post_bulk_create(request):
         success_msg = f'✅ Добавлено постов: {len(chunks)}'
         if week_label:
             success_msg += f' ({week_label})'
+        if split_method_label:
+            success_msg += f' · разбор: {split_method_label}'
         messages.success(request, success_msg)
 
         next_date = created_dates[-1] + timedelta(days=1)
         return render(request, 'crm/post_bulk.html', {
-            'channels': channels,
+            **base_context,
             'added_count': len(chunks),
             'progress': _month_progress(created_dates),
             'first_date': created_dates[0],
@@ -356,7 +391,7 @@ def post_bulk_create(request):
         })
 
     return render(request, 'crm/post_bulk.html', {
-        'channels': channels,
+        **base_context,
         'prefill_date': request.GET.get('continue_date', ''),
         'prefill_time': request.GET.get('continue_time', ''),
     })
