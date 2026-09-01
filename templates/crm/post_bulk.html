@@ -142,6 +142,11 @@
     .post-bulk-page .progress-added {
         color: #4ac06a;
         font-weight: 600;
+        margin-bottom: 6px;
+    }
+    .post-bulk-page .progress-range {
+        color: #8a9aaa;
+        font-size: 0.88rem;
         margin-bottom: 14px;
     }
     .post-bulk-page .progress-month {
@@ -184,6 +189,7 @@
     {% if progress %}
     <div class="card-glass progress-card">
         <div class="progress-added">✅ Добавлено постов: {{ added_count }}</div>
+        <div class="progress-range">📅 Запланированы с {{ first_date|date:"d.m.Y" }} по {{ last_date|date:"d.m.Y" }}</div>
         {% for m in progress %}
         <div class="progress-month">
             <div>
@@ -202,6 +208,10 @@
             </div>
         </div>
         {% endfor %}
+        <a href="{% url 'crm_post_bulk' %}?continue_date={{ continue_date|urlencode }}&continue_time={{ continue_time|urlencode }}"
+            class="btn-lantern btn-lantern-pill" style="display:inline-block; margin-top:16px; text-decoration:none;">
+            ➕ Добавить ещё, начиная с {{ continue_date }}
+        </a>
     </div>
     {% endif %}
 
@@ -213,13 +223,16 @@
             <textarea name="bulk_text" id="bulk-text" class="field-input"
                 placeholder="Текст первого поста...&#10;&#10;---&#10;&#10;Текст второго поста...&#10;&#10;---&#10;&#10;Текст третьего поста..."
             >{% if bulk_text %}{{ bulk_text }}{% endif %}</textarea>
-            <p class="field-hint">Раздели посты строкой из трёх дефисов <code>---</code> на отдельной строке. Каждый пост получит свою дату — по одному в день, начиная с даты ниже.</p>
+            <p class="field-hint">
+                Раздели посты строкой из трёх дефисов <code>---</code> на отдельной строке — каждый пост получит свою дату, по одному в день, начиная с даты ниже.<br>
+                Можно вставить и недельную заготовку по дням (Понедельник…Воскресенье, поля Заголовок/Введение/Основная часть/Вывод/Призыв к действию) — формат распознается автоматически, служебные подписи полей уберутся, останется чистовой текст.
+            </p>
 
             <label class="field-label" style="margin-top: 22px;">Дата и время первого поста</label>
             <div class="datetime-picker">
                 <div class="dt-field">
                     <input type="text" id="post-date-display" class="field-input" placeholder="дд.мм.гггг"
-                        inputmode="numeric" autocomplete="off" maxlength="10">
+                        inputmode="numeric" autocomplete="off" maxlength="10" value="{{ prefill_date|default:'' }}">
                     <div class="dt-presets">
                         <button type="button" class="dt-preset-btn" data-date-offset="0">Сегодня</button>
                         <button type="button" class="dt-preset-btn" data-date-offset="1">Завтра</button>
@@ -227,7 +240,7 @@
                 </div>
                 <div class="dt-field">
                     <input type="text" id="post-time-display" class="field-input" placeholder="чч:мм"
-                        inputmode="numeric" autocomplete="off" maxlength="5">
+                        inputmode="numeric" autocomplete="off" maxlength="5" value="{{ prefill_time|default:'' }}">
                     <div class="dt-presets">
                         <button type="button" class="dt-preset-btn" data-time="09:00">09:00</button>
                         <button type="button" class="dt-preset-btn" data-time="12:00">12:00</button>

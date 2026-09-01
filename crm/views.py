@@ -1,5 +1,6 @@
 import calendar
 import logging
+import re
 from collections import Counter
 from datetime import timedelta
 from django.contrib.auth.models import User as AuthUser
@@ -168,6 +169,80 @@ def _split_bulk_posts(raw_text):
     return [c for c in chunks if c]
 
 
+WEEKDAY_RE = re.compile(
+    r'^(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)\s*:?\s*$'
+)
+FIELD_LABELS = ['Заголовок', 'Введение', 'Основная часть', 'Вывод', 'Призыв к действию']
+FIELD_LABEL_RE = re.compile(
+    r'^(Заголовок|Введение|Основная часть|Вывод|Призыв к действию)\s*:\s*(.*)$'
+)
+WEEK_HEADER_RE = re.compile(r'^неделя\s+\d+\.?\s*(.*)$')
+
+
+def _looks_like_weekly_format(raw_text):
+    """Похож ли текст на недельную заготовку (Понедельник..Воскресенье с
+    полями Заголовок/Введение/Основная часть/Вывод/Призыв к действию) —
+    определяем по наличию минимум двух строк-названий дней недели."""
+    lines = [line.strip().lower() for line in raw_text.splitlines()]
+    return sum(1 for line in lines if WEEKDAY_RE.match(line)) >= 2
+
+
+def _extract_week_label(raw_text):
+    """Возвращает заголовок вида «Неделя 16. Закон бумеранга и вера», если он
+    есть в начале текста — только для отображения в подтверждении, в сами
+    посты не попадает."""
+    for line in raw_text.splitlines():
+        if WEEK_HEADER_RE.match(line.strip().lower()):
+            return line.strip()
+    return None
+
+
+def _split_weekly_posts(raw_text):
+    """Разбирает недельную заготовку по дням недели и собирает из полей
+    Заголовок/Введение/Основная часть/Вывод/Призыв к действию один чистовой
+    текст поста на каждый день — без служебных подписей полей."""
+    lines = (raw_text or '').replace('\r\n', '\n').split('\n')
+    days = []
+    current = None
+    for line in lines:
+        if WEEKDAY_RE.match(line.strip().lower()):
+            if current is not None:
+                days.append(current)
+            current = []
+        elif current is not None:
+            current.append(line)
+    if current is not None:
+        days.append(current)
+
+    posts = []
+    for day_lines in days:
+        fields = {}
+        label = None
+        for line in day_lines:
+            m = FIELD_LABEL_RE.match(line.strip())
+            if m:
+                label = m.group(1)
+                fields[label] = [m.group(2).strip()] if m.group(2).strip() else []
+            elif label and line.strip():
+                fields[label].append(line.strip())
+        parts = [' '.join(fields[l]).strip() for l in FIELD_LABELS if fields.get(l)]
+        text = '\n\n'.join(p for p in parts if p)
+        if text:
+            posts.append(text)
+    return posts
+
+
+def _parse_bulk_text(raw_text):
+    """Выбирает формат разбора автоматически: если похоже на недельную
+    заготовку (дни недели + подписанные поля) — разбирает и чистит её;
+    иначе — обычное разделение строкой ---."""
+    if _looks_like_weekly_format(raw_text):
+        posts = _split_weekly_posts(raw_text)
+        if posts:
+            return posts
+    return _split_bulk_posts(raw_text)
+
+
 def _month_progress(new_dates):
     """Для дат только что добавленных постов считает по каждому затронутому
     месяцу: сколько добавлено сейчас, сколько всего постов на этот месяц в
@@ -195,11 +270,12 @@ def post_bulk_create(request):
     channels = Channel.objects.filter(is_active=True)
     if request.method == 'POST':
         raw_text = request.POST.get('bulk_text', '')
-        chunks = _split_bulk_posts(raw_text)
+        chunks = _parse_bulk_text(raw_text)
+        week_label = _extract_week_label(raw_text)
         start_date = _parse_publish_date(request, request.POST.get('start_date'))
 
         if not chunks:
-            messages.error(request, '❌ Не нашлось ни одного поста в тексте — раздели их строкой ---')
+            messages.error(request, '❌ Не нашлось ни одного поста в тексте — раздели их строкой ---, либо пришли заготовку по дням недели')
             return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
         if start_date is None:
             return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
@@ -213,13 +289,27 @@ def post_bulk_create(request):
             post.save(update_fields=['status'])
             created_dates.append(publish_date)
 
-        messages.success(request, f'✅ Добавлено постов: {len(chunks)}')
+        success_msg = f'✅ Добавлено постов: {len(chunks)}'
+        if week_label:
+            success_msg += f' ({week_label})'
+        messages.success(request, success_msg)
+
+        next_date = created_dates[-1] + timedelta(days=1)
         return render(request, 'crm/post_bulk.html', {
             'channels': channels,
             'added_count': len(chunks),
             'progress': _month_progress(created_dates),
+            'first_date': created_dates[0],
+            'last_date': created_dates[-1],
+            'continue_date': next_date.strftime('%d.%m.%Y'),
+            'continue_time': next_date.strftime('%H:%M'),
         })
-    return render(request, 'crm/post_bulk.html', {'channels': channels})
+
+    return render(request, 'crm/post_bulk.html', {
+        'channels': channels,
+        'prefill_date': request.GET.get('continue_date', ''),
+        'prefill_time': request.GET.get('continue_time', ''),
+    })
 
 
 @staff_member_required
