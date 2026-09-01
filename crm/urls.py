@@ -8,6 +8,7 @@ urlpatterns = [
     path('clients/<int:user_id>/', views.client_detail, name='crm_client_detail'),
     path('posts/', views.post_list, name='crm_post_list'),
     path('posts/new/', views.post_create, name='crm_post_create'),
+    path('posts/bulk/', views.post_bulk_create, name='crm_post_bulk'),
     path('posts/<int:post_id>/edit/', views.post_edit, name='crm_post_edit'),
     path('posts/<int:post_id>/delete/', views.post_delete, name='crm_post_delete'),
 ]

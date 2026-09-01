@@ -1,4 +1,7 @@
+import calendar
 import logging
+from collections import Counter
+from datetime import timedelta
 from django.contrib.auth.models import User as AuthUser
 from django.core.paginator import Paginator
 from django.shortcuts import render, redirect, get_object_or_404
@@ -10,6 +13,11 @@ from bot_api.models import User, Result, Review, Post, Channel, PostChannelStatu
 from myapp.models import UserCourseProgress
 
 logger = logging.getLogger(__name__)
+
+MONTH_NAMES_RU = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+]
 
 
 @staff_member_required
@@ -141,6 +149,77 @@ def _sync_post_channels(post, selected_channel_ids):
 
 def _selected_channel_ids(request):
     return {int(x) for x in request.POST.getlist('channels') if x.isdigit()}
+
+
+def _split_bulk_posts(raw_text):
+    """Разбивает вставленный текст на отдельные посты по строке-разделителю
+    '---' (строка, которая после strip() равна ровно '---'). Пустые куски
+    (только пробелы/переносы между разделителями) отбрасываются."""
+    lines = (raw_text or '').replace('\r\n', '\n').split('\n')
+    chunks = []
+    current = []
+    for line in lines:
+        if line.strip() == '---':
+            chunks.append('\n'.join(current).strip())
+            current = []
+        else:
+            current.append(line)
+    chunks.append('\n'.join(current).strip())
+    return [c for c in chunks if c]
+
+
+def _month_progress(new_dates):
+    """Для дат только что добавленных постов считает по каждому затронутому
+    месяцу: сколько добавлено сейчас, сколько всего постов на этот месяц в
+    базе и сколько ещё нужно добавить до нормы «пост на каждый день
+    месяца»."""
+    added_counts = Counter((d.year, d.month) for d in new_dates)
+    progress = []
+    for (year, month) in sorted(added_counts.keys()):
+        days_in_month = calendar.monthrange(year, month)[1]
+        total = Post.objects.filter(
+            publish_date__year=year, publish_date__month=month
+        ).count()
+        progress.append({
+            'label': f'{MONTH_NAMES_RU[month - 1]} {year}',
+            'added': added_counts[(year, month)],
+            'total': total,
+            'target': days_in_month,
+            'remaining': max(0, days_in_month - total),
+        })
+    return progress
+
+
+@staff_member_required
+def post_bulk_create(request):
+    channels = Channel.objects.filter(is_active=True)
+    if request.method == 'POST':
+        raw_text = request.POST.get('bulk_text', '')
+        chunks = _split_bulk_posts(raw_text)
+        start_date = _parse_publish_date(request, request.POST.get('start_date'))
+
+        if not chunks:
+            messages.error(request, '❌ Не нашлось ни одного поста в тексте — раздели их строкой ---')
+            return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
+        if start_date is None:
+            return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
+
+        selected_channel_ids = _selected_channel_ids(request)
+        created_dates = []
+        for i, text in enumerate(chunks):
+            publish_date = start_date + timedelta(days=i)
+            post = Post.objects.create(text=text, publish_date=publish_date, status='draft')
+            post.status = _sync_post_channels(post, selected_channel_ids)
+            post.save(update_fields=['status'])
+            created_dates.append(publish_date)
+
+        messages.success(request, f'✅ Добавлено постов: {len(chunks)}')
+        return render(request, 'crm/post_bulk.html', {
+            'channels': channels,
+            'added_count': len(chunks),
+            'progress': _month_progress(created_dates),
+        })
+    return render(request, 'crm/post_bulk.html', {'channels': channels})
 
 
 @staff_member_required

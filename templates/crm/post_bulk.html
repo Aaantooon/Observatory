@@ -1,0 +1,366 @@
+{% extends 'base.html' %}
+{% block extra_head %}
+<style>
+    .post-bulk-page .field-label {
+        display: block;
+        color: #8a9aaa;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+    }
+    .post-bulk-page .field-hint {
+        color: #5a6a7e;
+        font-size: 0.82rem;
+        margin-top: 6px;
+        line-height: 1.5;
+    }
+    .post-bulk-page .field-input {
+        width: 100%;
+        background: rgba(11,14,20,0.55);
+        border: 1px solid rgba(226,192,68,0.15);
+        color: #e0d5c1;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 0.95rem;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .post-bulk-page .field-input:focus {
+        outline: none;
+        background: rgba(11,14,20,0.75);
+        border-color: #e2c044;
+        box-shadow: 0 0 0 3px rgba(226,192,68,0.12);
+    }
+    .post-bulk-page textarea.field-input {
+        min-height: 260px;
+        resize: vertical;
+        line-height: 1.5;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        font-size: 0.88rem;
+    }
+    .post-bulk-page ::placeholder { color: #5a6a7e; }
+
+    .post-bulk-page .datetime-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    .post-bulk-page .dt-field { flex: 1 1 200px; min-width: 160px; }
+    .post-bulk-page .dt-field .field-input { text-align: center; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
+    .post-bulk-page .dt-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .post-bulk-page .dt-preset-btn {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #aab3c9;
+        border-radius: 8px;
+        padding: 5px 11px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        font-variant-numeric: tabular-nums;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .post-bulk-page .dt-preset-btn:hover { border-color: #e2c044; color: #e2c044; }
+    .post-bulk-page .dt-summary {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        color: #8a9aaa;
+        min-height: 1.2em;
+    }
+    .post-bulk-page .dt-summary.dt-summary-error { color: #ff8a95; }
+
+    .post-bulk-page .channel-picker { display: flex; flex-direction: column; gap: 10px; }
+    .post-bulk-page .channel-option {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .post-bulk-page .channel-option:hover { border-color: rgba(226,192,68,0.3); }
+    .post-bulk-page .channel-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .post-bulk-page .channel-option:has(input:checked) {
+        border-color: rgba(226,192,68,0.5);
+        background: rgba(226,192,68,0.07);
+    }
+    .post-bulk-page .channel-option .platform-badge {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        flex-shrink: 0;
+        background: rgba(226,192,68,0.1);
+    }
+    .post-bulk-page .channel-option .channel-meta { flex: 1; min-width: 0; }
+    .post-bulk-page .channel-option .channel-name { color: #e0d5c1; font-weight: 500; }
+    .post-bulk-page .channel-option .channel-platform { color: #5a6a7e; font-size: 0.8rem; }
+    .post-bulk-page .channel-option .check-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.2);
+        flex-shrink: 0;
+        position: relative;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .post-bulk-page .channel-option input:checked ~ .check-dot {
+        border-color: #e2c044;
+        background: #e2c044;
+    }
+    .post-bulk-page .channel-option input:checked ~ .check-dot::after {
+        content: '';
+        position: absolute;
+        inset: 5px;
+        border-radius: 50%;
+        background: #16213e;
+    }
+    .post-bulk-page .channel-empty {
+        color: #5a6a7e;
+        padding: 16px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 14px;
+    }
+    .post-bulk-page .btn-lantern-pill {
+        border: none;
+        padding: 12px 28px;
+        border-radius: 50px;
+        font-size: 0.95rem;
+    }
+
+    .post-bulk-page .progress-card { margin-top: 20px; }
+    .post-bulk-page .progress-added {
+        color: #4ac06a;
+        font-weight: 600;
+        margin-bottom: 14px;
+    }
+    .post-bulk-page .progress-month {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 0;
+        border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .post-bulk-page .progress-month:first-of-type { border-top: none; padding-top: 0; }
+    .post-bulk-page .progress-month .p-label { color: #e0d5c1; font-weight: 500; }
+    .post-bulk-page .progress-month .p-stats { color: #8a9aaa; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+    .post-bulk-page .progress-month .p-remaining { color: #e2c044; font-weight: 600; }
+    .post-bulk-page .progress-month .p-done { color: #4ac06a; font-weight: 600; }
+    .post-bulk-page .progress-bar-track {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: rgba(255,255,255,0.07);
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .post-bulk-page .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #e2c044, #4ac06a);
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="post-bulk-page" style="max-width: 700px; margin: 0 auto;">
+    <a href="{% url 'crm_post_list' %}" style="color:#8a9aaa; text-decoration:none; font-size:0.9rem;">← Контент-план</a>
+    <h1 style="color: #e2c044; font-weight: 300; margin-top:8px;">📦 Массовая загрузка постов</h1>
+    <p style="color:#8a9aaa; font-size:0.9rem;">
+        Вставь заготовку постов на месяц или год одним куском — каждый пост разберётся в отдельную запись.
+    </p>
+
+    {% if progress %}
+    <div class="card-glass progress-card">
+        <div class="progress-added">✅ Добавлено постов: {{ added_count }}</div>
+        {% for m in progress %}
+        <div class="progress-month">
+            <div>
+                <div class="p-label">{{ m.label }}</div>
+                <div class="progress-bar-track" style="width:220px;">
+                    <div class="progress-bar-fill" style="width:{% widthratio m.total m.target 100 %}%;"></div>
+                </div>
+            </div>
+            <div class="p-stats">
+                добавлено сейчас: {{ m.added }} · всего есть: {{ m.total }} из {{ m.target }}
+                {% if m.remaining > 0 %}
+                    · осталось добавить: <span class="p-remaining">{{ m.remaining }}</span>
+                {% else %}
+                    · <span class="p-done">норма набрана ✓</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card-glass" style="margin-top: 20px;">
+        <form method="post">
+            {% csrf_token %}
+
+            <label class="field-label" for="bulk-text">Тексты постов</label>
+            <textarea name="bulk_text" id="bulk-text" class="field-input"
+                placeholder="Текст первого поста...&#10;&#10;---&#10;&#10;Текст второго поста...&#10;&#10;---&#10;&#10;Текст третьего поста..."
+            >{% if bulk_text %}{{ bulk_text }}{% endif %}</textarea>
+            <p class="field-hint">Раздели посты строкой из трёх дефисов <code>---</code> на отдельной строке. Каждый пост получит свою дату — по одному в день, начиная с даты ниже.</p>
+
+            <label class="field-label" style="margin-top: 22px;">Дата и время первого поста</label>
+            <div class="datetime-picker">
+                <div class="dt-field">
+                    <input type="text" id="post-date-display" class="field-input" placeholder="дд.мм.гггг"
+                        inputmode="numeric" autocomplete="off" maxlength="10">
+                    <div class="dt-presets">
+                        <button type="button" class="dt-preset-btn" data-date-offset="0">Сегодня</button>
+                        <button type="button" class="dt-preset-btn" data-date-offset="1">Завтра</button>
+                    </div>
+                </div>
+                <div class="dt-field">
+                    <input type="text" id="post-time-display" class="field-input" placeholder="чч:мм"
+                        inputmode="numeric" autocomplete="off" maxlength="5">
+                    <div class="dt-presets">
+                        <button type="button" class="dt-preset-btn" data-time="09:00">09:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="12:00">12:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="18:00">18:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="21:00">21:00</button>
+                    </div>
+                </div>
+            </div>
+            <div id="dt-summary" class="dt-summary"></div>
+            <input type="hidden" name="start_date" id="post-date-iso">
+
+            <label class="field-label" style="margin-top: 22px;">Куда опубликовать</label>
+            <div class="channel-picker">
+                {% for channel in channels %}
+                <label class="channel-option">
+                    <input type="checkbox" name="channels" value="{{ channel.id }}">
+                    <span class="platform-badge">
+                        {% if channel.platform == 'vk' %}🔵{% elif channel.platform == 'telegram' %}✈️{% else %}💬{% endif %}
+                    </span>
+                    <span class="channel-meta">
+                        <div class="channel-name">{{ channel.name }}</div>
+                        <div class="channel-platform">{{ channel.get_platform_display }}</div>
+                    </span>
+                    <span class="check-dot"></span>
+                </label>
+                {% empty %}
+                <div class="channel-empty">
+                    Каналов ещё нет. <a href="/admin/bot_api/channel/add/" style="color:#e2c044;">Добавить канал</a> — платформа, ID группы и токен доступа.
+                </div>
+                {% endfor %}
+            </div>
+            <p style="color:#5a6a7e; font-size:0.85rem; margin-top:12px;">
+                Без выбранного канала все посты сохранятся как черновики. С выбранным каналом каждый пост автоматически опубликуется в свою дату.
+            </p>
+
+            <div style="margin-top:26px;">
+                <button type="submit" class="btn-lantern btn-lantern-pill">Разобрать и добавить</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(function() {
+    var dateInput = document.getElementById('post-date-display');
+    var timeInput = document.getElementById('post-time-display');
+    var isoInput = document.getElementById('post-date-iso');
+    var summary = document.getElementById('dt-summary');
+    var form = dateInput.closest('form');
+
+    var WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+    var MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function formatDateTyping(value) {
+        var digits = value.replace(/\D/g, '').slice(0, 8);
+        var out = digits.slice(0, 2);
+        if (digits.length > 2) out += '.' + digits.slice(2, 4);
+        if (digits.length > 4) out += '.' + digits.slice(4, 8);
+        return out;
+    }
+    function formatTimeTyping(value) {
+        var digits = value.replace(/\D/g, '').slice(0, 4);
+        var out = digits.slice(0, 2);
+        if (digits.length > 2) out += ':' + digits.slice(2, 4);
+        return out;
+    }
+
+    function parseFields() {
+        var dm = dateInput.value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        var tm = timeInput.value.match(/^(\d{2}):(\d{2})$/);
+        if (!dm || !tm) return null;
+        var day = parseInt(dm[1], 10), month = parseInt(dm[2], 10), year = parseInt(dm[3], 10);
+        var hour = parseInt(tm[1], 10), minute = parseInt(tm[2], 10);
+        if (month < 1 || month > 12 || hour > 23 || minute > 59) return null;
+        var d = new Date(year, month - 1, day, hour, minute);
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+        return { day: day, month: month, year: year, hour: hour, minute: minute, date: d };
+    }
+
+    function updateSummary() {
+        var parsed = parseFields();
+        var bothFilled = dateInput.value.length > 0 || timeInput.value.length > 0;
+        if (!parsed) {
+            isoInput.value = '';
+            if (bothFilled && (dateInput.value.length === 10 || timeInput.value.length === 5)) {
+                summary.textContent = 'Проверь дату и время — формат дд.мм.гггг и чч:мм';
+                summary.classList.add('dt-summary-error');
+            } else {
+                summary.textContent = '';
+                summary.classList.remove('dt-summary-error');
+            }
+            return;
+        }
+        summary.classList.remove('dt-summary-error');
+        isoInput.value = parsed.year + '-' + pad(parsed.month) + '-' + pad(parsed.day) + 'T' + pad(parsed.hour) + ':' + pad(parsed.minute);
+        summary.textContent = 'Первый пост: ' + WEEKDAYS[parsed.date.getDay()] + ', ' + parsed.day + ' ' + MONTHS[parsed.month - 1] + ' ' + parsed.year + ', ' + pad(parsed.hour) + ':' + pad(parsed.minute);
+    }
+
+    dateInput.addEventListener('input', function() {
+        this.value = formatDateTyping(this.value);
+        updateSummary();
+    });
+    timeInput.addEventListener('input', function() {
+        this.value = formatTimeTyping(this.value);
+        updateSummary();
+    });
+
+    document.querySelectorAll('.dt-preset-btn[data-date-offset]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var d = new Date();
+            d.setDate(d.getDate() + parseInt(this.dataset.dateOffset, 10));
+            dateInput.value = pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear();
+            updateSummary();
+        });
+    });
+    document.querySelectorAll('.dt-preset-btn[data-time]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            timeInput.value = this.dataset.time;
+            updateSummary();
+        });
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (!parseFields()) {
+            e.preventDefault();
+            summary.textContent = 'Укажи дату (дд.мм.гггг) и время (чч:мм) первого поста';
+            summary.classList.add('dt-summary-error');
+            dateInput.focus();
+        }
+    });
+
+    updateSummary();
+})();
+</script>
+{% endblock %}
