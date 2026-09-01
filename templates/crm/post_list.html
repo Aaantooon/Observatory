@@ -122,6 +122,15 @@
         align-items: center;
     }
     .post-list-page .post-select input { cursor: pointer; }
+    .post-list-page .select-all-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #e0d5c1;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+    .post-list-page .select-all-label input { cursor: pointer; }
 </style>
 {% endblock %}
 {% block content %}
@@ -138,7 +147,11 @@
           class="bulk-channel-bar"
           onsubmit="return confirm('Добавить выбранный канал ко всем отмеченным постам?');">
         {% csrf_token %}
-        <span class="bulk-hint">☑️ Отметь посты ниже, затем:</span>
+        <label class="select-all-label">
+            <input type="checkbox" id="select-all-posts">
+            Выбрать все
+        </label>
+        <span class="bulk-hint">затем:</span>
         <select name="channel_id" required>
             <option value="">— выбери канал —</option>
             {% for ch in channels %}
@@ -147,6 +160,16 @@
         </select>
         <button type="submit">Добавить канал отмеченным</button>
     </form>
+    <script>
+        (function() {
+            var selectAll = document.getElementById('select-all-posts');
+            if (!selectAll) return;
+            selectAll.addEventListener('change', function() {
+                var boxes = document.querySelectorAll('.post-select-checkbox');
+                boxes.forEach(function(box) { box.checked = selectAll.checked; });
+            });
+        })();
+    </script>
     {% else %}
     <p style="color:#8a9aaa; font-size:0.85rem;">Чтобы публиковать посты, сначала добавь канал: «⚙️ Каналы публикации» выше.</p>
     {% endif %}
@@ -157,7 +180,7 @@
             <div class="post-card-head">
                 {% if channels %}
                 <label class="post-select">
-                    <input type="checkbox" name="post_ids" value="{{ p.id }}" form="bulk-channel-form">
+                    <input type="checkbox" name="post_ids" value="{{ p.id }}" form="bulk-channel-form" class="post-select-checkbox">
                 </label>
                 {% endif %}
                 <span class="status-pill status-{{ p.status }}">{{ p.get_status_display }}</span>
