@@ -228,6 +228,7 @@ function CustomNode({ data }) {
             }, '▶ Текущий'),
             data.game_url && React.createElement('button', {
                 onClick: handleGameOpen,
+                className: 'nodrag nopan',
                 style: {
                     marginTop: '6px',
                     padding: '4px 12px',
