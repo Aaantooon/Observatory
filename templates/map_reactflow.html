@@ -209,9 +209,8 @@ function CustomNode({ data }) {
     const handleClick = () => {
         if (data.url) window.location.href = data.url;
     };
-    const handleGameOpen = (e) => {
+    const stopClick = (e) => {
         e.stopPropagation();
-        if (data.game_url) window.open(data.game_url, '_blank');
     };
 
     return React.createElement('div', {
@@ -226,10 +225,16 @@ function CustomNode({ data }) {
             data.status === 'current' && React.createElement('div', {
                 style: { fontSize: '10px', color: '#4a7a9a', marginTop: '4px' }
             }, '▶ Текущий'),
-            data.game_url && React.createElement('button', {
-                onClick: handleGameOpen,
+            data.game_url && React.createElement('a', {
+                href: data.game_url,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                onClick: stopClick,
+                onPointerDown: stopClick,
+                onMouseDown: stopClick,
                 className: 'nodrag nopan',
                 style: {
+                    display: 'inline-block',
                     marginTop: '6px',
                     padding: '4px 12px',
                     background: 'rgba(226,192,68,0.1)',
@@ -239,8 +244,8 @@ function CustomNode({ data }) {
                     cursor: 'pointer',
                     fontSize: '11px',
                     letterSpacing: '1px',
+                    textDecoration: 'none',
                 },
-                'data-game-url': data.game_url,
             }, '🎮 Играть')
         )
     );
