@@ -120,7 +120,8 @@ def post_list(request):
             1 for cs in post.channel_statuses.all()
             if cs.status in ('scheduled', 'failed') and cs.channel.is_active
         )
-    return render(request, 'crm/post_list.html', {'posts': posts})
+    channels = Channel.objects.filter(is_active=True)
+    return render(request, 'crm/post_list.html', {'posts': posts, 'channels': channels})
 
 
 def _parse_publish_date(request, raw_value):
@@ -140,6 +141,20 @@ def _parse_publish_date(request, raw_value):
     return parsed
 
 
+def _recompute_post_status(post):
+    """Сводный статус поста по всем его PostChannelStatus — опубликован, если
+    хоть где-то опубликован, иначе запланирован/провален/черновик. Общий
+    хвост для _sync_post_channels и массового назначения канала."""
+    statuses = set(post.channel_statuses.values_list('status', flat=True))
+    if 'published' in statuses:
+        return 'published'
+    if 'scheduled' in statuses:
+        return 'scheduled'
+    if statuses:
+        return 'failed'
+    return 'draft'
+
+
 def _sync_post_channels(post, selected_channel_ids):
     """Приводит PostChannelStatus поста в соответствие с выбранными в форме
     каналами: добавляет недостающие (status='scheduled'), убирает те, что
@@ -156,14 +171,7 @@ def _sync_post_channels(post, selected_channel_ids):
         if channel_id not in selected_channel_ids and pcs.status == 'scheduled':
             pcs.delete()
 
-    statuses = set(post.channel_statuses.values_list('status', flat=True))
-    if 'published' in statuses:
-        return 'published'
-    if 'scheduled' in statuses:
-        return 'scheduled'
-    if statuses:
-        return 'failed'
-    return 'draft'
+    return _recompute_post_status(post)
 
 
 def _selected_channel_ids(request):
@@ -284,16 +292,20 @@ def _weekday_label(dt):
 def _build_preview_items(chunks, dates):
     """Собирает список для предпросмотра — по каждому будущему посту дата,
     день недели и заголовок (первая строка, обрезанная), без создания
-    записей в базе."""
+    записей в базе. Заодно помечает дубли — посты с точно таким же текстом,
+    что уже есть в базе (например, если один и тот же кусок текста вставили
+    дважды), чтобы было видно до подтверждения, а не после."""
     items = []
     for text, publish_date in zip(chunks, dates):
         first_line = text.splitlines()[0].strip() if text.strip() else ''
         title = first_line if len(first_line) <= 100 else first_line[:100] + '…'
+        duplicate = Post.objects.filter(text=text).order_by('publish_date').first()
         items.append({
             'date': publish_date,
             'weekday': _weekday_label(publish_date),
             'title': title,
             'text': text,
+            'duplicate_date': duplicate.publish_date if duplicate else None,
         })
     return items
 
@@ -376,23 +388,41 @@ def post_bulk_create(request):
             })
 
         created_dates = []
+        skipped_duplicates = 0
         for text, publish_date in zip(chunks, dates):
+            # Тот же текст уже есть в базе — почти наверняка кусок вставили
+            # повторно (например, ту же неделю дважды). Не создаём дубль
+            # молча — просто пропускаем и сообщаем сколько пропущено.
+            if Post.objects.filter(text=text).exists():
+                skipped_duplicates += 1
+                continue
             post = Post.objects.create(text=text, publish_date=publish_date, status='draft')
             post.status = _sync_post_channels(post, selected_channel_ids)
             post.save(update_fields=['status'])
             created_dates.append(publish_date)
 
-        success_msg = f'✅ Добавлено постов: {len(chunks)}'
+        if not created_dates:
+            messages.warning(
+                request,
+                f'⚠️ Все посты ({skipped_duplicates}) — точные дубли уже существующих, ничего не добавлено.'
+            )
+            return render(request, 'crm/post_bulk.html', {
+                **base_context, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
+            })
+
+        success_msg = f'✅ Добавлено постов: {len(created_dates)}'
         if week_label:
             success_msg += f' ({week_label})'
         if split_method_label:
             success_msg += f' · разбор: {split_method_label}'
+        if skipped_duplicates:
+            success_msg += f' · пропущено дублей: {skipped_duplicates}'
         messages.success(request, success_msg)
 
         next_date = created_dates[-1] + timedelta(days=1)
         return render(request, 'crm/post_bulk.html', {
             **base_context,
-            'added_count': len(chunks),
+            'added_count': len(created_dates),
             'progress': _month_progress(created_dates),
             'first_date': created_dates[0],
             'last_date': created_dates[-1],
@@ -488,5 +518,47 @@ def post_publish_now(request, post_id):
     else:
         bad_names = ', '.join(f"{r['item'].channel.name} ({r['message']})" for r in failed)
         messages.error(request, f'❌ Не удалось опубликовать: {bad_names}.')
+
+    return redirect('crm_post_list')
+
+
+@staff_member_required
+def post_bulk_assign_channel(request):
+    """Массово привязывает один канал сразу к нескольким отмеченным постам
+    в списке — чтобы не заходить в «Редактировать» у каждого поста по
+    отдельности (актуально после массовой загрузки, когда посты создаются
+    без канала). Только ДОБАВЛЯЕТ канал выбранным постам, ничего не убирает
+    и не трогает посты, которых нет в отметке — в отличие от
+    _sync_post_channels (та отвечает за форму одного поста, где отсутствие
+    галочки означает «убрать»)."""
+    if request.method != 'POST':
+        return redirect('crm_post_list')
+
+    post_ids = [int(x) for x in request.POST.getlist('post_ids') if x.isdigit()]
+    channel_id = request.POST.get('channel_id', '')
+
+    if not post_ids:
+        messages.warning(request, '⚠️ Не отмечено ни одного поста.')
+        return redirect('crm_post_list')
+    if not channel_id.isdigit():
+        messages.warning(request, '⚠️ Не выбран канал.')
+        return redirect('crm_post_list')
+
+    channel = get_object_or_404(Channel, id=int(channel_id), is_active=True)
+
+    updated = 0
+    for post in Post.objects.filter(id__in=post_ids).prefetch_related('channel_statuses'):
+        if not post.channel_statuses.filter(channel_id=channel.id).exists():
+            PostChannelStatus.objects.create(post=post, channel=channel, status='scheduled')
+            updated += 1
+        new_status = _recompute_post_status(post)
+        if new_status != post.status:
+            post.status = new_status
+            post.save(update_fields=['status'])
+
+    if updated:
+        messages.success(request, f'✅ Канал «{channel.name}» добавлен {updated} посту(ам).')
+    else:
+        messages.warning(request, f'ℹ️ У всех отмеченных постов канал «{channel.name}» уже был добавлен ранее.')
 
     return redirect('crm_post_list')

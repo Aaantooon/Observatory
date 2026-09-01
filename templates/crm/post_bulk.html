@@ -193,6 +193,15 @@
         padding-top: 10px;
         border-top: 1px solid rgba(255,255,255,0.06);
     }
+    .post-bulk-page .preview-item.is-duplicate {
+        border-color: rgba(220,53,69,0.3);
+        background: rgba(220,53,69,0.05);
+    }
+    .post-bulk-page .preview-dup-badge {
+        color: #ff8a95;
+        font-size: 0.78rem;
+        white-space: nowrap;
+    }
 
     .post-bulk-page .progress-card { margin-top: 20px; }
     .post-bulk-page .progress-added {
@@ -323,16 +332,19 @@
         {% endif %}
         <div class="preview-list">
             {% for item in preview_items %}
-            <details class="preview-item">
+            <details class="preview-item{% if item.duplicate_date %} is-duplicate{% endif %}">
                 <summary>
                     <span class="preview-date">{{ item.date|date:"d.m.Y, H:i" }} · {{ item.weekday }}</span>
                     <span class="preview-title">{{ item.title }}</span>
+                    {% if item.duplicate_date %}
+                    <span class="preview-dup-badge">⚠️ уже есть такой пост от {{ item.duplicate_date|date:"d.m.Y" }}</span>
+                    {% endif %}
                 </summary>
                 <div class="preview-text">{{ item.text|linebreaksbr }}</div>
             </details>
             {% endfor %}
         </div>
-        <p style="color:#5a6a7e; font-size:0.82rem; margin-top:14px;">Ничего ещё не добавлено — это только проверка. Поправь текст или дату выше и нажми «Обновить предпросмотр», либо подтверди добавление.</p>
+        <p style="color:#5a6a7e; font-size:0.82rem; margin-top:14px;">Ничего ещё не добавлено — это только проверка. Поправь текст или дату выше и нажми «Обновить предпросмотр», либо подтверди добавление. Посты, отмеченные ⚠️, при подтверждении добавлены не будут — они точь-в-точь совпадают с уже существующими.</p>
     </div>
     {% endif %}
 
