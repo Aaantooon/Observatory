@@ -1935,6 +1935,72 @@ def test_stress_search_finish_early_after_3_analyzed_skips_remaining_items():
 
 
 # ---------------------------------------------------------------------------
+# Досрочное завершение прямо из части 1 (сбор образов) — второй, независимый
+# от разбора путь отправить упражнение на проверку: как только записано
+# MIN_ITEMS_TO_FINISH_EARLY (10) образов, не заходя в часть 2 вообще.
+# ---------------------------------------------------------------------------
+
+def _stress_write_items(ex, n):
+    for i in range(n):
+        ex.handle_message(UID, f"Причина{i} 5")
+
+
+def test_stress_search_part1_no_finish_button_before_10_items():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    _stress_write_items(ex, 9)
+    assert "✅ Завершить и отправить" not in vk.last_buttons
+
+
+def test_stress_search_part1_finish_button_appears_at_10_items():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    _stress_write_items(ex, 10)
+    assert "✅ Завершить и отправить" in vk.last_buttons
+    assert len(api.results) == 0
+
+
+def test_stress_search_part1_finish_and_send_too_early_is_rejected():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    _stress_write_items(ex, 5)
+    ex.handle_message(UID, "✅ Завершить и отправить")
+
+    assert len(api.results) == 0, "Рано — 10 ещё не набрано"
+    assert "5" in vk.last_message, "Честно называет текущий счётчик"
+    assert ex.user_sessions[UID]["phase"] == "collecting"
+
+
+def test_stress_search_part1_finish_and_send_at_10_items_saves_without_analysis():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    _stress_write_items(ex, 10)
+    ex.handle_message(UID, "✅ Завершить и отправить")
+
+    assert UID not in ex.user_sessions, "Упражнение должно полностью завершиться"
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 10
+    assert result["analysis"] == [], "Разбора не было вообще — analysis пуст"
+
+
+def test_stress_search_part1_finish_and_send_also_works_via_pasted_list():
+    """Тот же путь, но образы добавлены не по одному, а вставкой списком
+    (другая ветка кода — _add_stress_items, а не инлайновая в handle_collect)."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    pasted = "\n".join(f"Причина{i} 5" for i in range(12))
+    ex.handle_message(UID, pasted)
+    assert "✅ Завершить и отправить" in vk.last_buttons
+
+    ex.handle_message(UID, "✅ Завершить и отправить")
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 12
+    assert result["analysis"] == []
+
+
+# ---------------------------------------------------------------------------
 # send_message() не должен ронять вызывающий код (баг #4б) — актуально
 # особенно для _finish(), где save_result()/delete_progress() уже
 # отработали к моменту отправки завершающего сообщения.

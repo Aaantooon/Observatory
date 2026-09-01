@@ -4,14 +4,18 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    confirm_skip_keyboard, between_items_keyboard,
+    confirm_skip_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, FINISH_AND_SEND_TEXTS,
 )
 
-# Сколько образов нужно полностью разобрать (все 4 вопроса + переоценка),
-# прежде чем можно закончить путь досрочно и отправить его наблюдателю на
-# проверку, не разбирая остальные записанные образы.
+# Два независимых пути закончить путь досрочно и отправить его наблюдателю
+# на проверку, не дожидаясь полных 100 образов / разбора всех записанных:
+#   1. Часть 1 (сбор): записано хотя бы столько образов — можно отправить
+#      совсем без разбора (analysis будет пустым).
+#   2. Часть 2 (разбор): разобрано (все 4 вопроса + переоценка) хотя бы
+#      столько образов — можно отправить, не разбирая остальные записанные.
+MIN_ITEMS_TO_FINISH_EARLY = 10
 MIN_ANALYZED_TO_FINISH_EARLY = 3
 
 logger = logging.getLogger(__name__)
@@ -287,9 +291,11 @@ class StressSearchExercise:
             "💡 Можно списком — по пункту на строке, или всё в одну строку (тогда каждая оценка "
             "закрывает фразу перед собой):\n"
             "«Рецепт не выходит 8 вода не фильтруется 7 шум мешает думать 6»\n\n"
-            "🩺 Не обязательно ждать всех 100: уже после ~10 записанных и 3 разобранных "
-            "образов можно отправить упражнение наблюдателю на проверку (пункт «Отправить "
-            "на проверку» в меню) — получишь комментарий, не дожидаясь конца.\n\n"
+            f"🩺 Не обязательно ждать всех 100 — отправить наблюдателю на проверку можно "
+            f"раньше, любым из двух путей: как только запишешь {MIN_ITEMS_TO_FINISH_EARLY} "
+            f"образов («✅ Завершить и отправить» прямо здесь, без разбора), или как только "
+            f"разберёшь {MIN_ANALYZED_TO_FINISH_EARLY} из них в части 2 — получишь комментарий, "
+            f"не дожидаясь конца.\n\n"
             f"{self._get_separator()}\n"
             "➡️ «Продолжить» — к разбору, когда наберёшь все образы\n"
             "💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля",
@@ -347,7 +353,7 @@ class StressSearchExercise:
                 if can_finish else
                 "🕯️ Нажми «➡️ Продолжить», «💾 Сохранить и начать заново» или «💾 Сохранить и выйти»."
             )
-            self.send_message(user_id, hint, between_items_keyboard(can_finish))
+            self.send_message(user_id, hint, exercise_keyboard(can_finish))
             return
 
         if text_lower in RESTART_TEXTS:
@@ -389,6 +395,20 @@ class StressSearchExercise:
         self._save_progress(user_id, session)
 
         t = text.lower().strip()
+        if t in FINISH_AND_SEND_TEXTS:
+            count = len(session['items'])
+            if count >= MIN_ITEMS_TO_FINISH_EARLY:
+                self._finish_exercise(user_id, session)
+                return
+            self.send_message(
+                user_id,
+                f"🌫️ Пока рано — нужно хотя бы {MIN_ITEMS_TO_FINISH_EARLY} записанных образов "
+                f"(сейчас {count}). Пиши ещё — дальше уже можно будет закончить и отправить, "
+                f"не разбирая их в части 2.",
+                exercise_keyboard()
+            )
+            return
+
         if t in ADVANCE_TEXTS:
             if len(session['items']) == 0:
                 self.send_message(
@@ -485,6 +505,12 @@ class StressSearchExercise:
             self._try_auto_advance(user_id, session, count)
             return
 
+        can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
+        finish_line = (
+            f"· Записано уже {count} — если не хочешь разбирать в части 2, можно сразу "
+            f"«✅ Завершить и отправить» наблюдателю на проверку\n"
+            if can_finish else ""
+        )
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ #{count}\n\n"
@@ -493,8 +519,9 @@ class StressSearchExercise:
             f"{milestone_text}\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
-            f"· Пиши следующий образ, а когда закончишь — жми «Продолжить»",
-            exercise_keyboard()
+            f"· Пиши следующий образ, а когда закончишь — жми «Продолжить»\n"
+            f"{finish_line}",
+            exercise_keyboard(can_finish)
         )
 
         self._save_progress(user_id, session)
@@ -608,12 +635,19 @@ class StressSearchExercise:
 
         if milestone:
             message += f"{milestone}\n"
+
+        can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
         message += (
             f"\n{self._get_separator()}\n"
             "· Пиши следующий образ (можно сразу списком) — а когда закончишь, жми «Продолжить»"
         )
+        if can_finish:
+            message += (
+                f"\n· Записано уже {count} — если не хочешь разбирать в части 2, можно сразу "
+                f"«✅ Завершить и отправить» наблюдателю на проверку"
+            )
 
-        self.send_message(user_id, message, exercise_keyboard())
+        self.send_message(user_id, message, exercise_keyboard(can_finish))
         self._save_progress(user_id, session)
 
     def _try_auto_advance(self, user_id, session, count, target=100):
@@ -970,7 +1004,7 @@ class StressSearchExercise:
                     f"{finish_line}"
                     f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
                     f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
-                    between_items_keyboard(can_finish)
+                    exercise_keyboard(can_finish)
                 )
 
     def _finish_exercise(self, user_id, session):
