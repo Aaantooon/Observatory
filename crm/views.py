@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from bot_api.models import User, Result, Review, Post
+from bot_api.models import User, Result, Review, Post, Channel, PostChannelStatus
 from myapp.models import UserCourseProgress
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def review_detail(request, review_id):
 
 @staff_member_required
 def post_list(request):
-    posts = Post.objects.all()
+    posts = Post.objects.prefetch_related('channel_statuses__channel').all()
     return render(request, 'crm/post_list.html', {'posts': posts})
 
 
@@ -113,47 +113,73 @@ def _parse_publish_date(request, raw_value):
     return parsed
 
 
+def _sync_post_channels(post, selected_channel_ids):
+    """Приводит PostChannelStatus поста в соответствие с выбранными в форме
+    каналами: добавляет недостающие (status='scheduled'), убирает те, что
+    сняли в форме — но только пока они ещё не отправлены (status
+    'scheduled'); уже опубликованные/провалившиеся записи не трогаем,
+    это история, а не план. Возвращает актуальный статус поста для
+    Post.status (сводка для списка в CRM)."""
+    existing = {pcs.channel_id: pcs for pcs in post.channel_statuses.all()}
+
+    for channel_id in selected_channel_ids - existing.keys():
+        PostChannelStatus.objects.create(post=post, channel_id=channel_id, status='scheduled')
+
+    for channel_id, pcs in existing.items():
+        if channel_id not in selected_channel_ids and pcs.status == 'scheduled':
+            pcs.delete()
+
+    statuses = set(post.channel_statuses.values_list('status', flat=True))
+    if 'published' in statuses:
+        return 'published'
+    if 'scheduled' in statuses:
+        return 'scheduled'
+    if statuses:
+        return 'failed'
+    return 'draft'
+
+
+def _selected_channel_ids(request):
+    return {int(x) for x in request.POST.getlist('channels') if x.isdigit()}
+
+
 @staff_member_required
 def post_create(request):
+    channels = Channel.objects.filter(is_active=True)
     if request.method == 'POST':
         publish_date = _parse_publish_date(request, request.POST.get('publish_date'))
         if publish_date is None:
-            return render(request, 'crm/post_form.html', {
-                'platform_choices': Post.PLATFORM_CHOICES,
-                'status_choices': Post.STATUS_CHOICES,
-                'post': None,
-            })
-        Post.objects.create(
-            platform=request.POST.get('platform'),
-            text=request.POST.get('text'),
+            return render(request, 'crm/post_form.html', {'post': None, 'channels': channels})
+
+        post = Post.objects.create(
+            text=request.POST.get('text', ''),
             publish_date=publish_date,
-            status=request.POST.get('status', 'draft'),
+            status='draft',
         )
+        post.status = _sync_post_channels(post, _selected_channel_ids(request))
+        post.save(update_fields=['status'])
         return redirect('crm_post_list')
-    return render(request, 'crm/post_form.html', {'platform_choices': Post.PLATFORM_CHOICES, 'status_choices': Post.STATUS_CHOICES})
+    return render(request, 'crm/post_form.html', {'post': None, 'channels': channels})
 
 
 @staff_member_required
 def post_edit(request, post_id):
     post = get_object_or_404(Post, id=post_id)
+    channels = Channel.objects.filter(is_active=True)
     if request.method == 'POST':
         publish_date = _parse_publish_date(request, request.POST.get('publish_date'))
         if publish_date is None:
-            return render(request, 'crm/post_form.html', {
-                'post': post,
-                'platform_choices': Post.PLATFORM_CHOICES,
-                'status_choices': Post.STATUS_CHOICES,
-            })
-        post.platform = request.POST.get('platform')
-        post.text = request.POST.get('text')
+            return render(request, 'crm/post_form.html', {'post': post, 'channels': channels})
+
+        post.text = request.POST.get('text', '')
         post.publish_date = publish_date
-        post.status = request.POST.get('status', post.status)
+        post.status = _sync_post_channels(post, _selected_channel_ids(request))
         post.save()
         return redirect('crm_post_list')
     return render(request, 'crm/post_form.html', {
         'post': post,
-        'platform_choices': Post.PLATFORM_CHOICES,
-        'status_choices': Post.STATUS_CHOICES,
+        'channels': channels,
+        'selected_channel_ids': set(post.channel_statuses.values_list('channel_id', flat=True)),
     })
 
 

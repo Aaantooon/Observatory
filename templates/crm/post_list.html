@@ -3,11 +3,19 @@
 <div style="max-width: 900px; margin: 0 auto;">
     <h1 style="color: #e2c044; font-weight: 300;">📅 Контент-план</h1>
     <a href="{% url 'crm_post_create' %}" class="btn-primary-custom">+ Новый пост</a>
+    <a href="/admin/bot_api/channel/" style="margin-left:10px; color:#8a9aaa;">⚙️ Каналы публикации</a>
     <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
     {% for p in posts %}
         <div class="card-glass">
-            <strong style="color: #e2c044;">{{ p.get_platform_display }}</strong>
+            <strong style="color: #e2c044;">
+                {% for cs in p.channel_statuses.all %}{{ cs.channel.name }}{% if not forloop.last %}, {% endif %}{% empty %}Без канала{% endfor %}
+            </strong>
             <span style="color: #8a9aaa;"> · {{ p.get_status_display }} · {{ p.publish_date|date:"d.m.Y H:i" }}</span>
+            {% for cs in p.channel_statuses.all %}
+                {% if cs.status == 'failed' %}
+                <div style="color:#e05a5a; font-size:0.85rem;">⚠️ {{ cs.channel.name }}: {{ cs.error_message }}</div>
+                {% endif %}
+            {% endfor %}
             <p style="color: #d4d9e6;">{{ p.text|truncatewords:20 }}</p>
             <a href="{% url 'crm_post_edit' p.id %}" style="color:#e2c044;">Редактировать</a>
             <a href="{% url 'crm_post_delete' p.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>

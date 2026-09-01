@@ -4,18 +4,26 @@
     <h1 style="color: #e2c044; font-weight: 300;">{% if post %}Редактировать пост{% else %}Новый пост{% endif %}</h1>
     <form method="post">
         {% csrf_token %}
-        <select name="platform" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
-            {% for value, label in platform_choices %}
-            <option value="{{ value }}" {% if post.platform == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-        </select>
         <textarea name="text" rows="5" placeholder="Текст поста" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">{% if post %}{{ post.text }}{% endif %}</textarea>
         <input type="datetime-local" name="publish_date" required value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
-        <select name="status" style="width:100%; padding:10px; margin-bottom:10px; background:rgba(22,33,62,0.6); color:#e0d5c1; border:1px solid rgba(226,192,68,0.3); border-radius:8px;">
-            {% for value, label in status_choices %}
-            <option value="{{ value }}" {% if post.status == value %}selected{% endif %}>{{ label }}</option>
+
+        <div style="margin-bottom:10px; color:#8a9aaa;">Куда опубликовать:</div>
+        <div style="margin-bottom:10px; display:flex; flex-direction:column; gap:6px;">
+            {% for channel in channels %}
+            <label style="color:#e0d5c1;">
+                <input type="checkbox" name="channels" value="{{ channel.id }}"
+                    {% if channel.id in selected_channel_ids %}checked{% endif %}>
+                {{ channel.get_platform_display }} — {{ channel.name }}
+            </label>
+            {% empty %}
+            <p style="color:#5a6a7e;">Каналов ещё нет. <a href="/admin/bot_api/channel/add/" style="color:#e2c044;">Добавить канал</a> — платформа, ID группы и токен доступа.</p>
             {% endfor %}
-        </select>
+        </div>
+        <p style="color:#5a6a7e; font-size:0.85rem; margin-bottom:10px;">
+            Если не выбрать ни одного канала — пост сохранится как черновик и никуда не уйдёт.
+            С выбранным каналом пост автоматически опубликуется в указанную дату/время.
+        </p>
+
         <button type="submit" class="btn-primary-custom">Сохранить</button>
         {% if post %}
         <a href="{% url 'crm_post_delete' post.id %}" style="margin-left:10px;color:#e05a5a;">Удалить</a>
