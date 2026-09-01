@@ -1562,27 +1562,38 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
     ex.handle_message(UID, "➡️ Продолжить")   # -> analysis, 2 образа
     ex.handle_message(UID, "➡️ Далее")        # -> вопрос по образу 1, step 1
 
-    # образ 1: все 4 шага
+    # образ 1: все 4 вопроса + новая оценка (шаг 5)
     ex.handle_message(UID, "Идеал 1")
     ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
     ex.handle_message(UID, "80")
     ex.handle_message(UID, "Почему 1")
-    ex.handle_message(UID, "Рефлексия 1")  # step 4 -> следующий образ
+    ex.handle_message(UID, "Рефлексия 1")  # step 4 -> связный разбор, ждёт новую оценку
+    session = ex.user_sessions[UID]
+    assert session["question_index"] == 0, "Индекс сдвигается только после ответа на новую оценку"
+    ex.handle_message(UID, "5")  # шаг 5: новая оценка -> поздравление + пауза «Продолжить»
 
     session = ex.user_sessions[UID]
     assert session["question_index"] == 1, "После образа 1 индекс должен указывать на образ 2"
-    assert len(session["answers"]) == 2, "Для образа 2 должна была добавиться новая запись answers"
+    assert session.get("_between_items") is True, "Между образами должна быть пауза с кнопкой «Продолжить»"
+    assert len(session["answers"]) == 1, "Новая запись answers для образа 2 появится только после «Продолжить»"
     assert session["answers"][0] == {
         "text": "Работа", "rate": 8,
         "ideal": "Идеал 1", "percent": 80, "why": "Почему 1", "reflection": "Рефлексия 1",
+        "new_rate": 5,
     }
 
-    # образ 2: все 4 шага -> естественное завершение (index >= len(items))
+    ex.handle_message(UID, "➡️ Продолжить")  # -> вопрос по образу 2, step 1
+    session = ex.user_sessions[UID]
+    assert "_between_items" not in session
+    assert len(session["answers"]) == 2, "Для образа 2 должна была добавиться новая запись answers"
+
+    # образ 2: все 4 вопроса + новая оценка -> естественное завершение (index >= len(items))
     ex.handle_message(UID, "Идеал 2")
     ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
     ex.handle_message(UID, "40")
     ex.handle_message(UID, "Почему 2")
     ex.handle_message(UID, "Рефлексия 2")
+    ex.handle_message(UID, "3")  # шаг 5 -> последний образ, упражнение завершается
 
     assert UID not in ex.user_sessions, "После разбора обоих образов упражнение должно завершиться само"
     assert len(api.results) == 1
@@ -1592,7 +1603,71 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
     assert result["analysis"][1] == {
         "text": "Семья", "rate": 5,
         "ideal": "Идеал 2", "percent": 40, "why": "Почему 2", "reflection": "Рефлексия 2",
+        "new_rate": 3,
     }
+
+
+def test_stress_search_between_items_pause_reprompts_and_supports_restart():
+    """Пауза между образами (после '✅ Итог...') ждёт '➡️ Продолжить' —
+    любой другой текст переспрашивает, а 'Сохранить и начать сначала'
+    работает и из этой паузы, как и из любой другой точки упражнения."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "Семья 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "Идеал 1")
+    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "80")
+    ex.handle_message(UID, "Почему 1")
+    ex.handle_message(UID, "Рефлексия 1")  # -> связный разбор, ждёт новую оценку
+    ex.handle_message(UID, "5")  # шаг 5 -> поздравление + пауза между образами
+
+    assert ex.user_sessions[UID]["_between_items"] is True
+
+    # случайный текст во время паузы — не продвигает, просто переспрашивает
+    ex.handle_message(UID, "чтотоещё")
+    assert ex.user_sessions[UID]["_between_items"] is True
+    assert "Продолжить" in vk.last_message
+
+    # «Сохранить и начать заново» работает и из этой паузы: сохраняет
+    # результат и сразу открывает свежую сессию с нуля
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert ex.user_sessions[UID]["phase"] == "collecting"
+    assert ex.user_sessions[UID]["items"] == []
+
+
+def test_stress_search_new_rate_step_validates_1_to_10():
+    """Шаг 5 (новая оценка после разбора) принимает только число 1-10 —
+    не цифры и выход за диапазон переспрашивают, не продвигая упражнение."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "Идеал")
+    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "80")
+    ex.handle_message(UID, "Почему")
+    ex.handle_message(UID, "Рефлексия")  # -> шаг 5, ждёт новую оценку
+
+    ex.handle_message(UID, "не число")
+    assert ex.user_sessions[UID]["question_step"] == 5
+    assert "Напиши число от 1 до 10" in vk.last_message
+
+    ex.handle_message(UID, "11")
+    assert ex.user_sessions[UID]["question_step"] == 5
+    assert "от 1 до 10" in vk.last_message
+
+    ex.handle_message(UID, "0")
+    assert ex.user_sessions[UID]["question_step"] == 5
+
+    ex.handle_message(UID, "4")  # валидное значение -> завершение (единственный образ)
+    assert UID not in ex.user_sessions
+    assert api.results[0]["result_data"]["analysis"][0]["new_rate"] == 4
 
 
 def test_diary_advance_without_answer_shows_error_and_does_not_advance():

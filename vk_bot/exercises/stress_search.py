@@ -70,7 +70,7 @@ class StressSearchExercise:
         образа, чтобы не приходилось листать переписку выше."""
         lines = []
         if current_answer.get('ideal'):
-            lines.append(f"· Противоположность: {self._item_text_for_display(current_answer['ideal'])}")
+            lines.append(f"· Как, по-твоему, должно быть: {self._item_text_for_display(current_answer['ideal'])}")
         if 'percent' in current_answer:
             lines.append(f"· Реалистичность: {current_answer['percent']}%")
         if current_answer.get('why'):
@@ -80,6 +80,44 @@ class StressSearchExercise:
         if not lines:
             return ""
         return "📝 Твои ответы:\n" + "\n".join(lines) + "\n\n"
+
+    def _build_narrative_summary(self, current_answer, item_text, item_rate, index, total):
+        """После вопроса 4/4 — вместо сухого списка «Твои ответы» собирает
+        те же данные в связный разбор (по формулировке психолога) и сразу
+        спрашивает новую оценку 1-10, вместо старого/новую разницу — так
+        человек сам видит, изменилось ли что-то после разбора."""
+        ideal = self._item_text_for_display(current_answer.get('ideal', ''))
+        percent = current_answer.get('percent', 0)
+        why = self._item_text_for_display(current_answer.get('why', ''))
+        reflection = self._item_text_for_display(current_answer.get('reflection', ''))
+        return (
+            f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+            f"😖 Не нравится: «{self._item_text_for_display(item_text)}» — {item_rate}/10.\n\n"
+            f"🧠 В подсознании записано: должно быть «{ideal}».\n"
+            f"📊 В реальности жизни так происходит {percent}% случаев.\n"
+            f"❓ Почему реальность должна поменяться: {why}\n\n"
+            f"💭 {reflection}\n\n"
+            f"{self._get_separator()}\n"
+            f"Пока мы не поняли явление — оно целиком и полностью управляет нами. "
+            f"Как только поняли — появилась возможность взять его под контроль.\n\n"
+            f"Твой образ, который тебя раздражает, — это попытка взять его под контроль. "
+            f"Насколько успешно получилось — тебе делать вывод.\n\n"
+            f"❓ Была оценка {item_rate}/10 — какая она теперь?\n"
+            f"· Напиши число от 1 до 10: понизилась, повысилась или осталась такой же"
+        )
+
+    def _build_congrats_message(self, old_rate, new_rate, index, total):
+        if new_rate < old_rate:
+            change_line = f"📉 Было {old_rate}/10 → стало {new_rate}/10 — стало полегче."
+        elif new_rate > old_rate:
+            change_line = f"📈 Было {old_rate}/10 → стало {new_rate}/10."
+        else:
+            change_line = f"➖ Было {old_rate}/10 → осталось {new_rate}/10."
+        return (
+            f"🎉 Поздравляю! Образ {index + 1}/{total} — ещё один шаг в свой страх.\n\n"
+            f"{change_line}\n\n"
+            f"Ты молодец, и я рад, что ты это сделал."
+        )
 
     def _get_question1_hint(self):
         return (
@@ -274,6 +312,24 @@ class StressSearchExercise:
                 user_id,
                 "🕯️ Нажми «Продолжить ✅» или «Начать заново 🔄».",
                 continue_keyboard()
+            )
+            return
+
+        if session.get('_between_items'):
+            if text_lower in CONTINUE_TEXTS:
+                session.pop('_between_items', None)
+                self._show_current_question(user_id, session)
+                return
+            if text_lower in CANCEL_TEXTS:
+                self._handle_cancel(user_id, session)
+                return
+            if text_lower in RESTART_TEXTS:
+                self._handle_start_over(user_id)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «➡️ Продолжить», «💾 Сохранить и начать заново» или «💾 Сохранить и выйти».",
+                exercise_keyboard()
             )
             return
 
@@ -615,12 +671,18 @@ class StressSearchExercise:
                 analysis_keyboard()
             )
 
-    def _send_question1(self, user_id, item_text, item_rate, index, total):
+    def _send_question1(self, user_id, item_text, item_rate, index, total, retry=False):
+        retry_line = (
+            "🔄 Может, попробуешь ещё подумать? Можешь написать разные варианты, "
+            "которые приходят в голову — чем больше, тем лучше.\n\n"
+            if retry else ""
+        )
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
             f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
             f"❓ Вопрос 1/4:\n"
+            f"{retry_line}"
             f"{self._get_question1_hint()}\n\n"
             f"{self._get_separator()}\n"
             f"💾 «Сохранить и выйти»",
@@ -705,6 +767,12 @@ class StressSearchExercise:
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
+        elif step == 5:
+            self.send_message(
+                user_id,
+                self._build_narrative_summary(current_answer, item_text, item_rate, index, total),
+                cancel_keyboard()
+            )
         else:
             self._show_current_question(user_id, session)
 
@@ -739,6 +807,8 @@ class StressSearchExercise:
                     f"{self._format_answers_so_far(current_answer)}"
                     f"❓ Вопрос 2/4:\n"
                     f"· На сколько процентов это реально?\n"
+                    f"· Это твой прогноз — насколько ты сам считаешь и думаешь, "
+                    f"что так на самом деле есть в мире.\n"
                     f"· Напиши число от 0 до 100\n\n"
                     f"💾 «Сохранить и выйти»",
                     cancel_keyboard()
@@ -748,7 +818,7 @@ class StressSearchExercise:
             if text_lower in CONFIRM_NO_TEXTS:
                 session.pop('_confirm_ideal', None)
                 session.pop('_pending_ideal', None)
-                self._send_question1(user_id, item_text, item_rate, index, total)
+                self._send_question1(user_id, item_text, item_rate, index, total, retry=True)
                 return
 
             self.send_message(
@@ -826,14 +896,40 @@ class StressSearchExercise:
 
         elif step == 4:
             current_answer['reflection'] = text
-            session['question_step'] = 0
-
+            session['question_step'] = 5
             self._save_progress(user_id, session)
 
             self.send_message(
                 user_id,
-                f"✅ Итог по образу «{self._item_text_for_display(item_text)}» — {item_rate}/10:\n\n"
-                f"{self._format_answers_so_far(current_answer)}".rstrip()
+                self._build_narrative_summary(current_answer, item_text, item_rate, index, total),
+                cancel_keyboard()
+            )
+
+        elif step == 5:
+            if not text.isdigit():
+                self.send_message(
+                    user_id,
+                    "❌ Напиши число от 1 до 10 (только цифры)",
+                    cancel_keyboard()
+                )
+                return
+
+            new_rate = int(text)
+            if not (1 <= new_rate <= 10):
+                self.send_message(
+                    user_id,
+                    "❌ Число должно быть от 1 до 10",
+                    cancel_keyboard()
+                )
+                return
+
+            current_answer['new_rate'] = new_rate
+            session['question_step'] = 0
+            self._save_progress(user_id, session)
+
+            self.send_message(
+                user_id,
+                self._build_congrats_message(item_rate, new_rate, index, total)
             )
 
             session['question_index'] += 1
@@ -841,7 +937,16 @@ class StressSearchExercise:
             if session['question_index'] >= len(session.get('items', [])):
                 self._finish_exercise(user_id, session)
             else:
-                self._show_current_question(user_id, session)
+                session['_between_items'] = True
+                self._save_progress(user_id, session)
+                self.send_message(
+                    user_id,
+                    f"{self._get_separator()}\n"
+                    f"➡️ «Продолжить» — к следующему образу\n"
+                    f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
+                    f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
+                    exercise_keyboard()
+                )
 
     def _finish_exercise(self, user_id, session):
         result_data = {
