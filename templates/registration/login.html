@@ -10,10 +10,30 @@
         <p style="color: #aab3c9; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">
             На «Пути наблюдателя» нет отдельного пароля — вход только через ВКонтакте.
         </p>
+        <label style="display: flex; align-items: flex-start; gap: 10px; text-align: left; margin-bottom: 20px; font-size: 0.85rem; color: #aab3c9; cursor: pointer;">
+            <input type="checkbox" id="consentCheckbox" style="margin-top: 3px; accent-color: #e2c044;">
+            <span>Согласен(-на) с <a href="{% url 'privacy_policy' %}" target="_blank" style="color: #e2c044;">Политикой конфиденциальности</a> и <a href="{% url 'terms_of_service' %}" target="_blank" style="color: #e2c044;">Пользовательским соглашением</a>, в том числе на обработку результатов упражнений и переписки с психологом.</span>
+        </label>
         <a href="{% url 'vk_login_start' %}{% if next %}?next={{ next }}{% endif %}"
-           class="btn-lantern" style="display: inline-block; width: 100%; padding: 12px 20px; border-radius: 50px; text-decoration: none; font-size: 0.95rem;">
+           id="vkLoginLink"
+           class="btn-lantern" style="display: inline-block; width: 100%; padding: 12px 20px; border-radius: 50px; text-decoration: none; font-size: 0.95rem; opacity: 0.5; pointer-events: none;">
             Войти через VK
         </a>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('consentCheckbox');
+    const link = document.getElementById('vkLoginLink');
+    checkbox.addEventListener('change', function() {
+        if (checkbox.checked) {
+            link.style.opacity = '1';
+            link.style.pointerEvents = 'auto';
+        } else {
+            link.style.opacity = '0.5';
+            link.style.pointerEvents = 'none';
+        }
+    });
+});
+</script>
 {% endblock %}
