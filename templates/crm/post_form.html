@@ -102,6 +102,39 @@
         border-radius: 50px;
         font-size: 0.95rem;
     }
+
+    .datetime-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    .dt-field { flex: 1 1 200px; min-width: 160px; }
+    .dt-field .field-input { text-align: center; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
+    .dt-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .dt-preset-btn {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: #aab3c9;
+        border-radius: 8px;
+        padding: 5px 11px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        font-variant-numeric: tabular-nums;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .dt-preset-btn:hover { border-color: #e2c044; color: #e2c044; }
+    .dt-summary {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        color: #8a9aaa;
+        min-height: 1.2em;
+    }
+    .dt-summary.dt-summary-error { color: #ff8a95; }
 </style>
 {% endblock %}
 {% block content %}
@@ -119,8 +152,31 @@
             >{% if post %}{{ post.text }}{% endif %}</textarea>
             <div class="char-counter"><span id="char-count">{% if post %}{{ post.text|length }}{% else %}0{% endif %}</span> символов</div>
 
-            <label class="field-label" style="margin-top: 18px;" for="post-date">Дата и время публикации</label>
-            <input type="datetime-local" name="publish_date" id="post-date" required class="field-input"
+            <label class="field-label" style="margin-top: 18px;">Дата и время публикации</label>
+            <div class="datetime-picker">
+                <div class="dt-field">
+                    <input type="text" id="post-date-display" class="field-input" placeholder="дд.мм.гггг"
+                        inputmode="numeric" autocomplete="off" maxlength="10"
+                        value="{% if post %}{{ post.publish_date|date:'d.m.Y' }}{% endif %}">
+                    <div class="dt-presets">
+                        <button type="button" class="dt-preset-btn" data-date-offset="0">Сегодня</button>
+                        <button type="button" class="dt-preset-btn" data-date-offset="1">Завтра</button>
+                    </div>
+                </div>
+                <div class="dt-field">
+                    <input type="text" id="post-time-display" class="field-input" placeholder="чч:мм"
+                        inputmode="numeric" autocomplete="off" maxlength="5"
+                        value="{% if post %}{{ post.publish_date|date:'H:i' }}{% endif %}">
+                    <div class="dt-presets">
+                        <button type="button" class="dt-preset-btn" data-time="09:00">09:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="12:00">12:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="18:00">18:00</button>
+                        <button type="button" class="dt-preset-btn" data-time="21:00">21:00</button>
+                    </div>
+                </div>
+            </div>
+            <div id="dt-summary" class="dt-summary"></div>
+            <input type="hidden" name="publish_date" id="post-date-iso"
                 value="{% if post %}{{ post.publish_date|date:'Y-m-d\TH:i' }}{% endif %}">
 
             <label class="field-label" style="margin-top: 22px;">Куда опубликовать</label>
@@ -158,4 +214,98 @@
         </form>
     </div>
 </div>
+<script>
+(function() {
+    var dateInput = document.getElementById('post-date-display');
+    var timeInput = document.getElementById('post-time-display');
+    var isoInput = document.getElementById('post-date-iso');
+    var summary = document.getElementById('dt-summary');
+    var form = dateInput.closest('form');
+
+    var WEEKDAYS = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+    var MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function formatDateTyping(value) {
+        var digits = value.replace(/\D/g, '').slice(0, 8);
+        var out = digits.slice(0, 2);
+        if (digits.length > 2) out += '.' + digits.slice(2, 4);
+        if (digits.length > 4) out += '.' + digits.slice(4, 8);
+        return out;
+    }
+    function formatTimeTyping(value) {
+        var digits = value.replace(/\D/g, '').slice(0, 4);
+        var out = digits.slice(0, 2);
+        if (digits.length > 2) out += ':' + digits.slice(2, 4);
+        return out;
+    }
+
+    function parseFields() {
+        var dm = dateInput.value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        var tm = timeInput.value.match(/^(\d{2}):(\d{2})$/);
+        if (!dm || !tm) return null;
+        var day = parseInt(dm[1], 10), month = parseInt(dm[2], 10), year = parseInt(dm[3], 10);
+        var hour = parseInt(tm[1], 10), minute = parseInt(tm[2], 10);
+        if (month < 1 || month > 12 || hour > 23 || minute > 59) return null;
+        var d = new Date(year, month - 1, day, hour, minute);
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+        return { day: day, month: month, year: year, hour: hour, minute: minute, date: d };
+    }
+
+    function updateSummary() {
+        var parsed = parseFields();
+        var bothFilled = dateInput.value.length > 0 || timeInput.value.length > 0;
+        if (!parsed) {
+            isoInput.value = '';
+            if (bothFilled && (dateInput.value.length === 10 || timeInput.value.length === 5)) {
+                summary.textContent = 'Проверь дату и время — формат дд.мм.гггг и чч:мм';
+                summary.classList.add('dt-summary-error');
+            } else {
+                summary.textContent = '';
+                summary.classList.remove('dt-summary-error');
+            }
+            return;
+        }
+        summary.classList.remove('dt-summary-error');
+        isoInput.value = parsed.year + '-' + pad(parsed.month) + '-' + pad(parsed.day) + 'T' + pad(parsed.hour) + ':' + pad(parsed.minute);
+        summary.textContent = WEEKDAYS[parsed.date.getDay()] + ', ' + parsed.day + ' ' + MONTHS[parsed.month - 1] + ' ' + parsed.year + ', ' + pad(parsed.hour) + ':' + pad(parsed.minute);
+    }
+
+    dateInput.addEventListener('input', function() {
+        this.value = formatDateTyping(this.value);
+        updateSummary();
+    });
+    timeInput.addEventListener('input', function() {
+        this.value = formatTimeTyping(this.value);
+        updateSummary();
+    });
+
+    document.querySelectorAll('.dt-preset-btn[data-date-offset]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var d = new Date();
+            d.setDate(d.getDate() + parseInt(this.dataset.dateOffset, 10));
+            dateInput.value = pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear();
+            updateSummary();
+        });
+    });
+    document.querySelectorAll('.dt-preset-btn[data-time]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            timeInput.value = this.dataset.time;
+            updateSummary();
+        });
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (!parseFields()) {
+            e.preventDefault();
+            summary.textContent = 'Укажи дату (дд.мм.гггг) и время (чч:мм) публикации';
+            summary.classList.add('dt-summary-error');
+            dateInput.focus();
+        }
+    });
+
+    updateSummary();
+})();
+</script>
 {% endblock %}
