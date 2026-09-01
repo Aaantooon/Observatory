@@ -933,6 +933,42 @@ def test_stress_search_multiline_all_unrecognized_does_not_add_items():
     assert "Не смог распознать" in vk.last_message
 
 
+def test_stress_search_reaching_100_auto_advances_to_analysis_single_item():
+    """Когда 100-й пункт добавлен по одному (не списком) — переход в Часть 2
+    должен происходить сразу, без ожидания «Продолжить» от пользователя."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    session = ex.user_sessions[UID]
+    session["items"] = [{"text": f"Пункт {i}", "rate": 5} for i in range(99)]
+
+    ex.handle_message(UID, "Последний пункт 8")
+
+    assert len(session["items"]) == 100
+    assert session["phase"] == "analysis", (
+        "После 100-го пункта сессия должна была сама перейти в разбор (Часть 2)"
+    )
+    assert "100 пунктов набрано" in vk.sent[-2]["message"]
+    assert "РАЗБОР ПУТИ" in vk.last_message, (
+        "Сообщение с разбором (Часть 2) должно было прийти сразу следом, без обрыва"
+    )
+
+
+def test_stress_search_reaching_100_auto_advances_to_analysis_batch():
+    """То же самое, когда 100-й (и последующие) пункт добавлен вставкой
+    сразу нескольких строк одним сообщением."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    session = ex.user_sessions[UID]
+    session["items"] = [{"text": f"Пункт {i}", "rate": 5} for i in range(97)]
+
+    ex.handle_message(UID, "Предпоследний 7\nПоследний 8\nЛишний сверху 6")
+
+    assert len(session["items"]) == 100
+    assert session["phase"] == "analysis"
+    assert "100 пунктов набрано" in vk.sent[-2]["message"]
+    assert "РАЗБОР ПУТИ" in vk.last_message
+
+
 # ---------------------------------------------------------------------------
 # "Сохранить и выйти" (CANCEL_TEXTS) — прогресс сохраняется, сессия
 # закрывается, при повторном входе появляется resume-промпт

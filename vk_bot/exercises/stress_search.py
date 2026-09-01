@@ -382,6 +382,19 @@ class StressSearchExercise:
         milestone = self._milestone_line(count, target=100)
         milestone_text = f"{milestone}\n" if milestone else ""
 
+        if count >= 100:
+            self.send_message(
+                user_id,
+                f"🔦 ОБРАЗ #{count}\n\n"
+                f"📌 {self._score_emoji(rate)} «{item}» — {rate}/10\n\n"
+                f"· {progress}\n\n"
+                f"{reply}\n\n"
+                f"🎉 100 пунктов набрано! Часть 1 завершена — переходим к разбору.",
+                analysis_keyboard()
+            )
+            self._try_auto_advance(user_id, session, count)
+            return
+
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ #{count}\n\n"
@@ -494,10 +507,17 @@ class StressSearchExercise:
             f"· {progress}\n"
             f"Всего: {count}/100\n"
         )
-        if milestone:
-            message += f"{milestone}\n"
         if note:
             message += f"\n⚠️ {note}\n"
+
+        if count >= 100:
+            message += "\n🎉 100 пунктов набрано! Часть 1 завершена — переходим к разбору."
+            self.send_message(user_id, message, analysis_keyboard())
+            self._try_auto_advance(user_id, session, count)
+            return
+
+        if milestone:
+            message += f"{milestone}\n"
         message += (
             f"\n{self._get_separator()}\n"
             "· Пиши следующий образ (можно сразу списком) — а когда закончишь, жми «Продолжить»"
@@ -505,6 +525,18 @@ class StressSearchExercise:
 
         self.send_message(user_id, message, exercise_keyboard())
         self._save_progress(user_id, session)
+
+    def _try_auto_advance(self, user_id, session, count, target=100):
+        """Как только по итогам добавления пунктов набрано 100 (или больше) —
+        сразу переводит сессию в Часть 2 (разбор), не дожидаясь, пока
+        пользователь сам нажмёт «Продолжить». Так переход из Части 1 в
+        Часть 2 происходит без обрыва потока, автоматически."""
+        if count < target:
+            return False
+        session['phase'] = 'analysis'
+        self._save_progress(user_id, session)
+        self._start_analysis(user_id, session)
+        return True
 
     def _handle_multiline_collect(self, user_id, text, session):
         parsed_items, invalid_lines = self._split_stress_items(text)
