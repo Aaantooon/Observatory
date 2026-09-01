@@ -4,7 +4,9 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
+    confirm_skip_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
+    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -613,6 +615,18 @@ class StressSearchExercise:
                 analysis_keyboard()
             )
 
+    def _send_question1(self, user_id, item_text, item_rate, index, total):
+        self.send_message(
+            user_id,
+            f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+            f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+            f"❓ Вопрос 1/4:\n"
+            f"{self._get_question1_hint()}\n\n"
+            f"{self._get_separator()}\n"
+            f"💾 «Сохранить и выйти»",
+            cancel_keyboard()
+        )
+
     def _show_current_question(self, user_id, session):
         index = session.get('question_index', 0)
         items = session.get('items', [])
@@ -632,17 +646,8 @@ class StressSearchExercise:
             'rate': item['rate']
         })
 
-        self.send_message(
-            user_id,
-            f"🔦 ОБРАЗ {index + 1}/{len(items)}\n\n"
-            f"📌 {self._score_emoji(item['rate'])} «{item['text']}» — {item['rate']}/10\n\n"
-            f"❓ Вопрос 1/4:\n"
-            f"{self._get_question1_hint()}\n\n"
-            f"{self._get_separator()}\n"
-            f"💾 «Сохранить и выйти»",
-            cancel_keyboard()
-        )
-        
+        self._send_question1(user_id, item['text'], item['rate'], index, len(items))
+
         session['phase'] = 'question'
         self._save_progress(user_id, session)
 
@@ -661,16 +666,7 @@ class StressSearchExercise:
         current_answer = answers[-1] if answers else {}
 
         if step == 1:
-            self.send_message(
-                user_id,
-                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
-                f"❓ Вопрос 1/4:\n"
-                f"{self._get_question1_hint()}\n\n"
-                f"{self._get_separator()}\n"
-                f"💾 «Сохранить и выйти»",
-                cancel_keyboard()
-            )
+            self._send_question1(user_id, item_text, item_rate, index, total)
         elif step == 2:
             self.send_message(
                 user_id,
@@ -729,21 +725,50 @@ class StressSearchExercise:
         total = len(session.get('items', []))
         index = session.get('question_index', 0)
 
+        if session.get('_confirm_ideal'):
+            if text_lower in CONFIRM_YES_TEXTS:
+                session.pop('_confirm_ideal', None)
+                current_answer['ideal'] = session.pop('_pending_ideal', text)
+                session['question_step'] = 2
+                self._save_progress(user_id, session)
+
+                self.send_message(
+                    user_id,
+                    f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+                    f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                    f"{self._format_answers_so_far(current_answer)}"
+                    f"❓ Вопрос 2/4:\n"
+                    f"· На сколько процентов это реально?\n"
+                    f"· Напиши число от 0 до 100\n\n"
+                    f"💾 «Сохранить и выйти»",
+                    cancel_keyboard()
+                )
+                return
+
+            if text_lower in CONFIRM_NO_TEXTS:
+                session.pop('_confirm_ideal', None)
+                session.pop('_pending_ideal', None)
+                self._send_question1(user_id, item_text, item_rate, index, total)
+                return
+
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «✅ Да, дальше» или «✏️ Нет, буду писать».",
+                confirm_skip_keyboard()
+            )
+            return
+
         if step == 1:
-            current_answer['ideal'] = text
-            session['question_step'] = 2
-            self._save_progress(user_id, session)
+            session['_pending_ideal'] = text
+            session['_confirm_ideal'] = True
 
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
-                f"{self._format_answers_so_far(current_answer)}"
-                f"❓ Вопрос 2/4:\n"
-                f"· На сколько процентов это реально?\n"
-                f"· Напиши число от 0 до 100\n\n"
-                f"💾 «Сохранить и выйти»",
-                cancel_keyboard()
+                f"Ты написал: «{text}»\n\n"
+                f"❓ Уверен, что это противоположность — и именно так должно быть?",
+                confirm_skip_keyboard()
             )
 
         elif step == 2:

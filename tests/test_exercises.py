@@ -728,7 +728,8 @@ def test_stress_search_resume_from_question_does_not_duplicate_answer():
     ex.handle_message(UID, "➡️ Продолжить")   # -> analysis
     ex.handle_message(UID, "➡️ Далее")        # -> показывает первый вопрос, добавляет answers[0]
     assert len(ex.user_sessions[UID]["answers"]) == 1
-    ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> 2
+    ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> ждём подтверждения
+    ex.handle_message(UID, "✅ Да, дальше")        # подтверждение -> step 1 -> 2
 
     ex2, vk2, _ = make(StressSearchExercise)
     ex2.vk, ex2.api = ex.vk, api
@@ -967,6 +968,64 @@ def test_stress_search_reaching_100_auto_advances_to_analysis_batch():
     assert session["phase"] == "analysis"
     assert "100 пунктов набрано" in vk.sent[-2]["message"]
     assert "РАЗБОР ПУТИ" in vk.last_message
+
+
+def test_stress_search_question1_asks_confirmation_before_advancing():
+    """После ответа на Вопрос 1 (противоположность) бот должен сначала
+    спросить подтверждение и только после «Да» переходить к Вопросу 2 —
+    не сохранять ответ и не продвигать question_step сразу."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "Пунктуальность")
+    session = ex.user_sessions[UID]
+    assert session["question_step"] == 1, "До подтверждения шаг не должен продвигаться"
+    assert "answers" not in session or "ideal" not in session["answers"][-1], (
+        "До подтверждения ответ не должен попадать в answers"
+    )
+    assert "Уверен" in vk.last_message
+    assert "Пунктуальность" in vk.last_message
+
+
+def test_stress_search_question1_confirmation_yes_advances():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "Пунктуальность")
+
+    ex.handle_message(UID, "✅ Да, дальше")
+    session = ex.user_sessions[UID]
+    assert session["question_step"] == 2
+    assert session["answers"][-1]["ideal"] == "Пунктуальность"
+    assert "_confirm_ideal" not in session
+    assert "Вопрос 2/4" in vk.last_message
+
+
+def test_stress_search_question1_confirmation_no_reasks():
+    """«Нет» должно вернуть к тому же Вопросу 1, чтобы переписать ответ,
+    не сохраняя отклонённый вариант."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "Плохой вариант")
+
+    ex.handle_message(UID, "✏️ Нет, буду писать")
+    session = ex.user_sessions[UID]
+    assert session["question_step"] == 1
+    assert "_confirm_ideal" not in session
+    assert "_pending_ideal" not in session
+    assert "Вопрос 1/4" in vk.last_message
+
+    ex.handle_message(UID, "Пунктуальность")
+    ex.handle_message(UID, "✅ Да, дальше")
+    assert ex.user_sessions[UID]["answers"][-1]["ideal"] == "Пунктуальность"
 
 
 # ---------------------------------------------------------------------------
@@ -1473,7 +1532,8 @@ def test_stress_search_question_step2_validates_percent():
     ex.handle_message(UID, "Работа 8")
     ex.handle_message(UID, "➡️ Продолжить")   # analysis
     ex.handle_message(UID, "➡️ Далее")        # question, step 1
-    ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> step 2
+    ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> ждём подтверждения
+    ex.handle_message(UID, "✅ Да, дальше")        # подтверждение -> step 1 -> step 2
 
     ex.handle_message(UID, "не число")
     assert ex.user_sessions[UID]["question_step"] == 2, "Нечисловой % не должен продвигать шаг"
@@ -1504,6 +1564,7 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
 
     # образ 1: все 4 шага
     ex.handle_message(UID, "Идеал 1")
+    ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
     ex.handle_message(UID, "80")
     ex.handle_message(UID, "Почему 1")
     ex.handle_message(UID, "Рефлексия 1")  # step 4 -> следующий образ
@@ -1518,6 +1579,7 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
 
     # образ 2: все 4 шага -> естественное завершение (index >= len(items))
     ex.handle_message(UID, "Идеал 2")
+    ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
     ex.handle_message(UID, "40")
     ex.handle_message(UID, "Почему 2")
     ex.handle_message(UID, "Рефлексия 2")
