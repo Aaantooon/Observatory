@@ -137,6 +137,62 @@
         border-radius: 50px;
         font-size: 0.95rem;
     }
+    .post-bulk-page .btn-ghost-pill {
+        border: 1px solid rgba(226,192,68,0.25);
+        background: transparent;
+        color: #aab3c9;
+        padding: 11px 22px;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease;
+    }
+    .post-bulk-page .btn-ghost-pill:hover { border-color: #e2c044; color: #e2c044; }
+
+    .post-bulk-page .preview-card { margin-top: 20px; }
+    .post-bulk-page .preview-header { color: #e2c044; font-weight: 600; margin-bottom: 4px; }
+    .post-bulk-page .preview-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 16px;
+        max-height: 480px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+    .post-bulk-page .preview-item {
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 10px 14px;
+        background: rgba(255,255,255,0.02);
+    }
+    .post-bulk-page .preview-item summary {
+        cursor: pointer;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: baseline;
+        list-style: none;
+    }
+    .post-bulk-page .preview-item summary::-webkit-details-marker { display: none; }
+    .post-bulk-page .preview-item summary::before { content: '▸'; color: #5a6a7e; margin-right: 2px; }
+    .post-bulk-page .preview-item[open] summary::before { content: '▾'; }
+    .post-bulk-page .preview-date {
+        color: #8a9aaa;
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .post-bulk-page .preview-title { color: #e0d5c1; font-weight: 500; }
+    .post-bulk-page .preview-text {
+        color: #aab3c9;
+        font-size: 0.86rem;
+        margin-top: 10px;
+        line-height: 1.55;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+    }
 
     .post-bulk-page .progress-card { margin-top: 20px; }
     .post-bulk-page .progress-added {
@@ -215,8 +271,29 @@
     </div>
     {% endif %}
 
+    {% if preview_items %}
+    <div class="card-glass preview-card">
+        <div class="preview-header">
+            👁️ Предпросмотр{% if preview_week_label %} — {{ preview_week_label }}{% endif %}: будет добавлено {{ preview_count }}
+        </div>
+        <div class="progress-range">📅 С {{ preview_first_date|date:"d.m.Y H:i" }} по {{ preview_last_date|date:"d.m.Y H:i" }}</div>
+        <div class="preview-list">
+            {% for item in preview_items %}
+            <details class="preview-item">
+                <summary>
+                    <span class="preview-date">{{ item.date|date:"d.m.Y, H:i" }} · {{ item.weekday }}</span>
+                    <span class="preview-title">{{ item.title }}</span>
+                </summary>
+                <div class="preview-text">{{ item.text|linebreaksbr }}</div>
+            </details>
+            {% endfor %}
+        </div>
+        <p style="color:#5a6a7e; font-size:0.82rem; margin-top:14px;">Ничего ещё не добавлено — это только проверка. Поправь текст или дату выше и нажми «Обновить предпросмотр», либо подтверди добавление.</p>
+    </div>
+    {% endif %}
+
     <div class="card-glass" style="margin-top: 20px;">
-        <form method="post">
+        <form method="post" id="bulk-form">
             {% csrf_token %}
 
             <label class="field-label" for="bulk-text">Тексты постов</label>
@@ -256,7 +333,8 @@
             <div class="channel-picker">
                 {% for channel in channels %}
                 <label class="channel-option">
-                    <input type="checkbox" name="channels" value="{{ channel.id }}">
+                    <input type="checkbox" name="channels" value="{{ channel.id }}"
+                        {% if channel.id in selected_channel_ids %}checked{% endif %}>
                     <span class="platform-badge">
                         {% if channel.platform == 'vk' %}🔵{% elif channel.platform == 'telegram' %}✈️{% else %}💬{% endif %}
                     </span>
@@ -276,8 +354,13 @@
                 Без выбранного канала все посты сохранятся как черновики. С выбранным каналом каждый пост автоматически опубликуется в свою дату.
             </p>
 
-            <div style="margin-top:26px;">
-                <button type="submit" class="btn-lantern btn-lantern-pill">Разобрать и добавить</button>
+            <div style="margin-top:26px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                <button type="submit" name="action" value="preview" class="btn-ghost-pill">
+                    {% if preview_items %}🔄 Обновить предпросмотр{% else %}👁️ Показать предпросмотр{% endif %}
+                </button>
+                {% if preview_items %}
+                <button type="submit" name="action" value="confirm" class="btn-lantern btn-lantern-pill">✅ Подтвердить и добавить {{ preview_count }}</button>
+                {% endif %}
             </div>
         </form>
     </div>

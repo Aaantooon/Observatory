@@ -243,6 +243,30 @@ def _parse_bulk_text(raw_text):
     return _split_bulk_posts(raw_text)
 
 
+WEEKDAY_LABELS_RU = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+
+
+def _weekday_label(dt):
+    return WEEKDAY_LABELS_RU[timezone.localtime(dt).weekday()]
+
+
+def _build_preview_items(chunks, dates):
+    """Собирает список для предпросмотра — по каждому будущему посту дата,
+    день недели и заголовок (первая строка, обрезанная), без создания
+    записей в базе."""
+    items = []
+    for text, publish_date in zip(chunks, dates):
+        first_line = text.splitlines()[0].strip() if text.strip() else ''
+        title = first_line if len(first_line) <= 100 else first_line[:100] + '…'
+        items.append({
+            'date': publish_date,
+            'weekday': _weekday_label(publish_date),
+            'title': title,
+            'text': text,
+        })
+    return items
+
+
 def _month_progress(new_dates):
     """Для дат только что добавленных постов считает по каждому затронутому
     месяцу: сколько добавлено сейчас, сколько всего постов на этот месяц в
@@ -269,21 +293,47 @@ def _month_progress(new_dates):
 def post_bulk_create(request):
     channels = Channel.objects.filter(is_active=True)
     if request.method == 'POST':
+        # 'preview' по умолчанию — если поле action почему-то не пришло,
+        # безопаснее показать разбор текста, чем сразу создать посты.
+        action = request.POST.get('action', 'preview')
         raw_text = request.POST.get('bulk_text', '')
         chunks = _parse_bulk_text(raw_text)
         week_label = _extract_week_label(raw_text)
         start_date = _parse_publish_date(request, request.POST.get('start_date'))
+        selected_channel_ids = _selected_channel_ids(request)
 
         if not chunks:
             messages.error(request, '❌ Не нашлось ни одного поста в тексте — раздели их строкой ---, либо пришли заготовку по дням недели')
-            return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
+            return render(request, 'crm/post_bulk.html', {
+                'channels': channels, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
+            })
         if start_date is None:
-            return render(request, 'crm/post_bulk.html', {'channels': channels, 'bulk_text': raw_text})
+            return render(request, 'crm/post_bulk.html', {
+                'channels': channels, 'bulk_text': raw_text, 'selected_channel_ids': selected_channel_ids,
+            })
 
-        selected_channel_ids = _selected_channel_ids(request)
+        dates = [start_date + timedelta(days=i) for i in range(len(chunks))]
+
+        if action != 'confirm':
+            # Предпросмотр — ничего не создаём в базе, просто показываем,
+            # что получится, чтобы можно было проверить и поправить текст
+            # или дату до реального добавления.
+            local_start = timezone.localtime(start_date)
+            return render(request, 'crm/post_bulk.html', {
+                'channels': channels,
+                'bulk_text': raw_text,
+                'selected_channel_ids': selected_channel_ids,
+                'preview_items': _build_preview_items(chunks, dates),
+                'preview_count': len(chunks),
+                'preview_week_label': week_label,
+                'preview_first_date': dates[0],
+                'preview_last_date': dates[-1],
+                'prefill_date': local_start.strftime('%d.%m.%Y'),
+                'prefill_time': local_start.strftime('%H:%M'),
+            })
+
         created_dates = []
-        for i, text in enumerate(chunks):
-            publish_date = start_date + timedelta(days=i)
+        for text, publish_date in zip(chunks, dates):
             post = Post.objects.create(text=text, publish_date=publish_date, status='draft')
             post.status = _sync_post_channels(post, selected_channel_ids)
             post.save(update_fields=['status'])
