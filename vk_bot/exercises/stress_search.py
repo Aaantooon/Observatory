@@ -62,6 +62,23 @@ class StressSearchExercise:
         ]
         return phrases[idx] if idx < len(phrases) else f"🌟 {count}/{target} позади!"
 
+    def _format_answers_so_far(self, current_answer):
+        """Собирает уже данные пользователем ответы по текущему образу в
+        компактный блок — показывается перед следующим вопросом того же
+        образа, чтобы не приходилось листать переписку выше."""
+        lines = []
+        if current_answer.get('ideal'):
+            lines.append(f"· Противоположность: {self._item_text_for_display(current_answer['ideal'])}")
+        if 'percent' in current_answer:
+            lines.append(f"· Реалистичность: {current_answer['percent']}%")
+        if current_answer.get('why'):
+            lines.append(f"· Почему: {self._item_text_for_display(current_answer['why'])}")
+        if current_answer.get('reflection'):
+            lines.append(f"· Размышления: {self._item_text_for_display(current_answer['reflection'])}")
+        if not lines:
+            return ""
+        return "📝 Твои ответы:\n" + "\n".join(lines) + "\n\n"
+
     def _get_question1_hint(self):
         return (
             "· Какая противоположность у этого пункта?\n\n"
@@ -659,6 +676,7 @@ class StressSearchExercise:
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -669,8 +687,8 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
-                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
                 f"· Объясни\n\n"
@@ -681,16 +699,12 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
-                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
                 f"· И всё должно быть по-твоему?»\n\n"
                 f"· Это нормально так думать 😊\n\n"
-                f"· Важно сформулировать:\n"
-                f"  · Как должно быть?\n"
-                f"  · Почему?\n"
-                f"  · На сколько % это реально?\n\n"
                 f"· Напиши свои размышления\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
@@ -724,6 +738,7 @@ class StressSearchExercise:
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
                 f"· Напиши число от 0 до 100\n\n"
@@ -756,8 +771,8 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
-                f"· 📊 Реалистичность: {percent}%\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 3/4:\n"
                 f"· Почему так должно быть?\n"
                 f"· Объясни\n\n"
@@ -773,16 +788,12 @@ class StressSearchExercise:
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n"
-                f"· 📊 Реалистичность: {current_answer.get('percent', '?')}%\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 4/4:\n\n"
                 f"· «Ты — пуп земли и пуп вселенной.\n"
                 f"· И всё должно быть по-твоему?»\n\n"
                 f"· Это нормально так думать 😊\n\n"
-                f"· Важно сформулировать:\n"
-                f"  · Как должно быть?\n"
-                f"  · Почему?\n"
-                f"  · На сколько % это реально?\n\n"
                 f"· Напиши свои размышления\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
@@ -794,8 +805,14 @@ class StressSearchExercise:
 
             self._save_progress(user_id, session)
 
+            self.send_message(
+                user_id,
+                f"✅ Итог по образу «{self._item_text_for_display(item_text)}» — {item_rate}/10:\n\n"
+                f"{self._format_answers_so_far(current_answer)}".rstrip()
+            )
+
             session['question_index'] += 1
-            
+
             if session['question_index'] >= len(session.get('items', [])):
                 self._finish_exercise(user_id, session)
             else:
