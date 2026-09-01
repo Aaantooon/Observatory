@@ -206,16 +206,16 @@ function getNodeStyle(data) {
 // ===== КАСТОМНЫЙ УЗЕЛ =====
 function CustomNode({ data }) {
     const style = getNodeStyle(data);
-    const handleClick = () => {
-        if (data.url) window.location.href = data.url;
-    };
-    const stopClick = (e) => {
-        e.stopPropagation();
-    };
-
+    // Навигация теперь целиком обрабатывается в onNodeClick на уровне
+    // <ReactFlow> (см. MindMap ниже) — там React Flow уже сам надёжно
+    // отличает клик от начала перетаскивания узла. Здесь узел и кнопка
+    // "Играть" внутри него больше не вешают собственный onClick — иначе
+    // React Flow иногда перехватывал pointerdown ДО того, как наш
+    // обработчик успевал сработать, и клик по кнопке "терялся" молча,
+    // без ошибок в консоли. data-role/data-url ниже — просто метки,
+    // по которым onNodeClick понимает, куда вести.
     return React.createElement('div', {
         style: { cursor: data.url ? 'pointer' : 'default' },
-        onClick: handleClick,
     },
         React.createElement('div', { style: style },
             React.createElement('div', null, data.label),
@@ -227,9 +227,7 @@ function CustomNode({ data }) {
             }, '▶ Текущий'),
             data.game_url && React.createElement('a', {
                 href: data.game_url,
-                onClick: stopClick,
-                onPointerDown: stopClick,
-                onMouseDown: stopClick,
+                'data-role': 'game-link',
                 className: 'nodrag nopan',
                 style: {
                     display: 'inline-block',
@@ -309,6 +307,22 @@ function MindMap() {
         if (parts.length === 2) return parts.pop().split(";").shift();
     }
 
+    // Единая точка навигации по клику на узел. React Flow сам решает,
+    // был это клик или перетаскивание, и вызывает onNodeClick только
+    // для настоящего клика — поэтому логика тут надёжнее, чем свои
+    // onClick/stopPropagation внутри CustomNode (см. комментарий там).
+    const onNodeClick = React.useCallback((event, node) => {
+        const gameLink = event.target.closest && event.target.closest('[data-role="game-link"]');
+        if (gameLink) {
+            const url = gameLink.getAttribute('href');
+            if (url) window.location.href = url;
+            return;
+        }
+        if (node.data && node.data.url) {
+            window.location.href = node.data.url;
+        }
+    }, []);
+
     if (loading) {
         return React.createElement('div', {
             style: {
@@ -363,6 +377,7 @@ function MindMap() {
         onNodesChange: onNodesChange,
         onConnect: onConnect,
         onNodeDragStop: onNodeDragStop,
+        onNodeClick: onNodeClick,
         nodeTypes: nodeTypes,
         fitView: true,
         minZoom: 0.2,
