@@ -140,9 +140,19 @@ def test_save_and_restart_all_exercises():
         before_results = len(api.results)
         ex.handle_message(UID, "💾 Сохранить и начать заново")
 
-        assert len(api.results) == before_results + 1, (
-            f"{name}: 'Сохранить и начать заново' должен был сохранить результат"
-        )
+        # stress_search — особый случай: с 01.09.2026 "Сохранить и начать
+        # заново" отправляет наблюдателю только если материала достаточно
+        # (см. _can_finish_early) — с одним записанным и нулём разобранных
+        # это не так, поэтому здесь результат НЕ должен сохраняться (см.
+        # отдельный test_stress_search_save_and_restart_* ниже на оба случая).
+        if name == "stress_search":
+            assert len(api.results) == before_results, (
+                f"{name}: с 1 записанным и 0 разобранных отправлять наблюдателю ещё рано"
+            )
+        else:
+            assert len(api.results) == before_results + 1, (
+                f"{name}: 'Сохранить и начать заново' должен был сохранить результат"
+            )
         assert UID in ex.user_sessions, f"{name}: после сохранения должна начаться новая сессия"
         buttons = vk.last_buttons
         assert buttons == _expected_buttons(name), (
@@ -1632,10 +1642,13 @@ def test_stress_search_between_items_pause_reprompts_and_supports_restart():
     assert ex.user_sessions[UID]["_between_items"] is True
     assert "Продолжить" in vk.last_message
 
-    # «Сохранить и начать заново» работает и из этой паузы: сохраняет
-    # результат и сразу открывает свежую сессию с нуля
+    # «Сохранить и начать заново» работает и из этой паузы — но с 01.09.2026
+    # только разобран 1 образ из 2 (меньше MIN_ANALYZED_TO_FINISH_EARLY=3,
+    # и записано меньше MIN_ITEMS_TO_FINISH_EARLY=10), так что отправлять
+    # наблюдателю ещё рано: результат НЕ сохраняется, но новая сессия всё
+    # равно открывается с нуля.
     ex.handle_message(UID, "💾 Сохранить и начать заново")
-    assert len(api.results) == 1
+    assert len(api.results) == 0, "Маловато материала — рано отправлять наблюдателю"
     assert ex.user_sessions[UID]["phase"] == "collecting"
     assert ex.user_sessions[UID]["items"] == []
 
@@ -1793,7 +1806,8 @@ def test_stress_search_saves_result_with_correct_exercise_type():
     и его нельзя будет отправить на проверку психологу."""
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Работа 8")
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 8")  # хватает, чтобы завершить без разбора
     ex.handle_message(UID, "➡️ Продолжить")   # analysis
     ex.handle_message(UID, "✅ Завершить")     # завершить сразу из анализа
 
@@ -1833,7 +1847,8 @@ def test_happiness_list_save_result_failure_is_reported_honestly():
 def test_stress_search_save_result_failure_is_reported_honestly():
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Работа 8")
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 8")  # хватает, чтобы завершить без разбора
     ex.handle_message(UID, "➡️ Продолжить")   # -> analysis
 
     api.fail_save_result = True
@@ -1998,6 +2013,102 @@ def test_stress_search_part1_finish_and_send_also_works_via_pasted_list():
     result = api.results[0]["result_data"]
     assert result["total_count"] == 12
     assert result["analysis"] == []
+
+
+# ---------------------------------------------------------------------------
+# Пороги досрочного завершения должны действовать ОТОВСЮДУ, откуда можно
+# закончить упражнение — не только через «✅ Завершить и отправить». Правка
+# от 01.09.2026 после независимого код-ревью: раньше экран входа в разбор
+# («➡️ Далее» / «✅ Завершить») и «💾 Сохранить и начать заново» вызывали
+# _finish_exercise() без проверки, полностью обходя оба порога.
+# ---------------------------------------------------------------------------
+
+def test_stress_search_analysis_screen_finish_blocked_below_threshold():
+    """Экран входа в разбор («➡️ Нажми «Далее»... ✅ «Завершить»») — это тоже
+    завершение с 0 разобранных, и должно требовать тот же порог по items,
+    что и «✅ Завершить и отправить» из части 1."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")  # только 1 образ
+    ex.handle_message(UID, "➡️ Продолжить")  # -> экран входа в разбор
+
+    ex.handle_message(UID, "✅ Завершить")
+    assert len(api.results) == 0, "1 образ и 0 разобранных — рано завершать"
+    assert "1" in vk.last_message
+    assert ex.user_sessions[UID]["phase"] == "analysis", "Сессия не должна была сброситься"
+
+
+def test_stress_search_analysis_screen_finish_allowed_at_threshold():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+
+    ex.handle_message(UID, "✅ Завершить")
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 10
+    assert result["analysis"] == []
+
+
+def test_stress_search_save_and_restart_blocked_below_threshold():
+    """'Сохранить и начать заново' с недостаточным материалом (см. также
+    test_stress_search_between_items_pause_reprompts_and_supports_restart)
+    не должно отправлять наблюдателю пустышку — только честно предупредить
+    и начать заново без отправки."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    # Предупреждение отправляется отдельным сообщением ПЕРЕД интро нового
+    # захода — последнее сообщение (vk.last_message) это уже само интро.
+    assert "рано" in vk.sent[-2]["message"].lower()
+    assert ex.user_sessions[UID]["phase"] == "collecting"
+    assert ex.user_sessions[UID]["items"] == []
+
+
+def test_stress_search_save_and_restart_allowed_at_threshold():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 5")
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["total_count"] == 10
+    assert ex.user_sessions[UID]["phase"] == "collecting"
+    assert ex.user_sessions[UID]["items"] == []
+
+
+def test_stress_search_in_progress_answer_not_counted_as_analyzed_or_sent():
+    """Незавершённая запись answers (образ, который сейчас разбирается, но
+    ещё не дошли до переоценки) не должна ни засчитываться в 'разобрано',
+    ни попадать в отправляемый analysis — раньше session['answers'] включал
+    её как есть, что могло досрочно (и ошибочно) открыть порог в 3, а сам
+    result_data['analysis'] содержал бы недоделанную запись без 'new_rate'."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 5")  # 10 items, ни один не разобран
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")  # -> вопрос 1 по образу 1
+
+    ex.handle_message(UID, "Идеал 1")
+    ex.handle_message(UID, "✅ Да, дальше")  # застряли на середине вопроса 2/4
+
+    session = ex.user_sessions[UID]
+    assert len(session["answers"]) == 1, "Запись уже добавлена, хоть и не закончена"
+    assert "new_rate" not in session["answers"][0]
+    assert ex._completed_answers(session) == [], "Незаконченная запись не считается разобранной"
+
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1, "10 items >= порога — сохранение всё равно должно пройти"
+    result = api.results[0]["result_data"]
+    assert result["analysis"] == [], "Незаконченный разбор не должен попасть в отправляемые данные"
 
 
 # ---------------------------------------------------------------------------

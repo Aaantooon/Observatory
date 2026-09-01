@@ -47,6 +47,27 @@ class StressSearchExercise:
     def _get_separator(self):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
+    def _completed_answers(self, session):
+        """Только ПОЛНОСТЬЮ разобранные образы (все 4 вопроса + переоценка
+        new_rate). session['answers'] может содержать незавершённую запись
+        для образа, который сейчас разбирается (см. _show_current_question —
+        она добавляет запись ДО того, как на неё ответили) — её не нужно
+        засчитывать как «разобрано» и не нужно отправлять наблюдателю как
+        законченный разбор."""
+        return [a for a in session.get('answers', []) if 'new_rate' in a]
+
+    def _can_finish_early(self, session):
+        """Достаточно ли уже материала, чтобы разрешить досрочное завершение
+        и отправку на проверку — не дожидаясь 100 записанных образов и не
+        разбирая все из них. Два независимых условия (см. MIN_ITEMS_TO_FINISH_EARLY
+        / MIN_ANALYZED_TO_FINISH_EARLY в начале файла) — общая точка, которую
+        должны использовать ВСЕ места, откуда можно закончить упражнение
+        досрочно, чтобы пороги нельзя было обойти через другую кнопку."""
+        return (
+            len(session.get('items', [])) >= MIN_ITEMS_TO_FINISH_EARLY
+            or len(self._completed_answers(session)) >= MIN_ANALYZED_TO_FINISH_EARLY
+        )
+
     def _score_emoji(self, score):
         """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""
         if not isinstance(score, (int, float)):
@@ -198,7 +219,19 @@ class StressSearchExercise:
         return True
 
     def _handle_save_and_start_over(self, user_id, session):
-        self._finish_exercise(user_id, session)
+        if self._can_finish_early(session):
+            self._finish_exercise(user_id, session)
+        elif session.get('items') or session.get('answers'):
+            # Есть что-то записанное, но недостаточно, чтобы это имело смысл
+            # отправлять наблюдателю — не отправляем «пустышку», честно
+            # говорим об этом и просто начинаем заново.
+            self.send_message(
+                user_id,
+                f"🌫️ Пока рано отправлять на проверку — маловато записано "
+                f"(нужно хотя бы {MIN_ITEMS_TO_FINISH_EARLY} образов, либо разобрать "
+                f"{MIN_ANALYZED_TO_FINISH_EARLY}). Наблюдателю ничего не отправляю, "
+                f"начинаю путь заново."
+            )
         self._handle_start_over(user_id)
 
     def _handle_start_over(self, user_id):
@@ -291,11 +324,11 @@ class StressSearchExercise:
             "💡 Можно списком — по пункту на строке, или всё в одну строку (тогда каждая оценка "
             "закрывает фразу перед собой):\n"
             "«Рецепт не выходит 8 вода не фильтруется 7 шум мешает думать 6»\n\n"
-            f"🩺 Не обязательно ждать всех 100 — отправить наблюдателю на проверку можно "
-            f"раньше, любым из двух путей: как только запишешь {MIN_ITEMS_TO_FINISH_EARLY} "
-            f"образов («✅ Завершить и отправить» прямо здесь, без разбора), или как только "
-            f"разберёшь {MIN_ANALYZED_TO_FINISH_EARLY} из них в части 2 — получишь комментарий, "
-            f"не дожидаясь конца.\n\n"
+            f"🩺 Не обязательно ждать всех 100 — появится возможность отправить наблюдателю "
+            f"на проверку раньше, любым из двух путей: как только запишешь "
+            f"{MIN_ITEMS_TO_FINISH_EARLY} образов («✅ Завершить и отправить» прямо здесь, "
+            f"без разбора), или как только разберёшь {MIN_ANALYZED_TO_FINISH_EARLY} из них "
+            f"в части 2 — не дожидаясь конца.\n\n"
             f"{self._get_separator()}\n"
             "➡️ «Продолжить» — к разбору, когда наберёшь все образы\n"
             "💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля",
@@ -331,7 +364,7 @@ class StressSearchExercise:
             return
 
         if session.get('_between_items'):
-            analyzed = len(session.get('answers', []))
+            analyzed = len(self._completed_answers(session))
             can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
             if text_lower in CONTINUE_TEXTS:
                 session.pop('_between_items', None)
@@ -378,13 +411,19 @@ class StressSearchExercise:
         if phase == 'collecting':
             count = len(session.get('items', []))
             progress = self._get_progress_bar(count, target=100)
+            can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
+            finish_line = (
+                f"· Записано уже {count} — можно сразу «✅ Завершить и отправить», не разбирая\n"
+                if can_finish else ""
+            )
             self.send_message(
                 user_id,
                 "🔦 ПРОДОЛЖАЕМ ПУТЬ\n\n"
                 f"· Уже записано: {count} образов\n"
                 f"· {progress}\n\n"
-                "🕯️ Пиши следующий образ, а когда закончишь — жми «Продолжить».",
-                exercise_keyboard()
+                "🕯️ Пиши следующий образ, а когда закончишь — жми «Продолжить».\n"
+                f"{finish_line}",
+                exercise_keyboard(can_finish)
             )
         elif phase == 'analysis':
             self._start_analysis(user_id, session)
@@ -709,6 +748,18 @@ class StressSearchExercise:
 
     def handle_analysis(self, user_id, text, session):
         if text.lower() in ["завершить", "✅ завершить"]:
+            if not self._can_finish_early(session):
+                count = len(session.get('items', []))
+                self.send_message(
+                    user_id,
+                    f"🌫️ Пока рано — на этом экране разбора ещё не было, а записано "
+                    f"только {count} (нужно хотя бы {MIN_ITEMS_TO_FINISH_EARLY}, чтобы "
+                    f"отправить без разбора). Жми «Далее», чтобы начать разбор — после "
+                    f"{MIN_ANALYZED_TO_FINISH_EARLY} разобранных отправить можно будет "
+                    f"в любом случае.",
+                    analysis_keyboard()
+                )
+                return
             self._finish_exercise(user_id, session)
             return
 
@@ -830,9 +881,8 @@ class StressSearchExercise:
     def handle_question(self, user_id, text, session):
         text_lower = text.lower().strip()
 
-        if text_lower in CANCEL_TEXTS:
-            self._handle_cancel(user_id, session)
-            return
+        # CANCEL_TEXTS уже перехвачен раньше, безусловно, в handle_message —
+        # до дispatch по фазам, так что здесь его проверять не нужно.
 
         step = session.get('question_step', 1)
         answers = session.get('answers', [])
@@ -990,7 +1040,7 @@ class StressSearchExercise:
             else:
                 session['_between_items'] = True
                 self._save_progress(user_id, session)
-                analyzed = len(session.get('answers', []))
+                analyzed = len(self._completed_answers(session))
                 can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
                 finish_line = (
                     f"✅ «Завершить и отправить» — разобрано уже {analyzed}, этого достаточно, "
@@ -1011,7 +1061,7 @@ class StressSearchExercise:
         result_data = {
             'type': 'stress_search',
             'items': session.get('items', []),
-            'analysis': session.get('answers', []),
+            'analysis': self._completed_answers(session),
             'total_count': len(session.get('items', []))
         }
 
@@ -1052,10 +1102,11 @@ class StressSearchExercise:
             for b in top
         ])
 
-        analyzed = len(session.get('answers', []))
+        completed = self._completed_answers(session)
+        analyzed = len(completed)
         avg_percent = 0
         if analyzed > 0:
-            avg_percent = sum(a.get('percent', 0) for a in session.get('answers', [])) // analyzed
+            avg_percent = sum(a.get('percent', 0) for a in completed) // analyzed
 
         self.send_message(
             user_id,
