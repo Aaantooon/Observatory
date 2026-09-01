@@ -114,7 +114,9 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'corsheaders',
     'social_django',  # Вход через VK
-    
+    'django_otp',                       # 2FA для /admin/ и /crm/ (01.09.2026)
+    'django_otp.plugins.otp_totp',       # TOTP-устройства (Google Authenticator и т.п.)
+
     # Ваши приложения
     'myapp',
     'bot_api',
@@ -135,11 +137,26 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',  # 2FA — сразу после AuthenticationMiddleware (01.09.2026)
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'machina.apps.forum_permission.middleware.ForumPermissionMiddleware',
     'social_django.middleware.SocialAuthExceptionMiddleware',  # Вход через VK
+    'config.twofa_middleware.TwoFactorGateMiddleware',  # Гейт на /admin/ и /crm/ — включается REQUIRE_2FA (01.09.2026)
 ]
+
+# 2FA для /admin/ и /crm/. По умолчанию ВЫКЛЮЧЕНО (False), чтобы не заблокировать
+# самого себя раньше, чем устройство реально настроено и проверено. Порядок:
+# 1) задеплоить этот код с REQUIRE_2FA не заданным (или =False) в .env,
+# 2) зайти в /admin/ как обычно (логин/пароль), открыть /2fa/setup/, привязать
+#    приложение-аутентификатор по QR, ввести код для подтверждения,
+# 3) убедиться, что устройство подтверждено,
+# 4) только после этого поставить REQUIRE_2FA=True в .env на сервере и
+#    перезапустить observatory — вот теперь /admin/ и /crm/ требуют код.
+# Если что-то пошло не так и доступ пропал — вернуть REQUIRE_2FA=False в .env
+# и перезапустить сервис, без обращения к базе данных.
+REQUIRE_2FA = os.getenv('REQUIRE_2FA', 'False') == 'True'
+OTP_TOTP_ISSUER = 'Путь наблюдателя'
 
 ROOT_URLCONF = 'config.urls'
 

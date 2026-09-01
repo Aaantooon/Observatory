@@ -8,6 +8,7 @@ from . import views
 from .admin import admin_site  # Импортируем кастомную админку
 from myapp.vk_id_auth import vk_login_start, vk_login_callback
 from myapp.sitemaps import StaticViewSitemap, ModuleSitemap
+from .twofa_views import setup_2fa, verify_2fa
 
 sitemaps = {
     'static': StaticViewSitemap,
@@ -26,6 +27,10 @@ urlpatterns = [
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('vk/login/', vk_login_start, name='vk_login_start'),
     path('vk/callback/', vk_login_callback, name='vk_login_callback'),
+
+    # 2FA для /admin/ и /crm/ (01.09.2026) — см. REQUIRE_2FA в settings.py
+    path('2fa/setup/', setup_2fa, name='twofa_setup'),
+    path('2fa/verify/', verify_2fa, name='twofa_verify'),
 
     # ВАЖНО: URL-маршруты social_django (path('', include('social_django.urls', ...)))
     # намеренно НЕ подключаются. Это старый параллельный вход через VK OAuth,
