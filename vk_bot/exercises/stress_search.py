@@ -1149,16 +1149,24 @@ class StressSearchExercise:
 
         completed = self._completed_answers(session)
         analyzed = len(completed)
-        avg_percent = 0
+        # «Реалистичность» — это средний % совпадения прогноза с реальностью
+        # по РАЗОБРАННЫМ образам (см. вопрос в _show_current_question). Если
+        # разбора не было вообще (например, отправлено досрочно из части 1),
+        # считать её как 0% нечестно — это не «карта неточная», а просто
+        # «пока не измеряли». Показываем метрику, только когда есть на чём
+        # её посчитать.
         if analyzed > 0:
             avg_percent = sum(a.get('percent', 0) for a in completed) // analyzed
+            realism_line = f"· 📊 Реалистичность твоей карты: {avg_percent}%"
+        else:
+            realism_line = "· 📊 Реалистичность карты: пока не оценена — появится после разбора"
 
         self.send_message(
             user_id,
             "✨ ПУТЬ ЗАВЕРШЁН\n\n"
             f"· 🔦 Ты осветил {total} образов в тумане\n"
             f"· 🧠 Разобрано: {analyzed}\n"
-            f"· 📊 Реалистичность твоей карты: {avg_percent}%"
+            f"{realism_line}"
             f"{streak_text}\n\n"
             f"{self._get_separator()}\n"
             f"🔥 Топ-3 образа:\n{top_text}\n\n"
