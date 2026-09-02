@@ -189,7 +189,6 @@ class StressSearchExercise:
             # Несколько вариантов «как должно быть» — у каждого своя
             # реалистичность (%) и своё «почему», разбираются по отдельности
             # (см. _send_variant_percent_question / _send_variant_why_question).
-            lines.append("· Твои варианты и разбор по каждому:")
             for d in details:
                 entry = f"  – «{self._item_text_for_display(d['text'])}»"
                 if 'percent' in d:
@@ -261,20 +260,19 @@ class StressSearchExercise:
         реалистичность (%) спрашивается для КАЖДОГО варианта по отдельности,
         а не одним общим числом на все сразу. current_answer['_variant_idx']
         (внутри самой записи answers — поэтому переживает «Сохранить и
-        выйти») указывает, какой вариант сейчас разбирается."""
-        details = current_answer['ideal_details']
-        idx = current_answer.get('_variant_idx', 0)
-        variant_text = details[idx]['text']
+        выйти») указывает, какой вариант сейчас разбирается — какой из
+        них ещё не разобран, видно по списку в _format_answers_so_far
+        (у него единственного среди перечисленных ещё нет процента)."""
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-            f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+            f"📌 Пункт «{item_text}» — {item_rate}/10\n\n"
             f"{self._format_answers_so_far(current_answer)}"
-            f"❓ Вопрос 2/4 — вариант {idx + 1}/{len(details)}:\n"
-            f"· На сколько процентов реально «{variant_text}»?\n"
-            f"· Это твой прогноз — насколько ты сам считаешь и думаешь, что так "
-            f"на самом деле есть в мире.\n"
-            f"· Напиши число от 0 до 100\n\n"
+            f"💭 Именно это — твои убеждения о том, каким должен быть мир. Мир не такой, "
+            f"поэтому не совпадает с твоим ожиданием — и рождается стресс, который толкает "
+            f"тебя его изменить.\n\n"
+            f"Давай оценим, насколько реально их воплотить и сколько сил на это уйдёт.\n"
+            f"· Напиши число от 0 до 100 — увидишь свою оценку рядом с пунктом\n\n"
             f"💾 «Сохранить и выйти»",
             cancel_keyboard()
         )

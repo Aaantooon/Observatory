@@ -1120,11 +1120,13 @@ def test_stress_search_multiple_ideal_variants_stay_visible_before_percent_split
     assert session["question_step"] == 2
     # Экран Вопроса 2/4 сразу спрашивает процент по ПЕРВОМУ варианту
     # отдельно (см. следующий тест) — но все варианты видны в блоке "Твои
-    # ответы" на этом экране.
+    # ответы" на этом экране, без явного "вариант N/M" (по просьбе
+    # пользователя убрано — единственный вариант без процента и есть
+    # текущий).
     assert "надо мной не шутят" in vk.last_message
     assert "шутят когда я сам захочу" in vk.last_message
     assert "понимают моё настроение" in vk.last_message
-    assert "вариант 1/3" in vk.last_message.lower()
+    assert "убеждения о том, каким должен быть мир" in vk.last_message
 
 
 def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant():
@@ -1143,13 +1145,14 @@ def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant
     ex.handle_message(UID, "понимают моё настроение")
     ex.handle_message(UID, "➡️ Продолжить")
 
-    # Часть 2: процент по каждому варианту отдельно
+    # Часть 2: процент по каждому варианту отдельно (без явного "вариант
+    # N/M" в тексте — видно по списку, у кого ещё нет процента)
     ex.handle_message(UID, "60")  # % для "надо мной не шутят"
+    assert "надо мной не шутят» — 60%" in vk.last_message
     assert "шутят когда я сам захочу" in vk.last_message
-    assert "вариант 2/3" in vk.last_message.lower()
     ex.handle_message(UID, "70")  # % для "шутят когда я сам захочу"
+    assert "шутят когда я сам захочу» — 70%" in vk.last_message
     assert "понимают моё настроение" in vk.last_message
-    assert "вариант 3/3" in vk.last_message.lower()
     ex.handle_message(UID, "80")  # % для "понимают моё настроение"
 
     session = ex.user_sessions[UID]
