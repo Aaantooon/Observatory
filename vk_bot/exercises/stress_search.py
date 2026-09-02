@@ -166,16 +166,30 @@ class StressSearchExercise:
         компактный блок — показывается перед следующим вопросом того же
         образа, чтобы не приходилось листать переписку выше."""
         lines = []
-        variants = self._ideal_variants_list(current_answer)
-        if len(variants) > 1:
-            lines.append("· Как, по-твоему, должно быть ещё (все твои варианты):")
-            lines.extend(f"  – {self._item_text_for_display(v)}" for v in variants)
-        elif variants:
-            lines.append(f"· Как, по-твоему, должно быть ещё: {self._item_text_for_display(variants[0])}?")
-        if 'percent' in current_answer:
-            lines.append(f"· Реалистичность: {current_answer['percent']}%")
-        if current_answer.get('why'):
-            lines.append(f"· Почему: {self._item_text_for_display(current_answer['why'])}")
+        details = current_answer.get('ideal_details')
+        if details:
+            # Несколько вариантов «как должно быть» — у каждого своя
+            # реалистичность (%) и своё «почему», разбираются по отдельности
+            # (см. _send_variant_percent_question / _send_variant_why_question).
+            lines.append("· Твои варианты и разбор по каждому:")
+            for d in details:
+                entry = f"  – «{self._item_text_for_display(d['text'])}»"
+                if 'percent' in d:
+                    entry += f" — {d['percent']}%"
+                lines.append(entry)
+                if d.get('why'):
+                    lines.append(f"     Почему: {self._item_text_for_display(d['why'])}")
+        else:
+            variants = self._ideal_variants_list(current_answer)
+            if len(variants) > 1:
+                lines.append("· Как, по-твоему, должно быть ещё (все твои варианты):")
+                lines.extend(f"  – {self._item_text_for_display(v)}" for v in variants)
+            elif variants:
+                lines.append(f"· Как, по-твоему, должно быть ещё: {self._item_text_for_display(variants[0])}?")
+            if 'percent' in current_answer:
+                lines.append(f"· Реалистичность: {current_answer['percent']}%")
+            if current_answer.get('why'):
+                lines.append(f"· Почему: {self._item_text_for_display(current_answer['why'])}")
         if current_answer.get('reflection'):
             lines.append(f"· Размышления: {self._item_text_for_display(current_answer['reflection'])}")
         if not lines:
@@ -204,11 +218,82 @@ class StressSearchExercise:
         lines = "\n".join(f"· {self._item_text_for_display(v)}" for v in variants)
         return f"📝 Твои варианты:\n{lines}\n\n"
 
+    def _send_variant_percent_question(self, user_id, item_text, item_rate, index, total, current_answer):
+        """Часть 2 разбора, когда вариантов «как должно быть» несколько —
+        реалистичность (%) спрашивается для КАЖДОГО варианта по отдельности,
+        а не одним общим числом на все сразу. current_answer['_variant_idx']
+        (внутри самой записи answers — поэтому переживает «Сохранить и
+        выйти») указывает, какой вариант сейчас разбирается."""
+        details = current_answer['ideal_details']
+        idx = current_answer.get('_variant_idx', 0)
+        variant_text = details[idx]['text']
+        self.send_message(
+            user_id,
+            f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+            f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+            f"{self._format_answers_so_far(current_answer)}"
+            f"❓ Вопрос 2/4 — вариант {idx + 1}/{len(details)}:\n"
+            f"· На сколько процентов реально «{variant_text}»?\n"
+            f"· Это твой прогноз — насколько ты сам считаешь и думаешь, что так "
+            f"на самом деле есть в мире.\n"
+            f"· Напиши число от 0 до 100\n\n"
+            f"💾 «Сохранить и выйти»",
+            cancel_keyboard()
+        )
+
+    def _send_variant_why_question(self, user_id, item_text, item_rate, index, total, current_answer):
+        """Часть 3 разбора для нескольких вариантов — «почему так должно
+        быть» тоже спрашивается для КАЖДОГО варианта отдельно, с опорой на
+        его же собственный процент из _send_variant_percent_question."""
+        details = current_answer['ideal_details']
+        idx = current_answer.get('_variant_idx', 0)
+        variant = details[idx]
+        self.send_message(
+            user_id,
+            f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+            f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+            f"{self._format_answers_so_far(current_answer)}"
+            f"❓ Вопрос 3/4 — вариант {idx + 1}/{len(details)}:\n"
+            f"· Увеличиваем с твоих {variant.get('percent', 0)}% до 100% для "
+            f"«{variant['text']}» — почему так должно быть?\n"
+            f"· Объясни\n\n"
+            f"🌍 Мир не против жить по-твоему — только объясни, чтобы это было "
+            f"полезно всем.\n\n"
+            f"✍️ Подумай и напиши\n\n"
+            f"💾 «Сохранить и выйти»",
+            cancel_keyboard()
+        )
+
     def _build_narrative_summary(self, current_answer, item_text, item_rate, index, total):
         """После вопроса 4/4 — вместо сухого списка «Твои ответы» собирает
         те же данные в связный разбор (по формулировке психолога) и сразу
         спрашивает новую оценку 1-10, вместо старого/новую разницу — так
         человек сам видит, изменилось ли что-то после разбора."""
+        details = current_answer.get('ideal_details')
+        reflection = self._item_text_for_display(current_answer.get('reflection', ''))
+        if details:
+            breakdown = "\n".join(
+                f"  · «{self._item_text_for_display(d['text'])}» — {d.get('percent', 0)}% реально.\n"
+                f"    Почему: {self._item_text_for_display(d.get('why', ''))}"
+                for d in details
+            )
+            body = (
+                f"🧠 В подсознании записано — и вот разбор по каждому варианту:\n"
+                f"{breakdown}\n"
+            )
+            return (
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+                f"😖 Не нравится: «{self._item_text_for_display(item_text)}» — {item_rate}/10.\n\n"
+                f"{body}\n"
+                f"💭 {reflection}\n\n"
+                f"{self._get_separator()}\n"
+                f"Пока мы не поняли явление — оно целиком и полностью управляет нами. "
+                f"Как только поняли — появилась возможность взять его под контроль.\n\n"
+                f"Твой образ, который тебя раздражает, — это попытка взять его под контроль. "
+                f"Насколько успешно получилось — тебе делать вывод.\n\n"
+                f"❓ Была оценка {item_rate}/10 — какая она теперь?\n"
+                f"· Напиши число от 1 до 10: понизилась, повысилась или осталась такой же"
+            )
         variants = self._ideal_variants_list(current_answer)
         if len(variants) > 1:
             ideal = " / ".join(f"«{self._item_text_for_display(v)}»" for v in variants)
@@ -216,7 +301,6 @@ class StressSearchExercise:
             ideal = f"«{self._item_text_for_display(variants[0])}»" if variants else "«»"
         percent = current_answer.get('percent', 0)
         why = self._item_text_for_display(current_answer.get('why', ''))
-        reflection = self._item_text_for_display(current_answer.get('reflection', ''))
         return (
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
             f"😖 Не нравится: «{self._item_text_for_display(item_text)}» — {item_rate}/10.\n\n"
@@ -988,6 +1072,9 @@ class StressSearchExercise:
         if step == 1:
             self._send_question1(user_id, item_text, item_rate, index, total)
         elif step == 2:
+            if current_answer.get('ideal_details'):
+                self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
+                return
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
@@ -1000,6 +1087,9 @@ class StressSearchExercise:
                 cancel_keyboard()
             )
         elif step == 3:
+            if current_answer.get('ideal_details'):
+                self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
+                return
             percent = current_answer.get('percent', '?')
             self.send_message(
                 user_id,
@@ -1119,11 +1209,20 @@ class StressSearchExercise:
                 # варианты (не только последний, который ушёл в 'ideal'), чтобы
                 # они были видны и дальше по ходу разбора, и в итоге отправятся
                 # наблюдателю вместе с остальным разбором.
+                session['question_step'] = 2
                 if variants and len(variants) > 1:
                     current_answer['ideal_variants'] = variants
-                session['question_step'] = 2
-                self._save_progress(user_id, session)
+                    # Несколько вариантов «как должно быть» — по просьбе
+                    # пользователя каждый разбирается по отдельности: своя
+                    # реалистичность (%) и своё «почему» на каждый, а не одно
+                    # общее число/объяснение на всё сразу.
+                    current_answer['ideal_details'] = [{'text': v} for v in variants]
+                    current_answer['_variant_idx'] = 0
+                    self._save_progress(user_id, session)
+                    self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
+                    return
 
+                self._save_progress(user_id, session)
                 self.send_message(
                     user_id,
                     f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
@@ -1201,6 +1300,28 @@ class StressSearchExercise:
                 )
                 return
 
+            details = current_answer.get('ideal_details')
+            if details:
+                # Несколько вариантов — процент спрашивается по одному на
+                # каждый (см. _send_variant_percent_question). Когда
+                # разобраны все — считаем среднее в 'percent' (для общей
+                # статистики реалистичности) и переходим к «почему» тоже
+                # по каждому варианту отдельно.
+                idx = current_answer.get('_variant_idx', 0)
+                details[idx]['percent'] = percent
+                idx += 1
+                if idx < len(details):
+                    current_answer['_variant_idx'] = idx
+                    self._save_progress(user_id, session)
+                    self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
+                    return
+                current_answer['percent'] = round(sum(d['percent'] for d in details) / len(details))
+                current_answer['_variant_idx'] = 0
+                session['question_step'] = 3
+                self._save_progress(user_id, session)
+                self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
+                return
+
             current_answer['percent'] = percent
             session['question_step'] = 3
             self._save_progress(user_id, session)
@@ -1221,6 +1342,38 @@ class StressSearchExercise:
             )
 
         elif step == 3:
+            details = current_answer.get('ideal_details')
+            if details:
+                # Аналогично — «почему» тоже по одному на каждый вариант.
+                idx = current_answer.get('_variant_idx', 0)
+                details[idx]['why'] = text
+                idx += 1
+                if idx < len(details):
+                    current_answer['_variant_idx'] = idx
+                    self._save_progress(user_id, session)
+                    self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
+                    return
+                current_answer.pop('_variant_idx', None)
+                current_answer['why'] = "; ".join(
+                    f"«{d['text']}»: {d.get('why', '')}" for d in details
+                )
+                session['question_step'] = 4
+                self._save_progress(user_id, session)
+                self.send_message(
+                    user_id,
+                    f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+                    f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                    f"{self._format_answers_so_far(current_answer)}"
+                    f"❓ Вопрос 4/4:\n\n"
+                    f"· «Ты — пуп земли и пуп вселенной.\n"
+                    f"· И всё должно быть по-твоему?»\n\n"
+                    f"· Это нормально так думать 😊\n\n"
+                    f"· Напиши свои размышления\n\n"
+                    f"💾 «Сохранить и выйти»",
+                    cancel_keyboard()
+                )
+                return
+
             current_answer['why'] = text
             session['question_step'] = 4
             self._save_progress(user_id, session)

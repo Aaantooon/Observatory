@@ -1095,11 +1095,11 @@ def test_stress_search_question1_can_retype_before_continuing():
     assert "_pending_ideal_variants" not in ex.user_sessions[UID], "Черновик вариантов должен очищаться после подтверждения"
 
 
-def test_stress_search_multiple_ideal_variants_stay_visible_and_reach_result_data():
+def test_stress_search_multiple_ideal_variants_stay_visible_before_percent_split():
     """Если пользователь на экране подтверждения написал НЕСКОЛЬКО разных
     вариантов «как должно быть» (переписывал подряд), все они должны
-    остаться видны и в «Твои ответы» дальше по разбору, и в итоге дойти
-    до result_data — а не потеряться, оставив только последний вариант."""
+    остаться видны в 'ideal_variants' (последний уходит в 'ideal'), а
+    дальше разбор идёт по каждому отдельно (см. следующий тест)."""
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
     ex.handle_message(UID, "Шутят надо мной 10")
@@ -1118,29 +1118,94 @@ def test_stress_search_multiple_ideal_variants_stay_visible_and_reach_result_dat
         "надо мной не шутят", "шутят когда я сам захочу", "понимают моё настроение",
     ]
     assert session["question_step"] == 2
-    # Экран Вопроса 2/4 показывает "Твои ответы" со ВСЕМИ вариантами, не
-    # только последним подтверждённым.
+    # Экран Вопроса 2/4 сразу спрашивает процент по ПЕРВОМУ варианту
+    # отдельно (см. следующий тест) — но все варианты видны в блоке "Твои
+    # ответы" на этом экране.
     assert "надо мной не шутят" in vk.last_message
     assert "шутят когда я сам захочу" in vk.last_message
     assert "понимают моё настроение" in vk.last_message
+    assert "вариант 1/3" in vk.last_message.lower()
 
-    ex.handle_message(UID, "60")
-    ex.handle_message(UID, "Почему")
-    ex.handle_message(UID, "Рефлексия")
-    # Экран перед новой оценкой (шаг 5, связный разбор) тоже должен
-    # показать все варианты, а не только последний.
-    assert "надо мной не шутят" in vk.last_message
+
+def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant():
+    """По просьбе пользователя: если вариантов «как должно быть» несколько,
+    процент реальности и «почему» спрашиваются ОТДЕЛЬНО по каждому, а не
+    одним общим числом/объяснением на все сразу — и всё доходит до
+    result_data (для наблюдателя и статистики на сайте)."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Шутят надо мной 10")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "надо мной не шутят")
+    ex.handle_message(UID, "шутят когда я сам захочу")
+    ex.handle_message(UID, "понимают моё настроение")
+    ex.handle_message(UID, "➡️ Продолжить")
+
+    # Часть 2: процент по каждому варианту отдельно
+    ex.handle_message(UID, "60")  # % для "надо мной не шутят"
     assert "шутят когда я сам захочу" in vk.last_message
+    assert "вариант 2/3" in vk.last_message.lower()
+    ex.handle_message(UID, "70")  # % для "шутят когда я сам захочу"
     assert "понимают моё настроение" in vk.last_message
+    assert "вариант 3/3" in vk.last_message.lower()
+    ex.handle_message(UID, "80")  # % для "понимают моё настроение"
+
+    session = ex.user_sessions[UID]
+    current_answer = session["answers"][-1]
+    assert session["question_step"] == 3
+    assert current_answer["ideal_details"] == [
+        {"text": "надо мной не шутят", "percent": 60},
+        {"text": "шутят когда я сам захочу", "percent": 70},
+        {"text": "понимают моё настроение", "percent": 80},
+    ]
+    assert current_answer["percent"] == 70, "Общий процент — среднее по всем вариантам"
+    # Часть 3: «почему» по каждому варианту отдельно, начиная с первого
+    assert "вариант 1/3" in vk.last_message.lower()
+    assert "60%" in vk.last_message
+
+    ex.handle_message(UID, "Почему1")
+    assert "вариант 2/3" in vk.last_message.lower()
+    assert "70%" in vk.last_message
+    ex.handle_message(UID, "Почему2")
+    assert "вариант 3/3" in vk.last_message.lower()
+    assert "80%" in vk.last_message
+    ex.handle_message(UID, "Почему3")
+
+    session = ex.user_sessions[UID]
+    current_answer = session["answers"][-1]
+    assert session["question_step"] == 4, "После разбора всех вариантов — переход к Вопросу 4/4"
+    assert "_variant_idx" not in current_answer, "Служебный курсор не должен оставаться в записи"
+    assert current_answer["ideal_details"] == [
+        {"text": "надо мной не шутят", "percent": 60, "why": "Почему1"},
+        {"text": "шутят когда я сам захочу", "percent": 70, "why": "Почему2"},
+        {"text": "понимают моё настроение", "percent": 80, "why": "Почему3"},
+    ]
+    assert "Вопрос 4/4" in vk.last_message
+
+    ex.handle_message(UID, "Рефлексия")
+    # Шаг 5 — связный разбор должен показать разбор по каждому варианту.
+    assert "надо мной не шутят" in vk.last_message
+    assert "Почему1" in vk.last_message
+    assert "шутят когда я сам захочу" in vk.last_message
+    assert "Почему2" in vk.last_message
+    assert "понимают моё настроение" in vk.last_message
+    assert "Почему3" in vk.last_message
 
     ex.handle_message(UID, "4")  # новая оценка -> упражнение завершается (1 образ)
 
     assert UID not in ex.user_sessions
     result = api.results[0]["result_data"]
-    assert result["analysis"][0]["ideal"] == "понимают моё настроение"
-    assert result["analysis"][0]["ideal_variants"] == [
-        "надо мной не шутят", "шутят когда я сам захочу", "понимают моё настроение",
+    analysis = result["analysis"][0]
+    assert analysis["ideal"] == "понимают моё настроение"
+    assert analysis["percent"] == 70
+    assert analysis["ideal_details"] == [
+        {"text": "надо мной не шутят", "percent": 60, "why": "Почему1"},
+        {"text": "шутят когда я сам захочу", "percent": 70, "why": "Почему2"},
+        {"text": "понимают моё настроение", "percent": 80, "why": "Почему3"},
     ]
+    assert "_variant_idx" not in analysis
 
 
 # ---------------------------------------------------------------------------
