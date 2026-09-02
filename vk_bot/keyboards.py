@@ -29,6 +29,9 @@ FINISH_AND_SEND_TEXTS = {
 CONFIRM_YES_TEXTS = {"да", "да, дальше", "да, дальше ✅", "✅ да, дальше"}
 CONFIRM_NO_TEXTS = {"нет", "нет, буду писать", "нет, буду писать ✏️", "✏️ нет, буду писать"}
 OVERRIDE_LIMIT_TEXTS = {"всё равно продолжить", "⚠️ всё равно продолжить"}
+# Кнопка на экране Вопроса 1/4 «Поиска стресса» — изменить текст/оценку
+# самого пункта, если он неточно сформулирован (не найти противоположность).
+EDIT_ITEM_TEXTS = {"изменить пункт", "✏️ изменить пункт"}
 
 # Навигация по шагам упражнения — доступна в любой момент внутри сессии
 BACK_TEXTS = {"назад", "⬅️ назад"}
@@ -109,6 +112,16 @@ def simple_continue_keyboard():
 
 def cancel_keyboard():
     keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
+    return keyboard.get_keyboard()
+
+def question1_keyboard():
+    """Клавиатура экрана Вопроса 1/4 («какая противоположность?») — с
+    кнопкой «Изменить пункт», чтобы поправить текст/оценку образа прямо
+    здесь, если он неточно сформулирован, не выходя из разбора."""
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("✏️ Изменить пункт", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
     keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
     return keyboard.get_keyboard()
 

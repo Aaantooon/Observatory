@@ -4,9 +4,9 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    simple_continue_keyboard,
+    simple_continue_keyboard, question1_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
-    FINISH_AND_SEND_TEXTS,
+    FINISH_AND_SEND_TEXTS, EDIT_ITEM_TEXTS,
 )
 
 # Два независимых пути закончить путь досрочно и отправить его наблюдателю
@@ -713,13 +713,18 @@ class StressSearchExercise:
         «работа » считались одним и тем же пунктом."""
         return (text or '').strip().lower()
 
-    def _find_duplicate_item(self, session, item_text):
+    def _find_duplicate_item(self, session, item_text, exclude_index=None):
         """Есть ли уже такой образ в записанной карте — сравнение без учёта
-        регистра/пробелов (см. _normalize_item_text)."""
+        регистра/пробелов (см. _normalize_item_text). exclude_index — индекс
+        пункта, который не нужно сравнивать с самим собой (используется при
+        редактировании существующего пункта, чтобы он не считался дублем
+        сам себя)."""
         norm = self._normalize_item_text(item_text)
         if not norm:
             return None
-        for existing in session.get('items', []):
+        for i, existing in enumerate(session.get('items', [])):
+            if exclude_index is not None and i == exclude_index:
+                continue
             if self._normalize_item_text(existing.get('text', '')) == norm:
                 return existing
         return None
@@ -893,16 +898,19 @@ class StressSearchExercise:
                 analysis_keyboard()
             )
 
-    def _send_question1(self, user_id, item_text, item_rate, index, total):
+    def _send_question1(self, user_id, item_text, item_rate, index, total, note=None):
+        prefix = f"{note}\n\n" if note else ""
         self.send_message(
             user_id,
+            f"{prefix}"
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
             f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
             f"❓ Вопрос 1/4:\n"
             f"{self._get_question1_hint()}\n\n"
             f"{self._get_separator()}\n"
+            f"✏️ «Изменить пункт» — если текст или оценка неточные\n"
             f"💾 «Сохранить и выйти»",
-            cancel_keyboard()
+            question1_keyboard()
         )
 
     def _show_current_question(self, user_id, session):
@@ -1011,6 +1019,62 @@ class StressSearchExercise:
         item_rate = current_item.get('rate', '')
         total = len(session.get('items', []))
         index = session.get('question_index', 0)
+
+        if session.get('_editing_item'):
+            parsed = self._parse_stress_line(text)
+            if not parsed:
+                self.send_message(
+                    user_id,
+                    "🌫️ Не разобрал формат.\n"
+                    "· Нужно: Текст 9 (текст + пробел + оценка от 1 до 10)\n"
+                    "· 📌 Пример: Работа 8\n\n"
+                    "💾 «Сохранить и выйти»",
+                    cancel_keyboard()
+                )
+                return
+
+            new_text, new_rate = parsed
+            if self._find_duplicate_item(session, new_text, exclude_index=index):
+                self.send_message(
+                    user_id,
+                    f"🌫️ «{new_text}» уже есть в твоей карте — это другой пункт. "
+                    f"Опиши иначе, чтобы не было дублей.",
+                    cancel_keyboard()
+                )
+                return
+
+            items = session.get('items', [])
+            items[index] = {'text': new_text, 'rate': new_rate}
+            session['current_item'] = items[index]
+            # current_answer — та же запись в session['answers'], что уже
+            # создана в _show_current_question (см. её комментарий) и в
+            # конце попадёт в _finish_exercise -> save_result как есть, так
+            # что правка текста/оценки здесь сразу отражается и в итоговой
+            # сводке, и в result_data (а значит и в статистике на сайте,
+            # читающей тот же Result.result_data).
+            current_answer['text'] = new_text
+            current_answer['rate'] = new_rate
+            session.pop('_editing_item', None)
+            self._save_progress(user_id, session)
+
+            self._send_question1(
+                user_id, new_text, new_rate, index, total,
+                note=f"✅ Пункт изменён: «{new_text}» — {new_rate}/10"
+            )
+            return
+
+        if step == 1 and not session.get('_confirm_ideal') and text_lower in EDIT_ITEM_TEXTS:
+            session['_editing_item'] = True
+            self.send_message(
+                user_id,
+                f"✏️ ИЗМЕНИТЬ ПУНКТ\n\n"
+                f"Сейчас: «{item_text}» — {item_rate}/10\n\n"
+                f"· Напиши новый текст и оценку в формате: Текст 9\n"
+                f"· 📌 Пример: Работа 8\n\n"
+                f"💾 «Сохранить и выйти»",
+                cancel_keyboard()
+            )
+            return
 
         if session.get('_confirm_ideal'):
             if text_lower in CONTINUE_TEXTS:

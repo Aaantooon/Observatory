@@ -1096,6 +1096,106 @@ def test_stress_search_question1_can_retype_before_continuing():
 
 
 # ---------------------------------------------------------------------------
+# Кнопка «✏️ Изменить пункт» на экране Вопроса 1/4 — правка текста/оценки
+# самого образа, если он неточно сформулирован, без выхода из разбора.
+# ---------------------------------------------------------------------------
+
+def test_stress_search_edit_item_button_appears_on_question1():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    assert "✏️ Изменить пункт" in vk.last_buttons
+    assert "Вопрос 1/4" in vk.last_message
+
+
+def test_stress_search_edit_item_updates_text_and_rate_everywhere():
+    """Правка пункта на экране Вопроса 1/4 должна обновить и сам образ
+    (items), и current_item, и уже созданную запись в answers — иначе
+    итоговая сводка и результат для наблюдателя не совпадут с картой."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")  # -> Вопрос 1/4 по «Опоздание»
+
+    ex.handle_message(UID, "✏️ Изменить пункт")
+    assert ex.user_sessions[UID]["_editing_item"] is True
+    assert "Опоздание" in vk.last_message
+
+    ex.handle_message(UID, "Опоздание на встречу 9")
+
+    session = ex.user_sessions[UID]
+    assert "_editing_item" not in session
+    assert session["items"][0] == {"text": "Опоздание на встречу", "rate": 9}
+    assert session["current_item"] == {"text": "Опоздание на встречу", "rate": 9}
+    assert session["answers"][-1]["text"] == "Опоздание на встречу"
+    assert session["answers"][-1]["rate"] == 9
+    assert "Пункт изменён" in vk.last_message
+    assert "Опоздание на встречу" in vk.last_message
+    assert "9/10" in vk.last_message
+    assert "✏️ Изменить пункт" in vk.last_buttons, "После правки снова показывается Вопрос 1/4"
+
+
+def test_stress_search_edit_item_rejects_bad_format():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "✏️ Изменить пункт")
+    ex.handle_message(UID, "просто текст без оценки")
+
+    session = ex.user_sessions[UID]
+    assert session["_editing_item"] is True, "Должен остаться в режиме редактирования"
+    assert session["items"][0] == {"text": "Опоздание", "rate": 8}, "Исходный пункт не должен измениться"
+    assert "не разобрал формат" in vk.last_message.lower()
+
+
+def test_stress_search_edit_item_rejects_duplicate_of_another_item():
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "Шум 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")  # -> Вопрос 1/4 по «Опоздание» (index 0)
+
+    ex.handle_message(UID, "✏️ Изменить пункт")
+    ex.handle_message(UID, "шум 6")  # совпадает с другим уже записанным пунктом
+
+    session = ex.user_sessions[UID]
+    assert session["_editing_item"] is True
+    assert session["items"][0] == {"text": "Опоздание", "rate": 8}, "Правка не должна была примениться"
+    assert "уже есть в твоей карте" in vk.last_message.lower()
+
+
+def test_stress_search_edit_item_reflected_in_finish_result_data():
+    """Правка пункта должна дойти до result_data, сохраняемого через
+    save_result — это тот же JSON, который читает статистика на сайте."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "✏️ Изменить пункт")
+    ex.handle_message(UID, "Опоздание на встречу 9")
+
+    _stress_do_item(ex, "Пунктуальность", 60, "Почему", "Рефлексия", 4)
+
+    assert UID not in ex.user_sessions
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["items"][0] == {"text": "Опоздание на встречу", "rate": 9}
+    assert result["analysis"][0]["text"] == "Опоздание на встречу"
+    assert result["analysis"][0]["rate"] == 9
+    assert result["analysis"][0]["ideal"] == "Пунктуальность"
+
+
+# ---------------------------------------------------------------------------
 # "Сохранить и выйти" (CANCEL_TEXTS) — прогресс сохраняется, сессия
 # закрывается, при повторном входе появляется resume-промпт
 # ---------------------------------------------------------------------------
