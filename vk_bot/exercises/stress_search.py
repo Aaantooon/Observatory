@@ -506,8 +506,7 @@ class StressSearchExercise:
                     user_id,
                     "🌫️ ТУМАН ПУСТ\n\n"
                     "· Запиши хотя бы один образ\n"
-                    "· 📌 Формат: Причина 9\n\n"
-                    "💾 «Сохранить и выйти»",
+                    "· 📌 Формат: Причина 9",
                     cancel_keyboard()
                 )
                 return
