@@ -739,7 +739,7 @@ def test_stress_search_resume_from_question_does_not_duplicate_answer():
     ex.handle_message(UID, "➡️ Далее")        # -> показывает первый вопрос, добавляет answers[0]
     assert len(ex.user_sessions[UID]["answers"]) == 1
     ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> ждём подтверждения
-    ex.handle_message(UID, "✅ Да, дальше")        # подтверждение -> step 1 -> 2
+    ex.handle_message(UID, "➡️ Продолжить")        # подтверждение -> step 1 -> 2
 
     ex2, vk2, _ = make(StressSearchExercise)
     ex2.vk, ex2.api = ex.vk, api
@@ -1008,7 +1008,7 @@ def test_stress_search_question1_confirmation_yes_advances():
     ex.handle_message(UID, "➡️ Далее")
     ex.handle_message(UID, "Пунктуальность")
 
-    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "➡️ Продолжить")
     session = ex.user_sessions[UID]
     assert session["question_step"] == 2
     assert session["answers"][-1]["ideal"] == "Пунктуальность"
@@ -1016,9 +1016,11 @@ def test_stress_search_question1_confirmation_yes_advances():
     assert "Вопрос 2/4" in vk.last_message
 
 
-def test_stress_search_question1_confirmation_no_reasks():
-    """«Нет» должно вернуть к тому же Вопросу 1, чтобы переписать ответ,
-    не сохраняя отклонённый вариант."""
+def test_stress_search_question1_can_retype_before_continuing():
+    """На экране подтверждения не нужна отдельная кнопка «Нет» — если
+    передумал, можно просто написать другой вариант ещё раз. Черновик
+    обновится и экран покажет именно последний написанный текст, а не
+    список всех попыток; «Продолжить» зафиксирует последний вариант."""
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
     ex.handle_message(UID, "Опоздание 8")
@@ -1026,15 +1028,14 @@ def test_stress_search_question1_confirmation_no_reasks():
     ex.handle_message(UID, "➡️ Далее")
     ex.handle_message(UID, "Плохой вариант")
 
-    ex.handle_message(UID, "✏️ Нет, буду писать")
+    ex.handle_message(UID, "Пунктуальность")  # передумал, без кнопки "Нет"
     session = ex.user_sessions[UID]
-    assert session["question_step"] == 1
-    assert "_confirm_ideal" not in session
-    assert "_pending_ideal" not in session
-    assert "Вопрос 1/4" in vk.last_message
+    assert session["question_step"] == 1, "Всё ещё на подтверждении, шаг не продвинулся"
+    assert session.get("_pending_ideal") == "Пунктуальность"
+    assert "Пунктуальность" in vk.last_message
+    assert "Плохой вариант" not in vk.last_message, "Старые попытки не должны копиться на экране"
 
-    ex.handle_message(UID, "Пунктуальность")
-    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "➡️ Продолжить")
     assert ex.user_sessions[UID]["answers"][-1]["ideal"] == "Пунктуальность"
 
 
@@ -1719,7 +1720,7 @@ def test_stress_search_question_step2_validates_percent():
     ex.handle_message(UID, "➡️ Продолжить")   # analysis
     ex.handle_message(UID, "➡️ Далее")        # question, step 1
     ex.handle_message(UID, "Идеальная ситуация")  # step 1 -> ждём подтверждения
-    ex.handle_message(UID, "✅ Да, дальше")        # подтверждение -> step 1 -> step 2
+    ex.handle_message(UID, "➡️ Продолжить")        # подтверждение -> step 1 -> step 2
 
     ex.handle_message(UID, "не число")
     assert ex.user_sessions[UID]["question_step"] == 2, "Нечисловой % не должен продвигать шаг"
@@ -1750,7 +1751,7 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
 
     # образ 1: все 4 вопроса + новая оценка (шаг 5)
     ex.handle_message(UID, "Идеал 1")
-    ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
+    ex.handle_message(UID, "➡️ Продолжить")  # подтверждение шага 1
     ex.handle_message(UID, "80")
     ex.handle_message(UID, "Почему 1")
     ex.handle_message(UID, "Рефлексия 1")  # step 4 -> связный разбор, ждёт новую оценку
@@ -1775,7 +1776,7 @@ def test_stress_search_full_flow_through_all_questions_to_finish():
 
     # образ 2: все 4 вопроса + новая оценка -> естественное завершение (index >= len(items))
     ex.handle_message(UID, "Идеал 2")
-    ex.handle_message(UID, "✅ Да, дальше")  # подтверждение шага 1
+    ex.handle_message(UID, "➡️ Продолжить")  # подтверждение шага 1
     ex.handle_message(UID, "40")
     ex.handle_message(UID, "Почему 2")
     ex.handle_message(UID, "Рефлексия 2")
@@ -1805,7 +1806,7 @@ def test_stress_search_between_items_pause_reprompts_and_supports_restart():
     ex.handle_message(UID, "➡️ Далее")
 
     ex.handle_message(UID, "Идеал 1")
-    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "80")
     ex.handle_message(UID, "Почему 1")
     ex.handle_message(UID, "Рефлексия 1")  # -> связный разбор, ждёт новую оценку
@@ -1838,7 +1839,7 @@ def test_stress_search_new_rate_step_validates_1_to_10():
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "➡️ Далее")
     ex.handle_message(UID, "Идеал")
-    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "80")
     ex.handle_message(UID, "Почему")
     ex.handle_message(UID, "Рефлексия")  # -> шаг 5, ждёт новую оценку
@@ -2172,7 +2173,7 @@ def test_stress_search_save_result_failure_is_reported_honestly():
 
 def _stress_do_item(ex, ideal, percent, why, reflection, new_rate):
     ex.handle_message(UID, ideal)
-    ex.handle_message(UID, "✅ Да, дальше")
+    ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, str(percent))
     ex.handle_message(UID, why)
     ex.handle_message(UID, reflection)
@@ -2396,7 +2397,7 @@ def test_stress_search_in_progress_answer_not_counted_as_analyzed_or_sent():
     ex.handle_message(UID, "➡️ Далее")  # -> вопрос 1 по образу 1
 
     ex.handle_message(UID, "Идеал 1")
-    ex.handle_message(UID, "✅ Да, дальше")  # застряли на середине вопроса 2/4
+    ex.handle_message(UID, "➡️ Продолжить")  # застряли на середине вопроса 2/4
 
     session = ex.user_sessions[UID]
     assert len(session["answers"]) == 1, "Запись уже добавлена, хоть и не закончена"

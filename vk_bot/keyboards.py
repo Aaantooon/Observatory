@@ -100,6 +100,13 @@ def confirm_skip_keyboard():
     keyboard.add_button("✏️ Нет, буду писать", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
+def simple_continue_keyboard():
+    """Клавиатура с единственной кнопкой «Продолжить» — для экранов, где не
+    нужен выбор да/нет, а просто подтверждение «готов, двигаюсь дальше»."""
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    return keyboard.get_keyboard()
+
 def cancel_keyboard():
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)

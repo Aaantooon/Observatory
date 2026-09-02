@@ -4,9 +4,9 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    confirm_skip_keyboard,
+    simple_continue_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
-    CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, FINISH_AND_SEND_TEXTS,
+    FINISH_AND_SEND_TEXTS,
 )
 
 # Два независимых пути закончить путь досрочно и отправить его наблюдателю
@@ -826,18 +826,12 @@ class StressSearchExercise:
                 analysis_keyboard()
             )
 
-    def _send_question1(self, user_id, item_text, item_rate, index, total, retry=False):
-        retry_line = (
-            "🔄 Может, попробуешь ещё подумать? Можешь написать разные варианты, "
-            "которые приходят в голову — чем больше, тем лучше.\n\n"
-            if retry else ""
-        )
+    def _send_question1(self, user_id, item_text, item_rate, index, total):
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
             f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
             f"❓ Вопрос 1/4:\n"
-            f"{retry_line}"
             f"{self._get_question1_hint()}\n\n"
             f"{self._get_separator()}\n"
             f"💾 «Сохранить и выйти»",
@@ -897,14 +891,18 @@ class StressSearchExercise:
                 cancel_keyboard()
             )
         elif step == 3:
+            percent = current_answer.get('percent', '?')
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
                 f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
                 f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 3/4:\n"
-                f"· Почему так должно быть?\n"
+                f"· Увеличиваем с твоих {percent}% до 100% — почему так должно быть?\n"
                 f"· Объясни\n\n"
+                f"🌍 Мир не против жить по-твоему — только объясни, чтобы это было "
+                f"полезно всем.\n\n"
+                f"✍️ Подумай и напиши\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
@@ -948,7 +946,7 @@ class StressSearchExercise:
         index = session.get('question_index', 0)
 
         if session.get('_confirm_ideal'):
-            if text_lower in CONFIRM_YES_TEXTS:
+            if text_lower in CONTINUE_TEXTS:
                 session.pop('_confirm_ideal', None)
                 current_answer['ideal'] = session.pop('_pending_ideal', text)
                 session['question_step'] = 2
@@ -969,16 +967,24 @@ class StressSearchExercise:
                 )
                 return
 
-            if text_lower in CONFIRM_NO_TEXTS:
-                session.pop('_confirm_ideal', None)
-                session.pop('_pending_ideal', None)
-                self._send_question1(user_id, item_text, item_rate, index, total, retry=True)
-                return
-
+            # Передумал — не нужна отдельная кнопка «Нет»: любой другой текст
+            # просто заменяет черновик, и то же самое подтверждение
+            # показывается заново уже с новым вариантом. Раньше здесь были
+            # две кнопки («Да, дальше» / «Нет, буду писать») — по просьбе
+            # пользователя оставили одну «➡️ Продолжить».
+            session['_pending_ideal'] = text
             self.send_message(
                 user_id,
-                "🕯️ Нажми «✅ Да, дальше» или «✏️ Нет, буду писать».",
-                confirm_skip_keyboard()
+                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
+                f"рассматриваешь фонариком.\n"
+                f"Вот ты пришёл, и там: «{item_text}».\n\n"
+                f"{self._format_answers_so_far({'ideal': text})}"
+                f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
+                f"это противоположность — и именно так должно быть? Когда готов — жми "
+                f"«➡️ Продолжить».",
+                simple_continue_keyboard()
             )
             return
 
@@ -993,10 +999,11 @@ class StressSearchExercise:
                 f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
                 f"рассматриваешь фонариком.\n"
                 f"Вот ты пришёл, и там: «{item_text}».\n\n"
-                f"🛤️ Какие дороги отсюда ведут дальше? Ты нашёл одну: «{text}».\n\n"
+                f"{self._format_answers_so_far({'ideal': text})}"
                 f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
-                f"это противоположность — и именно так должно быть?",
-                confirm_skip_keyboard()
+                f"это противоположность — и именно так должно быть? Когда готов — жми "
+                f"«➡️ Продолжить».",
+                simple_continue_keyboard()
             )
 
         elif step == 2:
@@ -1027,8 +1034,11 @@ class StressSearchExercise:
                 f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
                 f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 3/4:\n"
-                f"· Почему так должно быть?\n"
+                f"· Увеличиваем с твоих {percent}% до 100% — почему так должно быть?\n"
                 f"· Объясни\n\n"
+                f"🌍 Мир не против жить по-твоему — только объясни, чтобы это было "
+                f"полезно всем.\n\n"
+                f"✍️ Подумай и напиши\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
             )
