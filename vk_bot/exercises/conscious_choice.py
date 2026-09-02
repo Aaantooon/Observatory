@@ -270,7 +270,7 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 2:
             session['current_answer'] = text
             session['step'] = 3
-   self._bump_max_step(session)
+            self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
