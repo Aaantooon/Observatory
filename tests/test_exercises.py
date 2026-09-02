@@ -1557,6 +1557,44 @@ def test_conscious_choice_pasted_multiline_list_splits_into_separate_items():
     assert "Всего: 5/20" in vk.last_message
 
 
+def test_conscious_choice_step2_asks_for_own_affirmation_before_the_question():
+    """Шаг 2 разбит на два экрана: сначала пример фразы («Я имею право не
+    хотеть «X»») с просьбой сформулировать свою на основе примера, а не
+    просто списать пример — и только следующим сообщением показывается сам
+    вопрос «Кто отнял...», уже со СВОИМ вариантом фразы пользователя."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Зарабатывать деньги")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> step 2, экран примера
+
+    assert ex.user_sessions[UID]["_awaiting_own_affirmation"] is True
+    assert "Получается пример вот это" in vk.last_message
+    assert "Я имею право не хотеть «Зарабатывать деньги»" in vk.last_message
+    assert "своими словами" in vk.last_message
+    assert "Кто отнял" not in vk.last_message, "Вопрос не должен показываться на экране примера"
+
+    ex.handle_message(UID, "Я не обязан зарабатывать больше, чем мне нужно")
+    assert "_awaiting_own_affirmation" not in ex.user_sessions[UID]
+    assert ex.user_sessions[UID]["right_phrase"] == "Я не обязан зарабатывать больше, чем мне нужно"
+    assert "Я не обязан зарабатывать больше, чем мне нужно" in vk.last_message
+    assert "Кто отнял" in vk.last_message
+
+
+def test_conscious_choice_step2_skip_own_affirmation_uses_example_as_is():
+    """На экране примера можно просто нажать «Продолжить», не формулируя
+    свой вариант — тогда используется фраза из примера как есть."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Зарабатывать деньги")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> step 2, экран примера
+    ex.handle_message(UID, "➡️ Продолжить")  # пропускаем свой вариант
+
+    assert "_awaiting_own_affirmation" not in ex.user_sessions[UID]
+    assert "right_phrase" not in ex.user_sessions[UID], "Свой вариант не написан — фраза не сохраняется отдельно"
+    assert "Я имею право не хотеть «Зарабатывать деньги»" in vk.last_message
+    assert "Кто отнял" in vk.last_message
+
+
 def test_conscious_choice_full_flow_to_finish():
     """Шаги 4 и 5 ("Анализ выбора" и "Альтернативы") разбиты на отдельные
     экраны — сначала показывается сам выбор (подтверждение "Продолжить"),
@@ -1569,6 +1607,12 @@ def test_conscious_choice_full_flow_to_finish():
     ex.handle_message(UID, "Кормить детей")        # добавлен must-пункт
     ex.handle_message(UID, "➡️ Продолжить")        # -> step 2 (current_must = "Кормить детей")
     assert ex.user_sessions[UID]["step"] == 2
+    assert ex.user_sessions[UID]["_awaiting_own_affirmation"] is True
+
+    ex.handle_message(UID, "Имею право отдохнуть")  # свой вариант фразы -> экран вопроса
+    assert ex.user_sessions[UID]["step"] == 2
+    assert "_awaiting_own_affirmation" not in ex.user_sessions[UID]
+    assert ex.user_sessions[UID]["right_phrase"] == "Имею право отдохнуть"
 
     ex.handle_message(UID, "Никто не отнял")        # who_took -> step 3
     assert ex.user_sessions[UID]["step"] == 3
@@ -1604,6 +1648,7 @@ def test_conscious_choice_full_flow_to_finish():
     assert len(result["analysis"]) == 1
     entry = result["analysis"][0]
     assert entry["must"] == "Кормить детей"
+    assert entry["right_phrase"] == "Имею право отдохнуть"
     assert entry["who_took"] == "Никто не отнял"
     assert entry["who_greater"] == "Я сам"
     assert "устану" in entry["choice_analysis"]
@@ -1618,7 +1663,8 @@ def test_conscious_choice_skip_all_minus_plus_via_continue():
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
-    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2
+    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2 (экран примера фразы)
+    ex.handle_message(UID, "➡️ Продолжить")   # пропускаем свой вариант -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")   # -> step 3
     ex.handle_message(UID, "Я сам")            # -> step 4
 
@@ -1647,9 +1693,11 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     assert session["step"] == 2
     assert session["analysis_index"] == 0
     assert session["current_must"] == "Кормить детей"
+    assert session["_awaiting_own_affirmation"] is True
     assert "1/2" in vk.last_message
 
     # разбираем пункт 1 полностью (шаги 2-9)
+    ex.handle_message(UID, "Имею право 1")     # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")   # -> 3
     ex.handle_message(UID, "Я сам")            # -> 4
     ex.handle_message(UID, "➡️ Продолжить")    # -> 5
@@ -1667,12 +1715,15 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     assert session["step"] == 2, "Должен был начаться разбор пункта 2 с шага 2"
     assert session["analysis_index"] == 1
     assert session["current_must"] == "Ходить на работу"
+    assert session["_awaiting_own_affirmation"] is True, "Для нового пункта снова нужно спросить свой вариант фразы"
     assert "2/2" in vk.last_message
     assert len(session["analysis_results"]) == 1, "Разбор пункта 1 должен был сохраниться промежуточно"
     # состояние предыдущего пункта не должно протекать в разбор нового
     assert "current_answer" not in session
+    assert "right_phrase" not in session
 
     # разбираем пункт 2
+    ex.handle_message(UID, "Имею право 2")     # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Родители")         # -> 3
     ex.handle_message(UID, "Никто")            # -> 4
     ex.handle_message(UID, "➡️ Продолжить")    # -> 5
@@ -1690,12 +1741,14 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
 
     a1, a2 = result["analysis"]
     assert a1["must"] == "Кормить детей"
+    assert a1["right_phrase"] == "Имею право 1"
     assert a1["who_took"] == "Никто не отнял"
     assert a1["who_greater"] == "Я сам"
     assert "устану 1" in a1["choice_analysis"]
     assert "энергия 1" in a1["alternatives"]
 
     assert a2["must"] == "Ходить на работу"
+    assert a2["right_phrase"] == "Имею право 2"
     assert a2["who_took"] == "Родители"
     assert a2["who_greater"] == "Никто"
     assert a2["choice_analysis"] == "Минусы: —, Плюсы: —"
@@ -1744,6 +1797,7 @@ def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
     ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Имею право")       # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")
     ex.handle_message(UID, "Я сам")            # -> step 4
 
@@ -2508,10 +2562,16 @@ def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step(
     assert "хотя бы один пункт" in vk.last_message
 
     ex.handle_message(UID, "Кормить детей")     # 1 пункт -> теперь можно перейти
-    ex.handle_message(UID, "➡️ Продолжить")     # -> step 2
+    ex.handle_message(UID, "➡️ Продолжить")     # -> step 2 (экран примера фразы)
     assert ex.user_sessions[UID]["step"] == 2
 
-    # шаг 2: "Продолжить" без ответа на вопрос
+    # экран примера фразы: "Продолжить" без своего варианта — разрешён,
+    # просто оставляет фразу как в примере и открывает сам вопрос
+    ex.handle_message(UID, "✅ Завершить")
+    assert ex.user_sessions[UID]["step"] == 2
+    assert "_awaiting_own_affirmation" not in ex.user_sessions[UID]
+
+    # а вот сам вопрос ("кто отнял") уже обязателен — "Продолжить" без ответа отклоняется
     ex.handle_message(UID, "✅ Завершить")
     assert ex.user_sessions[UID]["step"] == 2
     assert "Напиши свой ответ" in vk.last_message
@@ -2530,9 +2590,17 @@ def test_conscious_choice_blank_text_from_sticker_does_not_advance():
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")   # step 1 -> запись первого пункта
-    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2
+    ex.handle_message(UID, "➡️ Продолжить")   # -> step 2 (экран примера фразы)
 
-    ex.handle_message(UID, "")  # "стикер" на шаге 2
+    ex.handle_message(UID, "")  # "стикер" на экране примера фразы
+    assert ex.user_sessions[UID]["step"] == 2
+    assert ex.user_sessions[UID]["_awaiting_own_affirmation"] is True
+    assert "не могу обработать стикер" in vk.last_message
+
+    ex.handle_message(UID, "Имею право")      # свой вариант фразы -> экран вопроса
+    assert "_awaiting_own_affirmation" not in ex.user_sessions[UID]
+
+    ex.handle_message(UID, "")  # "стикер" на самом вопросе
     assert ex.user_sessions[UID]["step"] == 2
     assert "current_answer" not in ex.user_sessions[UID]
     assert "не могу обработать стикер" in vk.last_message
@@ -2994,7 +3062,8 @@ def test_conscious_choice_back_to_start_and_end_navigation():
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")       # must_items[0]
-    ex.handle_message(UID, "➡️ Продолжить")        # -> step 2
+    ex.handle_message(UID, "➡️ Продолжить")        # -> step 2 (экран примера фразы)
+    ex.handle_message(UID, "Имею право")           # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто")                # step 2 -> 3
     ex.handle_message(UID, "Никто")                # step 3 -> 4
 

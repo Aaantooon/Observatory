@@ -120,16 +120,37 @@ class ConsciousChoiceExercise(BaseExercise):
             must = session.get('current_must')
             item_num = session.get('analysis_index', 0) + 1
             total = len(session.get('must_items', []))
+
+            if session.get('_awaiting_own_affirmation'):
+                # Сначала отдельным экраном — пример фразы, а следующим
+                # сообщением пользователь пишет СВОЙ вариант (или жмёт
+                # «Продолжить», чтобы оставить пример как есть) — раньше
+                # пример сразу шёл в тело вопроса, и человек мог просто
+                # списать его, ничего не сформулировав сам.
+                self.send_message(
+                    user_id,
+                    f"{prefix}"
+                    f"Разбираем пункт {item_num}/{total}\n\n"
+                    f"Шаг 2: Я имею право не хотеть.\n\n"
+                    f"Написал: «{must}»\n\n"
+                    f"Получается ролевые ожидания.\n"
+                    f"Я должен «{must}»\n\n"
+                    f"Получается пример вот это:\n"
+                    f"Я имею право не хотеть «{must}»\n\n"
+                    f"✍️ Напиши эту фразу своими словами, на основе примера — "
+                    f"или жми «➡️ Продолжить», чтобы оставить как в примере.",
+                    conscious_choice_keyboard()
+                )
+                return
+
+            right_phrase = session.get('right_phrase') or f"Я имею право не хотеть «{must}»"
             note = self._existing_answer_note(session.get('current_answer'))
             self.send_message(
                 user_id,
                 f"{prefix}"
                 f"Разбираем пункт {item_num}/{total}\n\n"
                 f"Шаг 2: Я имею право не хотеть.\n\n"
-                f"Написал: «{must}»\n\n"
-                f"Получается ролевые ожидания.\n"
-                f"Я должен «{must}»\n"
-                f"Я имею право не хотеть «{must}»\n\n"
+                f"{right_phrase}\n\n"
                 f"❓ Кто отнял у тебя это право не хотеть?\n"
                 f"· Никто\n"
                 f"· Сам отнял право\n"
@@ -251,9 +272,13 @@ class ConsciousChoiceExercise(BaseExercise):
             self._send_must_items_added(user_id, items, len(session['must_items']))
 
         elif step == 2:
-            session['current_answer'] = text
-            session['step'] = 3
-            self._bump_max_step(session)
+            if session.get('_awaiting_own_affirmation'):
+                session['right_phrase'] = text
+                session.pop('_awaiting_own_affirmation', None)
+            else:
+                session['current_answer'] = text
+                session['step'] = 3
+                self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -379,15 +404,17 @@ class ConsciousChoiceExercise(BaseExercise):
         шаг 2 — как в stress_search) или, если пункты закончились, на шаг
         10 (финиш). Раньше единственный разбор просто шёл в _finish
         напрямую — остальные пункты списка молча оставались без анализа."""
+        must = session.get('current_must')
         session.setdefault('analysis_results', []).append({
-            'must': session.get('current_must'),
+            'must': must,
+            'right_phrase': session.get('right_phrase') or f"Я имею право не хотеть «{must}»",
             'who_took': session.get('current_answer'),
             'who_greater': session.get('who_greater'),
             'choice_analysis': session.get('choice_analysis', ''),
             'alternatives': session.get('alternatives', ''),
         })
         for key in ('current_answer', 'who_greater', 'choice_minus', 'choice_plus',
-                    'choice_analysis', 'alt_minus', 'alt_plus', 'alternatives'):
+                    'choice_analysis', 'alt_minus', 'alt_plus', 'alternatives', 'right_phrase'):
             session.pop(key, None)
 
         session['analysis_index'] = session.get('analysis_index', 0) + 1
@@ -396,6 +423,7 @@ class ConsciousChoiceExercise(BaseExercise):
             session['current_must'] = items[session['analysis_index']]
             session['step'] = 2
             session['_max_step'] = 2
+            session['_awaiting_own_affirmation'] = True
         else:
             session['step'] = 10
 
@@ -453,10 +481,20 @@ class ConsciousChoiceExercise(BaseExercise):
             session['current_must'] = items[0]
             session['step'] = 2
             session['_max_step'] = 2
+            session['_awaiting_own_affirmation'] = True
+            session.pop('right_phrase', None)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 2:
+            if session.get('_awaiting_own_affirmation'):
+                # На экране примера «Продолжить» разрешён без ответа —
+                # значит пользователь согласен оставить фразу как в
+                # примере, а не сформулировал свою.
+                session.pop('_awaiting_own_affirmation', None)
+                self.save_progress(user_id, session)
+                self._show_step(user_id, session)
+                return
             self._show_step(user_id, session, error="Напиши свой ответ на вопрос")
 
         elif step == 3:
