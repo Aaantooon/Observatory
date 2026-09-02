@@ -860,6 +860,59 @@ def test_stress_search_pasted_multiline_list_splits_into_separate_items():
     assert "Добавлено образов: 3" in vk.last_message
 
 
+def test_stress_search_rejects_duplicate_single_item():
+    """Нельзя записать один и тот же образ дважды (по просьбе пользователя:
+    не должно быть дубликатов пунктов) — сравнение без учёта регистра и
+    пробелов по краям."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+
+    ex.handle_message(UID, "Работа 8")
+    assert len(ex.user_sessions[UID]["items"]) == 1
+
+    ex.handle_message(UID, "работа  5")  # тот же текст, другой регистр/пробелы/оценка
+    assert len(ex.user_sessions[UID]["items"]) == 1, "Повтор не должен добавиться"
+    assert ex.user_sessions[UID]["items"][0]["rate"] == 8, "Исходная запись не должна измениться"
+    assert "уже есть" in vk.last_message.lower()
+
+    ex.handle_message(UID, "Учёба 6")  # другой текст — добавляется нормально
+    assert len(ex.user_sessions[UID]["items"]) == 2
+
+
+def test_stress_search_pasted_list_skips_duplicates():
+    """Дедупликация работает и при вставке списком — и против уже
+    записанных пунктов, и внутри самой вставки."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+
+    pasted = "работа 5\nШум за окном 7\nшум за окном 6\nДедлайны 9"
+    ex.handle_message(UID, pasted)
+
+    items = ex.user_sessions[UID]["items"]
+    texts = [i["text"] for i in items]
+    assert texts == ["Работа", "Шум за окном", "Дедлайны"], (
+        "Повтор «работа» (уже есть) и повтор «шум за окном» (внутри вставки) должны быть пропущены"
+    )
+    assert "Добавлено образов: 2" in vk.last_message
+    assert "Пропущено повторов" in vk.last_message
+
+
+def test_stress_search_pasted_list_all_duplicates_adds_nothing():
+    """Если вся вставка состоит из уже записанных пунктов — ничего не
+    добавляется и об этом честно сообщается, а не показывается «Добавлено
+    образов: 0»."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8\nУчёба 6")
+
+    ex.handle_message(UID, "работа 5\nучёба 7")
+
+    assert len(ex.user_sessions[UID]["items"]) == 2, "Ничего нового не должно было добавиться"
+    assert "уже есть" in vk.last_message.lower()
+    assert "Добавлено образов" not in vk.last_message
+
+
 def test_stress_search_pasted_long_multiline_list_does_not_exceed_vk_limit():
     """Баг #4: вставленный многострочный список эхается целиком без
     ограничения — с длинными строками (или их большим числом) сообщение

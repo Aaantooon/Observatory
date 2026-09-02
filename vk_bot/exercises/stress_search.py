@@ -579,6 +579,15 @@ class StressSearchExercise:
             return
 
         item = parts[0].strip().rstrip('-—–').strip()
+        if self._find_duplicate_item(session, item):
+            self.send_message(
+                user_id,
+                f"🌫️ «{item}» уже есть в твоей карте — повторно записывать не нужно. "
+                f"Если это правда другая ситуация, опиши её другими словами.",
+                exercise_keyboard()
+            )
+            return
+
         session['items'].append({'text': item, 'rate': rate})
         count = len(session['items'])
 
@@ -695,10 +704,55 @@ class StressSearchExercise:
             return text
         return text[:limit].rstrip() + "…"
 
+    def _normalize_item_text(self, text):
+        """Приводит текст образа к виду для сравнения на дубликаты — без
+        учёта регистра и лишних пробелов по краям, чтобы «Работа» и
+        «работа » считались одним и тем же пунктом."""
+        return (text or '').strip().lower()
+
+    def _find_duplicate_item(self, session, item_text):
+        """Есть ли уже такой образ в записанной карте — сравнение без учёта
+        регистра/пробелов (см. _normalize_item_text)."""
+        norm = self._normalize_item_text(item_text)
+        if not norm:
+            return None
+        for existing in session.get('items', []):
+            if self._normalize_item_text(existing.get('text', '')) == norm:
+                return existing
+        return None
+
     def _add_stress_items(self, user_id, session, parsed_items, note=None):
         """Добавляет распознанные (текст, оценка) пары в сессию и одним
         сообщением подтверждает добавление — используется и для
-        многострочной вставки, и для строки-вперемешку без переносов."""
+        многострочной вставки, и для строки-вперемешку без переносов.
+        Пропускает дубликаты — и уже записанные раньше образы, и повторы
+        внутри самой вставки (например, если один и тот же пункт случайно
+        вставлен дважды в одном сообщении)."""
+        existing_norm = {self._normalize_item_text(i.get('text', '')) for i in session.get('items', [])}
+        unique_items = []
+        duplicate_count = 0
+        for item_text, rate in parsed_items:
+            norm = self._normalize_item_text(item_text)
+            if norm in existing_norm:
+                duplicate_count += 1
+                continue
+            existing_norm.add(norm)
+            unique_items.append((item_text, rate))
+
+        if duplicate_count:
+            dup_note = f"Пропущено повторов (уже есть в карте): {duplicate_count}."
+            note = f"{note} {dup_note}" if note else dup_note
+
+        if not unique_items:
+            self.send_message(
+                user_id,
+                f"🌫️ Всё это уже есть в твоей карте — новых образов не добавилось "
+                f"({duplicate_count} повтор(ов)). Опиши другой источник стресса.",
+                exercise_keyboard()
+            )
+            return
+
+        parsed_items = unique_items
         for item_text, rate in parsed_items:
             session['items'].append({'text': item_text, 'rate': rate})
 
