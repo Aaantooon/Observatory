@@ -1095,6 +1095,54 @@ def test_stress_search_question1_can_retype_before_continuing():
     assert "_pending_ideal_variants" not in ex.user_sessions[UID], "Черновик вариантов должен очищаться после подтверждения"
 
 
+def test_stress_search_multiple_ideal_variants_stay_visible_and_reach_result_data():
+    """Если пользователь на экране подтверждения написал НЕСКОЛЬКО разных
+    вариантов «как должно быть» (переписывал подряд), все они должны
+    остаться видны и в «Твои ответы» дальше по разбору, и в итоге дойти
+    до result_data — а не потеряться, оставив только последний вариант."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Шутят надо мной 10")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+
+    ex.handle_message(UID, "надо мной не шутят")
+    ex.handle_message(UID, "шутят когда я сам захочу")
+    ex.handle_message(UID, "понимают моё настроение")
+    ex.handle_message(UID, "➡️ Продолжить")  # фиксирует все 3 варианта
+
+    session = ex.user_sessions[UID]
+    current_answer = session["answers"][-1]
+    assert current_answer["ideal"] == "понимают моё настроение", "Последний вариант — тот, что уходит в 'ideal'"
+    assert current_answer["ideal_variants"] == [
+        "надо мной не шутят", "шутят когда я сам захочу", "понимают моё настроение",
+    ]
+    assert session["question_step"] == 2
+    # Экран Вопроса 2/4 показывает "Твои ответы" со ВСЕМИ вариантами, не
+    # только последним подтверждённым.
+    assert "надо мной не шутят" in vk.last_message
+    assert "шутят когда я сам захочу" in vk.last_message
+    assert "понимают моё настроение" in vk.last_message
+
+    ex.handle_message(UID, "60")
+    ex.handle_message(UID, "Почему")
+    ex.handle_message(UID, "Рефлексия")
+    # Экран перед новой оценкой (шаг 5, связный разбор) тоже должен
+    # показать все варианты, а не только последний.
+    assert "надо мной не шутят" in vk.last_message
+    assert "шутят когда я сам захочу" in vk.last_message
+    assert "понимают моё настроение" in vk.last_message
+
+    ex.handle_message(UID, "4")  # новая оценка -> упражнение завершается (1 образ)
+
+    assert UID not in ex.user_sessions
+    result = api.results[0]["result_data"]
+    assert result["analysis"][0]["ideal"] == "понимают моё настроение"
+    assert result["analysis"][0]["ideal_variants"] == [
+        "надо мной не шутят", "шутят когда я сам захочу", "понимают моё настроение",
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Кнопка «✏️ Изменить пункт» на экране Вопроса 1/4 — правка текста/оценки
 # самого образа, если он неточно сформулирован, без выхода из разбора.

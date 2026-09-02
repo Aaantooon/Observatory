@@ -147,13 +147,31 @@ class StressSearchExercise:
         ]
         return phrases[idx] if idx < len(phrases) else f"🌟 {count}/{target} позади!"
 
+    def _ideal_variants_list(self, current_answer):
+        """Все варианты «как должно быть», написанные пользователем для
+        текущего образа на экране подтверждения Вопроса 1 — если он
+        переписывал несколько раз, все они сохраняются в
+        current_answer['ideal_variants'] (см. handle_question) и должны
+        оставаться видны и дальше по ходу разбора, а не только последний
+        подтверждённый (current_answer['ideal'])."""
+        variants = current_answer.get('ideal_variants')
+        if variants:
+            return variants
+        if current_answer.get('ideal'):
+            return [current_answer['ideal']]
+        return []
+
     def _format_answers_so_far(self, current_answer):
         """Собирает уже данные пользователем ответы по текущему образу в
         компактный блок — показывается перед следующим вопросом того же
         образа, чтобы не приходилось листать переписку выше."""
         lines = []
-        if current_answer.get('ideal'):
-            lines.append(f"· Как, по-твоему, должно быть ещё: {self._item_text_for_display(current_answer['ideal'])}?")
+        variants = self._ideal_variants_list(current_answer)
+        if len(variants) > 1:
+            lines.append("· Как, по-твоему, должно быть ещё (все твои варианты):")
+            lines.extend(f"  – {self._item_text_for_display(v)}" for v in variants)
+        elif variants:
+            lines.append(f"· Как, по-твоему, должно быть ещё: {self._item_text_for_display(variants[0])}?")
         if 'percent' in current_answer:
             lines.append(f"· Реалистичность: {current_answer['percent']}%")
         if current_answer.get('why'):
@@ -191,14 +209,18 @@ class StressSearchExercise:
         те же данные в связный разбор (по формулировке психолога) и сразу
         спрашивает новую оценку 1-10, вместо старого/новую разницу — так
         человек сам видит, изменилось ли что-то после разбора."""
-        ideal = self._item_text_for_display(current_answer.get('ideal', ''))
+        variants = self._ideal_variants_list(current_answer)
+        if len(variants) > 1:
+            ideal = " / ".join(f"«{self._item_text_for_display(v)}»" for v in variants)
+        else:
+            ideal = f"«{self._item_text_for_display(variants[0])}»" if variants else "«»"
         percent = current_answer.get('percent', 0)
         why = self._item_text_for_display(current_answer.get('why', ''))
         reflection = self._item_text_for_display(current_answer.get('reflection', ''))
         return (
             f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
             f"😖 Не нравится: «{self._item_text_for_display(item_text)}» — {item_rate}/10.\n\n"
-            f"🧠 В подсознании записано: должно быть «{ideal}».\n"
+            f"🧠 В подсознании записано: должно быть {ideal}.\n"
             f"📊 В реальности жизни так происходит {percent}% случаев.\n"
             f"❓ Почему реальность должна поменяться: {why}\n\n"
             f"💭 {reflection}\n\n"
@@ -1092,7 +1114,13 @@ class StressSearchExercise:
             if text_lower in CONTINUE_TEXTS:
                 session.pop('_confirm_ideal', None)
                 current_answer['ideal'] = session.pop('_pending_ideal', text)
-                session.pop('_pending_ideal_variants', None)
+                variants = session.pop('_pending_ideal_variants', None)
+                # Если пользователь переписывал несколько раз — сохраняем ВСЕ
+                # варианты (не только последний, который ушёл в 'ideal'), чтобы
+                # они были видны и дальше по ходу разбора, и в итоге отправятся
+                # наблюдателю вместе с остальным разбором.
+                if variants and len(variants) > 1:
+                    current_answer['ideal_variants'] = variants
                 session['question_step'] = 2
                 self._save_progress(user_id, session)
 
