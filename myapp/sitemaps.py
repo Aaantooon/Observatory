@@ -16,10 +16,13 @@ class StaticViewSitemap(Sitemap):
     changefreq = 'monthly'
 
     def items(self):
-        # 'home' и 'privacy_policy' зарегистрированы в config/urls.py,
-        # 'course_index' — в myapp/urls.py (требует входа, но сам URL
-        # публичный — незалогиненного посетителя редиректнёт на вход).
-        return ['home', 'privacy_policy', 'terms_of_service', 'course_index']
+        # 'home', 'privacy_policy', 'faq', 'put' зарегистрированы в
+        # config/urls.py, 'course_index' — в myapp/urls.py (требует входа,
+        # но сам URL публичный — незалогиненного посетителя редиректнёт
+        # на вход). 'achievements'/'statistics' туда же не добавлены —
+        # это персональные страницы без входа не открываются вообще, и
+        # для поисковика в них нет отдельного контента (для всех один URL).
+        return ['home', 'privacy_policy', 'terms_of_service', 'faq', 'put', 'course_index']
 
     def location(self, item):
         return reverse(item)
