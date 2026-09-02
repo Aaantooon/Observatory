@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from myapp.models import Module, UserCourseProgress, UserStreak
+from myapp.models import Module, UserCourseProgress, UserStreak, Achievement, UserAchievement
+from myapp import achievements as achievements_module
 
 def home(request):
     if request.GET.get('code') and request.GET.get('device_id'):
@@ -79,11 +80,26 @@ def profile_view(request):
         defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
     )
     streak, _ = UserStreak.objects.get_or_create(user=request.user)
-    
+
+    # Раньше здесь была отдельная, захардкоженная мини-версия достижений
+    # (только по streak/completed_count, 5 фиксированных пунктов) — она
+    # никак не была связана с настоящей системой достижений
+    # (myapp/achievements.py, страница /achievements/) и показывала бы
+    # другую картину, чем она. Теперь профиль берёт те же самые реальные
+    # достижения, просто показывает последние несколько плюс ссылку на
+    # полный список.
+    achievements_module.check_and_award(request.user)
+    unlocked = list(
+        UserAchievement.objects.filter(user=request.user).select_related('achievement').order_by('-unlocked_at')
+    )
+
     return render(request, 'profile.html', {
         'progress_percent': progress.get_progress_percent(),
         'completed_count': progress.completed_modules.count(),
         'total_count': Module.objects.filter(is_published=True).count(),
         'streak': streak.current_streak,
         'max_streak': streak.max_streak,
+        'recent_achievements': unlocked[:6],
+        'unlocked_achievements_count': len(unlocked),
+        'total_achievements_count': Achievement.objects.count() or len(achievements_module.ACHIEVEMENTS),
     })

@@ -115,28 +115,23 @@
         </div>
     </div>
 
-    <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:12px;">🏅 Достижения</h3>
+    <h3 style="color:#e2c044;font-weight:300;letter-spacing:2px;margin-bottom:12px;">
+        🏅 Достижения ({{ unlocked_achievements_count|default:0 }}/{{ total_achievements_count|default:0 }})
+    </h3>
     <div class="achievements-grid">
-        <div class="achievement {% if streak >= 1 %}unlocked{% else %}locked{% endif %}">
-            <span class="icon">🔥</span>
-            <span class="name">Первый день</span>
-        </div>
-        <div class="achievement {% if streak >= 7 %}unlocked{% else %}locked{% endif %}">
-            <span class="icon">⚡</span>
-            <span class="name">7 дней</span>
-        </div>
-        <div class="achievement {% if streak >= 30 %}unlocked{% else %}locked{% endif %}">
-            <span class="icon">🌟</span>
-            <span class="name">30 дней</span>
-        </div>
-        <div class="achievement {% if completed_count >= 1 %}unlocked{% else %}locked{% endif %}">
-            <span class="icon">📖</span>
-            <span class="name">Первый модуль</span>
-        </div>
-        <div class="achievement {% if completed_count >= 5 %}unlocked{% else %}locked{% endif %}">
-            <span class="icon">🏆</span>
-            <span class="name">Курс пройден</span>
-        </div>
+        {% for ua in recent_achievements %}
+            <div class="achievement unlocked">
+                <span class="icon">{{ ua.achievement.icon }}</span>
+                <span class="name">{{ ua.achievement.title }}</span>
+            </div>
+        {% empty %}
+            <p style="color:#5a6a7e;font-size:0.85rem;grid-column:1/-1;">
+                Пока ни одного — они появляются сами за обычные действия на сайте и в боте.
+            </p>
+        {% endfor %}
     </div>
+    <p style="margin-top:14px;">
+        <a href="{% url 'achievements' %}" style="color:#e2c044;font-size:0.85rem;">Все достижения →</a>
+    </p>
 </div>
 {% endblock %}
