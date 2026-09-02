@@ -1151,7 +1151,13 @@ class StressSearchExercise:
             self._send_question1(user_id, item_text, item_rate, index, total)
         elif step == 2:
             if current_answer.get('ideal_details'):
-                self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
+                # Несколько вариантов — процент и «почему» идут парой на
+                # каждый (см. handle_question), _variant_phase говорит,
+                # какой из двух сейчас ждём.
+                if current_answer.get('_variant_phase') == 'why':
+                    self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
+                else:
+                    self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
                 return
             self.send_message(
                 user_id,
@@ -1167,9 +1173,9 @@ class StressSearchExercise:
                 cancel_keyboard()
             )
         elif step == 3:
-            if current_answer.get('ideal_details'):
-                self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
-                return
+            # Многовариантный разбор больше не задерживается на шаге 3 (см.
+            # step == 2 в handle_question) — сюда доходит только
+            # классический путь с одним вариантом.
             percent = current_answer.get('percent', '?')
             self.send_message(
                 user_id,
@@ -1299,6 +1305,7 @@ class StressSearchExercise:
                     # общее число/объяснение на всё сразу.
                     current_answer['ideal_details'] = [{'text': v} for v in variants]
                     current_answer['_variant_idx'] = 0
+                    current_answer['_variant_phase'] = 'percent'
                     self._save_progress(user_id, session)
                     self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
                     return
@@ -1344,6 +1351,75 @@ class StressSearchExercise:
             )
 
         elif step == 2:
+            details = current_answer.get('ideal_details')
+            if details:
+                # Несколько вариантов — по каждому спрашиваются ОБА
+                # под-вопроса подряд (сначала процент, сразу за ним
+                # «почему» — с опорой на этот же процент, пока не забылся),
+                # а уже потом переходим к следующему варианту. _variant_phase
+                # отличает, какой из двух сейчас ждём.
+                idx = current_answer.get('_variant_idx', 0)
+                phase = current_answer.get('_variant_phase', 'percent')
+
+                if phase == 'percent':
+                    if not text.isdigit():
+                        self.send_message(
+                            user_id,
+                            "❌ Напиши число от 0 до 100 (только цифры)",
+                            cancel_keyboard()
+                        )
+                        return
+                    percent = int(text)
+                    if not (0 <= percent <= 100):
+                        self.send_message(
+                            user_id,
+                            "❌ Число должно быть от 0 до 100",
+                            cancel_keyboard()
+                        )
+                        return
+                    details[idx]['percent'] = percent
+                    current_answer['_variant_phase'] = 'why'
+                    self._save_progress(user_id, session)
+                    self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
+                    return
+
+                # phase == 'why' — «почему» для ТОГО ЖЕ варианта, что и
+                # только что заданный процент.
+                details[idx]['why'] = text
+                idx += 1
+                if idx < len(details):
+                    current_answer['_variant_idx'] = idx
+                    current_answer['_variant_phase'] = 'percent'
+                    self._save_progress(user_id, session)
+                    self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
+                    return
+
+                # Все варианты разобраны — считаем среднее в 'percent' (для
+                # общей статистики реалистичности), склеиваем 'why', и
+                # переходим к Вопросу 4/4 (он один общий на весь образ).
+                current_answer['percent'] = round(sum(d['percent'] for d in details) / len(details))
+                current_answer['why'] = "; ".join(
+                    f"«{d['text']}»: {d.get('why', '')}" for d in details
+                )
+                current_answer.pop('_variant_idx', None)
+                current_answer.pop('_variant_phase', None)
+                session['question_step'] = 4
+                self._save_progress(user_id, session)
+                self.send_message(
+                    user_id,
+                    f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+                    f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+                    f"{self._format_answers_so_far(current_answer)}"
+                    f"❓ Вопрос 4/4:\n\n"
+                    f"· «Ты — пуп земли и пуп вселенной.\n"
+                    f"· И всё должно быть по-твоему?»\n\n"
+                    f"· Это нормально так думать 😊\n\n"
+                    f"· Напиши свои размышления\n\n"
+                    f"💾 «Сохранить и выйти»",
+                    cancel_keyboard()
+                )
+                return
+
             if not text.isdigit():
                 self.send_message(
                     user_id,
@@ -1359,28 +1435,6 @@ class StressSearchExercise:
                     "❌ Число должно быть от 0 до 100",
                     cancel_keyboard()
                 )
-                return
-
-            details = current_answer.get('ideal_details')
-            if details:
-                # Несколько вариантов — процент спрашивается по одному на
-                # каждый (см. _send_variant_percent_question). Когда
-                # разобраны все — считаем среднее в 'percent' (для общей
-                # статистики реалистичности) и переходим к «почему» тоже
-                # по каждому варианту отдельно.
-                idx = current_answer.get('_variant_idx', 0)
-                details[idx]['percent'] = percent
-                idx += 1
-                if idx < len(details):
-                    current_answer['_variant_idx'] = idx
-                    self._save_progress(user_id, session)
-                    self._send_variant_percent_question(user_id, item_text, item_rate, index, total, current_answer)
-                    return
-                current_answer['percent'] = round(sum(d['percent'] for d in details) / len(details))
-                current_answer['_variant_idx'] = 0
-                session['question_step'] = 3
-                self._save_progress(user_id, session)
-                self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
                 return
 
             current_answer['percent'] = percent
@@ -1404,38 +1458,10 @@ class StressSearchExercise:
             )
 
         elif step == 3:
-            details = current_answer.get('ideal_details')
-            if details:
-                # Аналогично — «почему» тоже по одному на каждый вариант.
-                idx = current_answer.get('_variant_idx', 0)
-                details[idx]['why'] = text
-                idx += 1
-                if idx < len(details):
-                    current_answer['_variant_idx'] = idx
-                    self._save_progress(user_id, session)
-                    self._send_variant_why_question(user_id, item_text, item_rate, index, total, current_answer)
-                    return
-                current_answer.pop('_variant_idx', None)
-                current_answer['why'] = "; ".join(
-                    f"«{d['text']}»: {d.get('why', '')}" for d in details
-                )
-                session['question_step'] = 4
-                self._save_progress(user_id, session)
-                self.send_message(
-                    user_id,
-                    f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                    f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
-                    f"{self._format_answers_so_far(current_answer)}"
-                    f"❓ Вопрос 4/4:\n\n"
-                    f"· «Ты — пуп земли и пуп вселенной.\n"
-                    f"· И всё должно быть по-твоему?»\n\n"
-                    f"· Это нормально так думать 😊\n\n"
-                    f"· Напиши свои размышления\n\n"
-                    f"💾 «Сохранить и выйти»",
-                    cancel_keyboard()
-                )
-                return
-
+            # Многовариантный разбор больше сюда не заходит — процент и
+            # «почему» для каждого варианта разбираются подряд внутри
+            # step == 2 (см. выше), к шагу 3 доходит только классический
+            # путь с одним вариантом «как должно быть».
             current_answer['why'] = text
             session['question_step'] = 4
             self._save_progress(user_id, session)

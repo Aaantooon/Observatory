@@ -1131,9 +1131,10 @@ def test_stress_search_multiple_ideal_variants_stay_visible_before_percent_split
 
 def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant():
     """По просьбе пользователя: если вариантов «как должно быть» несколько,
-    процент реальности и «почему» спрашиваются ОТДЕЛЬНО по каждому, а не
-    одним общим числом/объяснением на все сразу — и всё доходит до
-    result_data (для наблюдателя и статистики на сайте)."""
+    для КАЖДОГО варианта подряд спрашиваются процент реальности И «почему»
+    (сразу друг за другом, пока процент не забылся) — а уже потом переход
+    к следующему варианту, а не сначала все проценты, потом все «почему».
+    Всё доходит до result_data (для наблюдателя и статистики на сайте)."""
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
     ex.handle_message(UID, "Шутят надо мной 10")
@@ -1145,46 +1146,45 @@ def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant
     ex.handle_message(UID, "понимают моё настроение")
     ex.handle_message(UID, "➡️ Продолжить")
 
-    # Часть 2: процент по каждому варианту отдельно (без явного "вариант
-    # N/M" в тексте — видно по списку, у кого ещё нет процента)
+    # Вариант 1: процент, сразу за ним «почему» — про тот же вариант
     ex.handle_message(UID, "60")  # % для "надо мной не шутят"
-    assert "надо мной не шутят» — 60%" in vk.last_message
-    assert "шутят когда я сам захочу" in vk.last_message
-    ex.handle_message(UID, "70")  # % для "шутят когда я сам захочу"
-    assert "шутят когда я сам захочу» — 70%" in vk.last_message
-    assert "понимают моё настроение" in vk.last_message
-    ex.handle_message(UID, "80")  # % для "понимают моё настроение"
-
-    session = ex.user_sessions[UID]
-    current_answer = session["answers"][-1]
-    assert session["question_step"] == 3
-    assert current_answer["ideal_details"] == [
-        {"text": "надо мной не шутят", "percent": 60},
-        {"text": "шутят когда я сам захочу", "percent": 70},
-        {"text": "понимают моё настроение", "percent": 80},
-    ]
-    assert current_answer["percent"] == 70, "Общий процент — среднее по всем вариантам"
-    # Часть 3: «почему» по каждому варианту отдельно, начиная с первого
     assert "вариант 1/3" in vk.last_message.lower()
     assert "60%" in vk.last_message
+    assert ex.user_sessions[UID]["question_step"] == 2, "Ещё внутри цикла по вариантам"
 
-    ex.handle_message(UID, "Почему1")
+    ex.handle_message(UID, "Почему1")  # почему для варианта 1 -> переходим к варианту 2
+
+    # Вариант 2: процент, потом «почему»
+    assert "шутят когда я сам захочу" in vk.last_message
+    session = ex.user_sessions[UID]
+    current_answer = session["answers"][-1]
+    assert current_answer["ideal_details"][0] == {
+        "text": "надо мной не шутят", "percent": 60, "why": "Почему1",
+    }, "Вариант 1 должен быть полностью разобран (и процент, и почему) до перехода к варианту 2"
+
+    ex.handle_message(UID, "70")  # % для "шутят когда я сам захочу"
     assert "вариант 2/3" in vk.last_message.lower()
     assert "70%" in vk.last_message
-    ex.handle_message(UID, "Почему2")
+    ex.handle_message(UID, "Почему2")  # почему для варианта 2 -> переходим к варианту 3
+
+    # Вариант 3: процент, потом «почему»
+    assert "понимают моё настроение" in vk.last_message
+    ex.handle_message(UID, "80")  # % для "понимают моё настроение"
     assert "вариант 3/3" in vk.last_message.lower()
     assert "80%" in vk.last_message
-    ex.handle_message(UID, "Почему3")
+    ex.handle_message(UID, "Почему3")  # почему для варианта 3 -> все разобраны, Вопрос 4/4
 
     session = ex.user_sessions[UID]
     current_answer = session["answers"][-1]
     assert session["question_step"] == 4, "После разбора всех вариантов — переход к Вопросу 4/4"
     assert "_variant_idx" not in current_answer, "Служебный курсор не должен оставаться в записи"
+    assert "_variant_phase" not in current_answer, "Служебный курсор не должен оставаться в записи"
     assert current_answer["ideal_details"] == [
         {"text": "надо мной не шутят", "percent": 60, "why": "Почему1"},
         {"text": "шутят когда я сам захочу", "percent": 70, "why": "Почему2"},
         {"text": "понимают моё настроение", "percent": 80, "why": "Почему3"},
     ]
+    assert current_answer["percent"] == 70, "Общий процент — среднее по всем вариантам"
     assert "Вопрос 4/4" in vk.last_message
 
     ex.handle_message(UID, "Рефлексия")
@@ -1209,6 +1209,41 @@ def test_stress_search_multiple_ideal_variants_percent_and_why_asked_per_variant
         {"text": "понимают моё настроение", "percent": 80, "why": "Почему3"},
     ]
     assert "_variant_idx" not in analysis
+
+
+def test_stress_search_multi_variant_loop_survives_restart_mid_why():
+    """Обрыв процесса ровно посреди цикла по вариантам (процент варианта 2
+    уже дан, «почему» варианта 2 — ещё нет) не должен сбить ни текущий
+    вариант, ни фазу (процент/почему) — resume должен продолжить ровно
+    с того места."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Шутят надо мной 10")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "надо мной не шутят")
+    ex.handle_message(UID, "шутят когда я сам захочу")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "60")       # % вариант 1 -> почему вариант 1
+    ex.handle_message(UID, "Почему1")  # почему вариант 1 -> % вариант 2
+    ex.handle_message(UID, "70")       # % вариант 2 -> ждём почему варианта 2
+
+    ex2, vk2, _ = make(StressSearchExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    ex2.handle_message(UID, "Продолжить ✅")
+
+    assert "вариант 2/2" in vk.last_message.lower()
+    assert "70%" in vk.last_message
+
+    ex2.handle_message(UID, "Почему2")
+    session = ex2.user_sessions[UID]
+    current_answer = session["answers"][-1]
+    assert session["question_step"] == 4
+    assert current_answer["ideal_details"] == [
+        {"text": "надо мной не шутят", "percent": 60, "why": "Почему1"},
+        {"text": "шутят когда я сам захочу", "percent": 70, "why": "Почему2"},
+    ]
 
 
 # ---------------------------------------------------------------------------
