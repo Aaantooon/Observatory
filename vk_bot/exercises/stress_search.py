@@ -164,6 +164,16 @@ class StressSearchExercise:
             return ""
         return "📝 Твои ответы:\n" + "\n".join(lines) + "\n\n"
 
+    def _format_pending_variants(self, variants):
+        """Показывает ВСЕ варианты, написанные на экране подтверждения
+        Вопроса 1 (пока не нажали «Продолжить») — не только последний.
+        Человек может передумать и переписать несколько раз подряд, и
+        должен видеть все свои попытки, а не только самую свежую."""
+        if not variants:
+            return ""
+        lines = "\n".join(f"· {self._item_text_for_display(v)}" for v in variants)
+        return f"📝 Твои варианты:\n{lines}\n\n"
+
     def _build_narrative_summary(self, current_answer, item_text, item_rate, index, total):
         """После вопроса 4/4 — вместо сухого списка «Твои ответы» собирает
         те же данные в связный разбор (по формулировке психолога) и сразу
@@ -949,6 +959,7 @@ class StressSearchExercise:
             if text_lower in CONTINUE_TEXTS:
                 session.pop('_confirm_ideal', None)
                 current_answer['ideal'] = session.pop('_pending_ideal', text)
+                session.pop('_pending_ideal_variants', None)
                 session['question_step'] = 2
                 self._save_progress(user_id, session)
 
@@ -968,11 +979,13 @@ class StressSearchExercise:
                 return
 
             # Передумал — не нужна отдельная кнопка «Нет»: любой другой текст
-            # просто заменяет черновик, и то же самое подтверждение
-            # показывается заново уже с новым вариантом. Раньше здесь были
-            # две кнопки («Да, дальше» / «Нет, буду писать») — по просьбе
-            # пользователя оставили одну «➡️ Продолжить».
+            # добавляется как ещё один вариант, а не заменяет предыдущий —
+            # человек видит ВСЕ свои попытки, пока не нажмёт «Продолжить»
+            # (по просьбе пользователя: раньше показывался только последний
+            # вариант). Коммитится в итоге тоже последний написанный.
             session['_pending_ideal'] = text
+            variants = session.setdefault('_pending_ideal_variants', [])
+            variants.append(text)
             self.send_message(
                 user_id,
                 f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
@@ -980,7 +993,7 @@ class StressSearchExercise:
                 f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
                 f"рассматриваешь фонариком.\n"
                 f"Вот ты пришёл, и там: «{item_text}».\n\n"
-                f"{self._format_answers_so_far({'ideal': text})}"
+                f"{self._format_pending_variants(variants)}"
                 f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
                 f"это противоположность — и именно так должно быть? Когда готов — жми "
                 f"«➡️ Продолжить».",
@@ -990,6 +1003,7 @@ class StressSearchExercise:
 
         if step == 1:
             session['_pending_ideal'] = text
+            session['_pending_ideal_variants'] = [text]
             session['_confirm_ideal'] = True
 
             self.send_message(
@@ -999,7 +1013,7 @@ class StressSearchExercise:
                 f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
                 f"рассматриваешь фонариком.\n"
                 f"Вот ты пришёл, и там: «{item_text}».\n\n"
-                f"{self._format_answers_so_far({'ideal': text})}"
+                f"{self._format_pending_variants(session['_pending_ideal_variants'])}"
                 f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
                 f"это противоположность — и именно так должно быть? Когда готов — жми "
                 f"«➡️ Продолжить».",

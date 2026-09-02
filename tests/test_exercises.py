@@ -1018,9 +1018,10 @@ def test_stress_search_question1_confirmation_yes_advances():
 
 def test_stress_search_question1_can_retype_before_continuing():
     """На экране подтверждения не нужна отдельная кнопка «Нет» — если
-    передумал, можно просто написать другой вариант ещё раз. Черновик
-    обновится и экран покажет именно последний написанный текст, а не
-    список всех попыток; «Продолжить» зафиксирует последний вариант."""
+    передумал, можно просто написать другой вариант ещё раз. Все написанные
+    варианты видны на экране, пока не нажата «Продолжить» (по просьбе
+    пользователя: должен видеть всё, что написал в моменте); «Продолжить»
+    фиксирует именно последний вариант."""
     ex, vk, api = make(StressSearchExercise)
     ex.start(UID)
     ex.handle_message(UID, "Опоздание 8")
@@ -1032,11 +1033,13 @@ def test_stress_search_question1_can_retype_before_continuing():
     session = ex.user_sessions[UID]
     assert session["question_step"] == 1, "Всё ещё на подтверждении, шаг не продвинулся"
     assert session.get("_pending_ideal") == "Пунктуальность"
+    assert session.get("_pending_ideal_variants") == ["Плохой вариант", "Пунктуальность"]
     assert "Пунктуальность" in vk.last_message
-    assert "Плохой вариант" not in vk.last_message, "Старые попытки не должны копиться на экране"
+    assert "Плохой вариант" in vk.last_message, "Все попытки должны быть видны, пока не нажата «Продолжить»"
 
     ex.handle_message(UID, "➡️ Продолжить")
     assert ex.user_sessions[UID]["answers"][-1]["ideal"] == "Пунктуальность"
+    assert "_pending_ideal_variants" not in ex.user_sessions[UID], "Черновик вариантов должен очищаться после подтверждения"
 
 
 # ---------------------------------------------------------------------------
