@@ -153,7 +153,7 @@ class StressSearchExercise:
         образа, чтобы не приходилось листать переписку выше."""
         lines = []
         if current_answer.get('ideal'):
-            lines.append(f"· Как, по-твоему, должно быть: {self._item_text_for_display(current_answer['ideal'])}")
+            lines.append(f"· Как, по-твоему, должно быть ещё: {self._item_text_for_display(current_answer['ideal'])}?")
         if 'percent' in current_answer:
             lines.append(f"· Реалистичность: {current_answer['percent']}%")
         if current_answer.get('why'):
