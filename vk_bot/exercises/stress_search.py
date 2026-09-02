@@ -68,6 +68,36 @@ class StressSearchExercise:
             or len(self._completed_answers(session)) >= MIN_ANALYZED_TO_FINISH_EARLY
         )
 
+    def _items_finish_hint(self, count):
+        """Строка-подсказка про условие досрочного завершения в части 1
+        (сбор образов) — показывается всегда, чтобы человек видел, сколько
+        ещё нужно записать, а не просто внезапно увидел новую кнопку."""
+        if count >= MIN_ITEMS_TO_FINISH_EARLY:
+            return (
+                f"· Записано уже {count} — можно сразу «✅ Завершить и отправить», не разбирая\n"
+            )
+        remaining = MIN_ITEMS_TO_FINISH_EARLY - count
+        return (
+            f"🔒 «✅ Завершить и отправить» откроется после {MIN_ITEMS_TO_FINISH_EARLY} "
+            f"записанных (сейчас {count}, ещё {remaining})\n"
+        )
+
+    def _analyzed_finish_hint(self, analyzed):
+        """То же самое, но для части 2 (разбор) — условие считается по
+        числу полностью разобранных образов, а не записанных."""
+        if analyzed >= MIN_ANALYZED_TO_FINISH_EARLY:
+            return (
+                f"✅ «Завершить и отправить» — разобрано уже {analyzed}, этого достаточно, "
+                f"можно отправить наблюдателю на проверку прямо сейчас, остальное разбирать "
+                f"не обязательно\n"
+            )
+        remaining = MIN_ANALYZED_TO_FINISH_EARLY - analyzed
+        return (
+            f"🔒 «✅ Завершить и отправить» откроется после разбора "
+            f"{MIN_ANALYZED_TO_FINISH_EARLY} образов (сейчас разобрано {analyzed}, ещё "
+            f"{remaining})\n"
+        )
+
     def _score_emoji(self, score):
         """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""
         if not isinstance(score, (int, float)):
@@ -314,24 +344,30 @@ class StressSearchExercise:
     def _send_intro(self, user_id):
         self.send_message(
             user_id,
-            "🎯 ПОИСК СТРЕССА\n\n"
-            "🌫️ Пиши источники стресса, пока не наберётся 100 пунктов: что раздражает, что выводит "
-            "из себя и забирает энергию. Оценивай каждый от 1 до 10.\n\n"
-            "🧠 После 100 пунктов ты начнёшь замечать стресс автоматически, ещё до того как он "
-            "успеет накопиться — в этом и цель.\n\n"
-            "📖 Стресс = Прогноз ⚡ Реальность\n\n"
-            "📌 Формат: причина + оценка, например «Работа 8».\n"
-            "💡 Можно списком — по пункту на строке, или всё в одну строку (тогда каждая оценка "
-            "закрывает фразу перед собой):\n"
-            "«Рецепт не выходит 8 вода не фильтруется 7 шум мешает думать 6»\n\n"
-            f"🩺 Не обязательно ждать всех 100 — появится возможность отправить наблюдателю "
-            f"на проверку раньше, любым из двух путей: как только запишешь "
-            f"{MIN_ITEMS_TO_FINISH_EARLY} образов («✅ Завершить и отправить» прямо здесь, "
-            f"без разбора), или как только разберёшь {MIN_ANALYZED_TO_FINISH_EARLY} из них "
-            f"в части 2 — не дожидаясь конца.\n\n"
+            "🎯 ОХОТА НА СТРЕСС\n\n"
+            "Туман. Фонарик. Карта. Дорога.\n\n"
+            "Ты идёшь сквозь туман. В руке — фонарик. Он выхватывает из темноты только то, что "
+            "прямо перед тобой. Всё остальное — скрыто. Прямо как твой стресс: ты его не видишь, "
+            "пока не направишь свет.\n\n"
+            "🎯 Задача: выгрузи 100 триггеров — всё, что раздражает, бесит, высасывает энергию. "
+            "Каждый пункт — шаг по дороге. Оцени от 1 (ерунда) до 10 (атомный взрыв).\n\n"
+            "📖 Формула: Стресс = Прогноз ⚡ Реальность. Чем больше разрыв — тем ярче свет, тем "
+            "виднее препятствие.\n\n"
+            "🧠 Цель: после 100 пунктов туман рассеется. Ты начнёшь замечать стресс автоматически "
+            "— ещё до того, как он ударит. Это и есть твоя карта.\n\n"
+            "📌 Формат (на выбор):\n"
+            "· списком: «Работа 8»\n"
+            "· строкой: «работа 8 пробки 6 шум 7»\n\n"
+            f"🩺 Отправить на проверку можно раньше 100:\n"
+            f"✅ Часть 1. {MIN_ITEMS_TO_FINISH_EARLY} пунктов — отправляй без разбора "
+            f"(фонарик только зажёгся).\n"
+            f"✅ Часть 2. Разобрал {MIN_ANALYZED_TO_FINISH_EARLY} пункта — глубокая проработка "
+            f"(осветил путь).\n\n"
             f"{self._get_separator()}\n"
             "➡️ «Продолжить» — к разбору, когда наберёшь все образы\n"
-            "💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля",
+            "💾 «Сохранить и начать заново» — сохранить карту и начать путь заново\n"
+            "🏆 Достижение засчитывается только после полного прохождения пути — всех 100 пунктов.\n\n"
+            "Зажги фонарик. Пиши первый пункт. Дорога ждёт.",
             exercise_keyboard()
         )
 
@@ -412,17 +448,13 @@ class StressSearchExercise:
             count = len(session.get('items', []))
             progress = self._get_progress_bar(count, target=100)
             can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
-            finish_line = (
-                f"· Записано уже {count} — можно сразу «✅ Завершить и отправить», не разбирая\n"
-                if can_finish else ""
-            )
             self.send_message(
                 user_id,
                 "🔦 ПРОДОЛЖАЕМ ПУТЬ\n\n"
                 f"· Уже записано: {count} образов\n"
                 f"· {progress}\n\n"
                 "🕯️ Пиши следующий образ, а когда закончишь — жми «Продолжить».\n"
-                f"{finish_line}",
+                f"{self._items_finish_hint(count)}",
                 exercise_keyboard(can_finish)
             )
         elif phase == 'analysis':
@@ -545,11 +577,6 @@ class StressSearchExercise:
             return
 
         can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
-        finish_line = (
-            f"· Записано уже {count} — если не хочешь разбирать в части 2, можно сразу "
-            f"«✅ Завершить и отправить» наблюдателю на проверку\n"
-            if can_finish else ""
-        )
         self.send_message(
             user_id,
             f"🔦 ОБРАЗ #{count}\n\n"
@@ -559,7 +586,7 @@ class StressSearchExercise:
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
             f"· Пиши следующий образ, а когда закончишь — жми «Продолжить»\n"
-            f"{finish_line}",
+            f"{self._items_finish_hint(count)}",
             exercise_keyboard(can_finish)
         )
 
@@ -647,15 +674,17 @@ class StressSearchExercise:
         # Помимо обрезки текста каждого образа — ограничиваем и число строк,
         # реально показанных в подтверждении: одним сообщением можно
         # вставить очень длинный список, и даже при обрезке каждой строки
-        # десятки строк всё равно легко перевалят за лимит VK.
-        MAX_LISTED = 30
+        # десятки строк всё равно легко перевалят за лимит VK. Заодно и
+        # само сообщение не превращается в простыню — свет фонарика
+        # выхватывает только первые шаги, остальное растворяется в тумане.
+        MAX_LISTED = 10
         shown_items = parsed_items[:MAX_LISTED]
         listed = "\n".join(
             f"{i + 1}. {self._score_emoji(rate)} «{self._item_text_for_display(item_text)}» — {rate}/10"
             for i, (item_text, rate) in enumerate(shown_items)
         )
         if len(parsed_items) > MAX_LISTED:
-            listed += f"\n… и ещё {len(parsed_items) - MAX_LISTED}"
+            listed += f"\n🌫️ …и ещё {len(parsed_items) - MAX_LISTED} растворились в тумане"
 
         message = (
             f"✅ Добавлено образов: {len(parsed_items)}\n"
@@ -678,13 +707,9 @@ class StressSearchExercise:
         can_finish = count >= MIN_ITEMS_TO_FINISH_EARLY
         message += (
             f"\n{self._get_separator()}\n"
-            "· Пиши следующий образ (можно сразу списком) — а когда закончишь, жми «Продолжить»"
+            "· Пиши следующий образ (можно сразу списком) — а когда закончишь, жми «Продолжить»\n"
+            f"{self._items_finish_hint(count)}"
         )
-        if can_finish:
-            message += (
-                f"\n· Записано уже {count} — если не хочешь разбирать в части 2, можно сразу "
-                f"«✅ Завершить и отправить» наблюдателю на проверку"
-            )
 
         self.send_message(user_id, message, exercise_keyboard(can_finish))
         self._save_progress(user_id, session)
@@ -1042,16 +1067,11 @@ class StressSearchExercise:
                 self._save_progress(user_id, session)
                 analyzed = len(self._completed_answers(session))
                 can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
-                finish_line = (
-                    f"✅ «Завершить и отправить» — разобрано уже {analyzed}, этого достаточно, "
-                    f"можно отправить наблюдателю на проверку прямо сейчас, остальное разбирать не обязательно\n"
-                    if can_finish else ""
-                )
                 self.send_message(
                     user_id,
                     f"{self._get_separator()}\n"
                     f"➡️ «Продолжить» — к следующему образу\n"
-                    f"{finish_line}"
+                    f"{self._analyzed_finish_hint(analyzed)}"
                     f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
                     f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
                     exercise_keyboard(can_finish)
