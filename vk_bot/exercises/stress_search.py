@@ -107,6 +107,24 @@ class StressSearchExercise:
             f"{remaining})\n"
         )
 
+    def _send_between_items_prompt(self, user_id, session):
+        """Экран паузы между образами (после поздравления с новой оценкой,
+        перед переходом к следующему) — вынесено отдельным методом, чтобы
+        показывать его и сразу после разбора образа, и при восстановлении
+        сессии (resume), если пользователь вышел именно на этой паузе
+        (см. _between_items в _save_progress/_load_progress)."""
+        analyzed = len(self._completed_answers(session))
+        can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
+        self.send_message(
+            user_id,
+            f"{self._get_separator()}\n"
+            f"➡️ «Продолжить» — к следующему образу\n"
+            f"{self._analyzed_finish_hint(analyzed)}"
+            f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
+            f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
+            exercise_keyboard(can_finish)
+        )
+
     def _stress_split_line(self, session):
         """Постоянная строка-счётчик по всей записанной карте (не только по
         показанным в подтверждении пунктам): сколько образов уже сами по
@@ -206,6 +224,26 @@ class StressSearchExercise:
             "· шутят, когда я сам захочу\n"
             "· шутят, когда у меня хорошее настроение\n"
             "· понимают, когда у меня хорошее настроение\n\n"
+        )
+
+    def _send_confirm_ideal_screen(self, user_id, item_text, item_rate, index, total, variants):
+        """Экран подтверждения Вопроса 1 («Ещё есть дороги?») — показывает
+        все написанные варианты «как должно быть» и ждёт «➡️ Продолжить».
+        Используется и при первом вводе, и при повторном переписывании, и
+        при восстановлении сессии (resume) ровно на этом экране."""
+        self.send_message(
+            user_id,
+            f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
+            f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
+            f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
+            f"рассматриваешь фонариком.\n"
+            f"Вот ты пришёл, и там: «{item_text}».\n\n"
+            f"{self._get_variants_example()}"
+            f"{self._format_pending_variants(variants)}"
+            f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
+            f"это противоположность — и именно так должно быть? Когда готов — жми "
+            f"«➡️ Продолжить».",
+            simple_continue_keyboard()
         )
 
     def _format_pending_variants(self, variants):
@@ -356,6 +394,19 @@ class StressSearchExercise:
             'answers': session.get('answers', []),
             'current_item': session.get('current_item', {})
         }
+        # Черновик экрана подтверждения Вопроса 1 (варианты «как должно
+        # быть», написанные, но ещё не зафиксированные «➡️ Продолжить») и
+        # пауза между образами — сохраняются отдельно, чтобы не потеряться
+        # молча, если сессия оборвётся (краш процесса) именно в этот момент,
+        # и чтобы resume честно показал тот же экран, а не перескакивал
+        # через него (см. _load_progress / _restore_progress).
+        if session.get('_confirm_ideal'):
+            data['confirm_ideal_draft'] = {
+                'pending_ideal': session.get('_pending_ideal'),
+                'pending_ideal_variants': session.get('_pending_ideal_variants'),
+            }
+        if session.get('_between_items'):
+            data['between_items'] = True
         self.api.save_progress(user_id, 'stress_search', data)
 
     def _progress_unavailable_notice(self, user_id):
@@ -375,7 +426,7 @@ class StressSearchExercise:
             self._progress_unavailable_notice(user_id)
         if progress and progress.get('exists'):
             data = progress.get('data', {})
-            return {
+            result = {
                 'items': data.get('items', []),
                 'phase': data.get('phase', 'collecting'),
                 'question_index': data.get('question_index', 0),
@@ -383,6 +434,14 @@ class StressSearchExercise:
                 'answers': data.get('answers', []),
                 'current_item': data.get('current_item', {})
             }
+            draft = data.get('confirm_ideal_draft')
+            if draft:
+                result['_confirm_ideal'] = True
+                result['_pending_ideal'] = draft.get('pending_ideal')
+                result['_pending_ideal_variants'] = draft.get('pending_ideal_variants')
+            if data.get('between_items'):
+                result['_between_items'] = True
+            return result
         return None
 
     def _delete_progress(self, user_id):
@@ -1071,6 +1130,24 @@ class StressSearchExercise:
         answers = session.get('answers', [])
         current_answer = answers[-1] if answers else {}
 
+        if session.get('_between_items'):
+            # Пауза между образами (после новой оценки, до перехода к
+            # следующему) — если сессия оборвалась именно здесь, resume
+            # должен снова показать эту паузу, а не перескакивать сразу к
+            # Вопросу 1/4 следующего образа.
+            self._send_between_items_prompt(user_id, session)
+            return
+
+        if step == 1 and session.get('_confirm_ideal'):
+            # Обрыв ровно на экране подтверждения Вопроса 1 (варианты «как
+            # должно быть» ещё не зафиксированы «➡️ Продолжить») — черновик
+            # сохранён отдельно (см. _load_progress), показываем тот же
+            # экран, а не чистый Вопрос 1/4 (иначе написанные варианты
+            # выглядели бы потерянными).
+            variants = session.get('_pending_ideal_variants') or []
+            self._send_confirm_ideal_screen(user_id, item_text, item_rate, index, total, variants)
+            return
+
         if step == 1:
             self._send_question1(user_id, item_text, item_rate, index, total)
         elif step == 2:
@@ -1084,6 +1161,8 @@ class StressSearchExercise:
                 f"{self._format_answers_so_far(current_answer)}"
                 f"❓ Вопрос 2/4:\n"
                 f"· На сколько процентов это реально?\n"
+                f"· Это твой прогноз — насколько ты сам считаешь и думаешь, "
+                f"что так на самом деле есть в мире.\n"
                 f"· Напиши число от 0 до 100\n\n"
                 f"💾 «Сохранить и выйти»",
                 cancel_keyboard()
@@ -1248,40 +1327,20 @@ class StressSearchExercise:
             session['_pending_ideal'] = text
             variants = session.setdefault('_pending_ideal_variants', [])
             variants.append(text)
-            self.send_message(
-                user_id,
-                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
-                f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
-                f"рассматриваешь фонариком.\n"
-                f"Вот ты пришёл, и там: «{item_text}».\n\n"
-                f"{self._get_variants_example()}"
-                f"{self._format_pending_variants(variants)}"
-                f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
-                f"это противоположность — и именно так должно быть? Когда готов — жми "
-                f"«➡️ Продолжить».",
-                simple_continue_keyboard()
-            )
+            # Сохраняем черновик сразу — если сессия оборвётся ровно на этом
+            # экране (краш процесса), написанные варианты не потеряются
+            # молча (см. _save_progress/_load_progress).
+            self._save_progress(user_id, session)
+            self._send_confirm_ideal_screen(user_id, item_text, item_rate, index, total, variants)
             return
 
         if step == 1:
             session['_pending_ideal'] = text
             session['_pending_ideal_variants'] = [text]
             session['_confirm_ideal'] = True
-
-            self.send_message(
-                user_id,
-                f"🔦 ОБРАЗ {index + 1}/{total}\n\n"
-                f"📌 {self._score_emoji(item_rate)} «{item_text}» — {item_rate}/10\n\n"
-                f"🧭 Это твоя точка старта — образ стресса, который ты сейчас "
-                f"рассматриваешь фонариком.\n"
-                f"Вот ты пришёл, и там: «{item_text}».\n\n"
-                f"{self._get_variants_example()}"
-                f"{self._format_pending_variants(session['_pending_ideal_variants'])}"
-                f"❓ Ещё есть дороги? Не спеши, подумай — важно заметить все. Уверен, что "
-                f"это противоположность — и именно так должно быть? Когда готов — жми "
-                f"«➡️ Продолжить».",
-                simple_continue_keyboard()
+            self._save_progress(user_id, session)
+            self._send_confirm_ideal_screen(
+                user_id, item_text, item_rate, index, total, session['_pending_ideal_variants']
             )
 
         elif step == 2:
@@ -1439,17 +1498,7 @@ class StressSearchExercise:
             else:
                 session['_between_items'] = True
                 self._save_progress(user_id, session)
-                analyzed = len(self._completed_answers(session))
-                can_finish = analyzed >= MIN_ANALYZED_TO_FINISH_EARLY
-                self.send_message(
-                    user_id,
-                    f"{self._get_separator()}\n"
-                    f"➡️ «Продолжить» — к следующему образу\n"
-                    f"{self._analyzed_finish_hint(analyzed)}"
-                    f"💾 «Сохранить и начать заново» — сохранить как есть и начать с нуля\n"
-                    f"💾 «Сохранить и выйти» — сохранить и вернуться позже",
-                    exercise_keyboard(can_finish)
-                )
+                self._send_between_items_prompt(user_id, session)
 
     def _finish_exercise(self, user_id, session):
         result_data = {

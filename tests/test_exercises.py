@@ -1309,6 +1309,85 @@ def test_stress_search_edit_item_reflected_in_finish_result_data():
 
 
 # ---------------------------------------------------------------------------
+# Устойчивость к обрыву сессии (эмуляция рестарта процесса — новый
+# экземпляр упражнения с тем же api, память self.user_sessions потеряна)
+# ровно на «неудобных» экранах: подтверждение Вопроса 1 и пауза между
+# образами. Найдено адверсариальным ревью — раньше в этих двух случаях
+# resume либо терял написанные варианты, либо перескакивал через экран.
+# ---------------------------------------------------------------------------
+
+def test_stress_search_confirm_ideal_draft_survives_restart():
+    """Если процесс бота перезапустится ровно на экране подтверждения
+    Вопроса 1 (варианты ещё не зафиксированы «➡️ Продолжить») — написанные
+    варианты не должны потеряться при возврате."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "Плохой вариант")
+    ex.handle_message(UID, "Пунктуальность")  # 2 варианта в черновике, не подтверждено
+
+    # эмулируем рестарт процесса: новый экземпляр, тот же api (= тот же
+    # сохранённый прогресс), но session-память ex.user_sessions недоступна
+    ex2, vk2, _ = make(StressSearchExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    ex2.handle_message(UID, "Продолжить ✅")  # подтверждаем resume-промпт
+
+    session = ex2.user_sessions[UID]
+    assert session.get("_confirm_ideal") is True
+    assert session.get("_pending_ideal_variants") == ["Плохой вариант", "Пунктуальность"]
+    assert "Пунктуальность" in vk.last_message
+    assert "Плохой вариант" in vk.last_message, "Оба варианта должны быть видны после восстановления"
+
+
+def test_stress_search_between_items_pause_survives_restart():
+    """Если процесс перезапустится ровно на паузе между образами (после
+    поздравления с новой оценкой) — resume должен снова показать эту
+    паузу с кнопками, а не сразу перескочить к следующему образу."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Работа 8")
+    ex.handle_message(UID, "Семья 5")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    _stress_do_item(ex, "Идеал 1", 80, "Почему 1", "Рефлексия 1", 5)
+
+    assert ex.user_sessions[UID]["_between_items"] is True
+
+    ex2, vk2, _ = make(StressSearchExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    ex2.handle_message(UID, "Продолжить ✅")
+
+    session = ex2.user_sessions[UID]
+    assert session.get("_between_items") is True
+    assert len(session["answers"]) == 1, "Новая запись для образа 2 ещё не должна была создаться"
+    assert "к следующему образу" in vk.last_message
+
+
+def test_stress_search_resume_question2_single_variant_shows_forecast_hint():
+    """Косметическая нестыковка, найденная ревью: экран Вопроса 2/4 при
+    обычном показе объясняет, что процент — это прогноз пользователя;
+    при resume это пояснение должно быть тем же, а не короче."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Опоздание 8")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "➡️ Далее")
+    ex.handle_message(UID, "Пунктуальность")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> Вопрос 2/4
+
+    ex2, vk2, _ = make(StressSearchExercise)
+    ex2.vk, ex2.api = ex.vk, api
+    ex2.start(UID)
+    ex2.handle_message(UID, "Продолжить ✅")
+
+    assert "Это твой прогноз" in vk.last_message
+
+
+# ---------------------------------------------------------------------------
 # "Сохранить и выйти" (CANCEL_TEXTS) — прогресс сохраняется, сессия
 # закрывается, при повторном входе появляется resume-промпт
 # ---------------------------------------------------------------------------
