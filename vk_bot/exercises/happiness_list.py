@@ -66,11 +66,13 @@ class HappinessListExercise(BaseExercise):
             user_id,
             "✨ СПИСОК СЧАСТЬЯ\n\n"
             "Давай вспомним, что приносит тебе радость.\n\n"
-            "📝 Пиши по пунктам, что тебя радует, и ставь оценку от 1 до 10.\n"
+            "📝 Пиши, что тебя радует, и ставь оценку от 1 до 10 — можно по одному пункту, "
+            "можно сразу несколько (каждый с новой строки или все в одну — как удобнее), "
+            "всё запомнится.\n"
             "Например:\n"
-            "· Кофе утром — 8\n"
-            "· Прогулка в парке — 9\n"
-            "· Общение с друзьями — 10\n\n"
+            "· Кофе утром 8\n"
+            "· Прогулка в парке 9\n"
+            "· Общение с друзьями 10\n\n"
             f"Нужно набрать до {MAX_EXERCISE_ITEMS} пунктов.\n"
             "Ты можешь завершить в любой момент — я сохраню прогресс.\n\n"
             "✏️ Напиши первый пункт и оценку:",
@@ -141,13 +143,156 @@ class HappinessListExercise(BaseExercise):
         if session.get('phase') == 'collecting':
             self._handle_item(user_id, text, session)
 
+    def _parse_happiness_line(self, line):
+        """Разбирает одну строку вида «Текст — 8» или «Текст 8» в (текст,
+        оценка). Возвращает None, если строка не подходит под формат."""
+        cleaned = line.strip(' \t;,.-—•·')
+        if not cleaned:
+            return None
+
+        parts = cleaned.rsplit(' ', 1)
+        if len(parts) != 2 or not parts[1].isdigit():
+            return None
+
+        score = int(parts[1])
+        if not (1 <= score <= 10):
+            return None
+
+        item_text = parts[0].strip().rstrip('-—–').strip()
+        if not item_text:
+            return None
+
+        return item_text, score
+
+    def _split_happiness_lines(self, text):
+        """Разбивает вставленный текст на отдельные пункты — по переносам
+        строк (человек присылает сразу список, каждый пункт со своей
+        строки, «по пунктам»)."""
+        items = []
+        invalid = []
+        for raw_line in text.split('\n'):
+            line = raw_line.strip()
+            if not line:
+                continue
+            parsed = self._parse_happiness_line(line)
+            if parsed:
+                items.append(parsed)
+            else:
+                invalid.append(line)
+        return items, invalid
+
+    def _tokenize_happiness_items(self, text):
+        """Разбирает ОДНУ строку вида «Фраза N Фраза N Фраза N …» без
+        переносов — каждая оценка 1-10 закрывает фразу перед собой и
+        открывает следующую. Так распознаётся список, вставленный сплошным
+        текстом «в строчку», а не по пунктам. Возвращает (список пар
+        (текст, оценка), остаток текста после последней найденной оценки,
+        если он не пуст)."""
+        buffer = []
+        items = []
+        for tok in text.split():
+            cleaned = tok.strip(' \t;,.-—•·')
+            if cleaned.isdigit() and 1 <= int(cleaned) <= 10 and buffer:
+                phrase = ' '.join(buffer).strip(' \t;,.-—•·')
+                if phrase:
+                    items.append((phrase, int(cleaned)))
+                buffer = []
+            else:
+                buffer.append(tok)
+        leftover = ' '.join(buffer).strip()
+        return items, leftover
+
     def _handle_item(self, user_id, text, session):
+        # Можно писать и по пунктам (каждый на своей строке), и в строчку
+        # (все подряд, оценка закрывает предыдущую фразу) — оба варианта
+        # добавляют сразу несколько пунктов, ничего не теряя.
+        if '\n' in text.strip():
+            self._handle_multiline_items(user_id, text, session)
+            return
+
+        tokenized_items, leftover = self._tokenize_happiness_items(text)
+        if len(tokenized_items) >= 2:
+            note = None
+            if leftover:
+                note = f"Не смог разобрать хвост «{leftover}» — пришли отдельно в формате «Что радует 9»."
+            self._add_happiness_items(user_id, session, tokenized_items, note=note)
+            return
+
+        self._handle_single_item(user_id, text, session)
+
+    def _handle_multiline_items(self, user_id, text, session):
+        parsed_items, invalid_lines = self._split_happiness_lines(text)
+
+        if not parsed_items:
+            self.send_message(
+                user_id,
+                "❌ Не смог распознать ни одной строки.\n"
+                "· Нужно на каждой строке: Что радует 9 (слово + пробел + оценка)\n"
+                "· Пример: Кофе утром 8",
+                exercise_keyboard()
+            )
+            return
+
+        note = None
+        if invalid_lines:
+            note = f"Не распознал {len(invalid_lines)} строк(и) — пришли их отдельно в формате «Что радует 9»."
+
+        self._add_happiness_items(user_id, session, parsed_items, note=note)
+
+    def _add_happiness_items(self, user_id, session, parsed_items, note=None):
+        """Добавляет несколько распознанных (текст, оценка) пар сразу —
+        используется и для списка по пунктам, и для строки-вперемешку без
+        переносов. Одним сообщением подтверждает все добавленные пункты."""
+        for item_text, score in parsed_items:
+            session['items'].append({'text': item_text, 'score': score})
+
+        self.save_progress(user_id, {'items': session['items']})
+
+        count = len(session['items'])
+        progress = self._get_progress_bar(count, target=MAX_EXERCISE_ITEMS)
+        milestone = self._milestone_line(count, target=MAX_EXERCISE_ITEMS)
+        milestone_text = f"{milestone}\n" if milestone else ""
+
+        MAX_LISTED = 10
+        shown_items = parsed_items[:MAX_LISTED]
+        listed = "\n".join(
+            f"{i + 1}. {self._score_emoji(score)} «{self._item_text_for_display(item_text)}» — {score}/10"
+            for i, (item_text, score) in enumerate(shown_items)
+        )
+        if len(parsed_items) > MAX_LISTED:
+            listed += f"\n…и ещё {len(parsed_items) - MAX_LISTED} — уже в списке, ниже общий счёт"
+
+        note_text = f"\n\n⚠️ {note}" if note else ""
+
+        if count >= MAX_EXERCISE_ITEMS:
+            self.send_message(
+                user_id,
+                f"🎉 Отлично! Ты собрал {count} пунктов счастья!\n"
+                f"{listed}\n"
+                f"{progress}{note_text}\n\n"
+                "Нажми «➡️ Продолжить», чтобы сохранить результат.",
+                exercise_keyboard()
+            )
+            return
+
+        self.send_message(
+            user_id,
+            f"✅ Добавлено пунктов: {len(parsed_items)}\n"
+            f"{listed}\n\n"
+            f"{progress}\n"
+            f"{milestone_text}"
+            f"Всего: {count}/{MAX_EXERCISE_ITEMS}{note_text}\n\n"
+            "Пиши следующий пункт (можно сразу списком), а когда закончишь — жми «➡️ Продолжить»",
+            exercise_keyboard()
+        )
+
+    def _handle_single_item(self, user_id, text, session):
         parts = text.rsplit(' ', 1)
         if len(parts) != 2 or not parts[1].isdigit():
             self.send_message(
                 user_id,
-                "❌ Формат: Что радует — 9 (число от 1 до 10)\n"
-                "Пример: Кофе утром — 8",
+                "❌ Формат: Что радует 9 (число от 1 до 10)\n"
+                "Пример: Кофе утром 8",
                 exercise_keyboard()
             )
             return
@@ -167,7 +312,7 @@ class HappinessListExercise(BaseExercise):
         # Убираем висящее тире/дефис на конце, чтобы не дублировалось.
         item_text = parts[0].strip().rstrip('-—–').strip()
         session['items'].append({'text': item_text, 'score': score})
-        
+
         self.save_progress(user_id, {'items': session['items']})
 
         count = len(session['items'])
@@ -190,7 +335,7 @@ class HappinessListExercise(BaseExercise):
                 f"{progress}\n"
                 f"{milestone_text}\n"
                 f"📌 {self._score_emoji(score)} {item_text} — {score}/10\n\n"
-                "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
+                "Пиши следующий пункт (можно сразу списком), а когда закончишь — жми «➡️ Продолжить»",
                 exercise_keyboard()
             )
 
