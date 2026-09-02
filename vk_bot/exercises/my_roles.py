@@ -518,9 +518,19 @@ class MyRolesExercise(BaseExercise):
         session['last_analysis_date'] = self._today_str()
 
     def _send_daily_limit_message(self, user_id, session):
+        summary = ""
+        results = session.get('analysis_results') or []
+        if results:
+            last = results[-1]
+            summary = (
+                f"🎭 Роль: {last.get('role', '')}\n"
+                f"🌟 Идеально: {last.get('ideal', '')}\n"
+                f"💀 Ужасно: {last.get('terrible', '')}\n\n"
+            )
         self.send_message(
             user_id,
-            "✅ Сегодняшняя роль уже разобрана — большего за день и не нужно.\n"
+            "✅ Сегодняшняя роль уже разобрана — большего за день и не нужно.\n\n"
+            f"{summary}"
             "🌙 Возвращайся завтра, чтобы продолжить разбор следующей роли.\n\n"
             "⚠️ Если очень хочется — можно продолжить и сегодня, но учти: это снижает "
             "эффективность упражнения, каждую роль лучше \"проживать\" в свой день.\n\n"
