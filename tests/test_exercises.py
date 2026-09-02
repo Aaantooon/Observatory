@@ -1794,6 +1794,63 @@ def test_conscious_choice_save_and_restart_failure_keeps_progress_instead_of_wip
     assert ex.user_sessions[UID]["must_items"] == []
 
 
+def test_my_roles_save_and_restart_failure_keeps_roles_instead_of_wiping_them():
+    """Тот же баг, что уже был найден и исправлен в conscious_choice/diary/
+    stop_technique/happiness_list: my_roles._handle_save_and_start_over()
+    вызывал _finish() и следом БЕЗУСЛОВНО _handle_start_over(), не проверяя
+    результат save_result() — при сбое сохранения _finish() уже сохранял
+    записанные роли как черновик прогресса, но _handle_start_over() тут же
+    удалял этот черновик и открывал пустую сессию, теряя все роли насовсем,
+    хотя пользователю только что сказали "ничего не потеряно"."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Повар")  # social_roles += 1
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["social_roles"] == ["Повар"]
+    assert api.progress_store.get((UID, "my_roles"), {}).get("social_roles") == ["Повар"]
+
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["social_roles"] == []
+
+
+def test_stress_search_save_and_restart_failure_keeps_items_instead_of_wiping_them():
+    """Тот же баг: stress_search._handle_save_and_start_over() вызывал
+    _finish_exercise() и следом БЕЗУСЛОВНО _handle_start_over(), не проверяя
+    результат — при сбое сохранения _finish_exercise() уже сохранял
+    записанную карту стресса как черновик прогресса, но _handle_start_over()
+    тут же удалял этот черновик и открывал пустую сессию, теряя всю карту
+    насовсем. Воспроизводится только когда набрано достаточно образов для
+    досрочного завершения (MIN_ITEMS_TO_FINISH_EARLY) — иначе
+    _handle_save_and_start_over вообще не вызывает _finish_exercise."""
+    ex, vk, api = make(StressSearchExercise)
+    ex.start(UID)
+    for i in range(10):
+        ex.handle_message(UID, f"Причина{i} 5")
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    assert UID in ex.user_sessions
+    assert len(ex.user_sessions[UID]["items"]) == 10
+
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["items"] == []
+
+
 def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
     """Шаги 4 и 7 — экраны-подтверждения без поля ввода: если пользователь
     вместо «Продолжить» пришлёт текст, шаг не должен смениться."""

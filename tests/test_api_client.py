@@ -151,14 +151,13 @@ def test_save_result_network_exception_returns_falsy_not_fake_success():
 
 
 # ---------------------------------------------------------------------------
-# GET-методы со списком-по-умолчанию (get_exercises, get_user_results,
-# get_notifications, get_due_notifications, get_pending_admin_comments)
+# GET-методы со списком-по-умолчанию (get_exercises, get_due_notifications,
+# get_pending_admin_comments)
 # ---------------------------------------------------------------------------
 
 def test_get_methods_return_empty_list_on_failure_or_exception():
     cases = [
         ("get_exercises", ()),
-        ("get_user_results", ("123",)),
         ("get_due_notifications", ()),
         ("get_pending_admin_comments", ()),
     ]
@@ -183,6 +182,21 @@ def test_get_notifications_returns_none_on_failure_not_empty_list():
 
     client, fake = make(FakeResponse(200, []))
     assert client.get_notifications("123") == []
+
+
+def test_get_user_results_returns_none_on_failure_not_empty_list():
+    """Как и get_notifications: get_user_results должен отличать "историю
+    правда пустую" ([]) от "не смогли узнать" (None) — иначе handlers.py
+    (show_results/show_review_menu/show_daily_plan/handle_send_review)
+    показывает "путь пуст" вместо честного сообщения о временном сбое."""
+    client, fake = make(FakeResponse(500, None))
+    assert client.get_user_results("123") is None
+
+    client, fake = make(RuntimeError("упало"))
+    assert client.get_user_results("123") is None
+
+    client, fake = make(FakeResponse(200, []))
+    assert client.get_user_results("123") == []
 
 
 def test_get_user_results_success_returns_server_json():

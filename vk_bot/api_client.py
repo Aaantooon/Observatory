@@ -81,13 +81,19 @@ class APIClient:
             return None
 
     def get_user_results(self, vk_id):
+        # Возвращает None при сбое запроса и [] только когда результатов
+        # действительно нет — раньше оба случая маскировались под [], и
+        # вызывающий код показывал "у тебя пока пусто" даже при временном
+        # сбое сети/сервера, хотя история на самом деле могла быть непустой
+        # (см. get_notifications — тот же исправленный паттерн).
         try:
             response = requests.get(f"{self.base_url}/results/?vk_id={vk_id}", headers=self.headers, timeout=5)
             if response.status_code == 200:
                 return response.json()
-        except:
-            pass
-        return []
+            logger.warning(f"API Error getting user results: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Get user results error: {e}")
+        return None
 
     def update_streak(self, user_vk_id):
         try:

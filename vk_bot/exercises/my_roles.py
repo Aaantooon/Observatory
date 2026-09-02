@@ -54,7 +54,14 @@ class MyRolesExercise(BaseExercise):
         self._show_instruction(user_id, session)
 
     def _handle_save_and_start_over(self, user_id, session):
-        self._finish(user_id, session)
+        if not self._finish(user_id, session):
+            # _finish() уже сообщил о сбое и сохранил текущие ответы как
+            # черновик прогресса (см. _report_save_failure) — раньше сюда
+            # заходили безусловно и следующей же строкой удаляли этот самый
+            # черновик и открывали пустую сессию, теряя все записанные роли
+            # насовсем, хотя пользователю только что сказали "ничего не
+            # потеряно" (см. stop_technique.py/diary.py — тот же паттерн).
+            return
         self._handle_start_over(user_id)
 
     def start(self, user_id):
@@ -665,7 +672,7 @@ class MyRolesExercise(BaseExercise):
         
         if not self.save_result(user_id, result):
             self._report_save_failure(user_id, session, main_menu())
-            return
+            return False
         self.delete_progress(user_id)
         self.end_session(user_id)
 
@@ -681,8 +688,9 @@ class MyRolesExercise(BaseExercise):
             "· Ты не делаешь зла\n"
             "· Это уже хорошо ✨"
         )
-        
+
         self.send_message(user_id, message, main_menu())
+        return True
 
     def _handle_cancel(self, user_id, session):
         self.save_progress(user_id, session)

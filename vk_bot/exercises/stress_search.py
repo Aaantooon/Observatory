@@ -463,7 +463,15 @@ class StressSearchExercise:
 
     def _handle_save_and_start_over(self, user_id, session):
         if self._can_finish_early(session):
-            self._finish_exercise(user_id, session)
+            if not self._finish_exercise(user_id, session):
+                # _finish_exercise() уже сообщил о сбое и сохранил текущие
+                # ответы как черновик прогресса — раньше сюда заходили
+                # безусловно и следующей же строкой удаляли этот самый
+                # черновик и открывали пустую сессию, теряя всю записанную
+                # карту стресса насовсем, хотя пользователю только что
+                # сказали "ничего не потеряно" (см. stop_technique.py —
+                # тот же паттерн).
+                return
         elif session.get('items') or session.get('answers'):
             # Есть что-то записанное, но недостаточно, чтобы это имело смысл
             # отправлять наблюдателю — не отправляем «пустышку», честно
@@ -1553,7 +1561,7 @@ class StressSearchExercise:
                 "Попробуй завершить ещё раз через минуту.",
                 main_menu()
             )
-            return
+            return False
 
         self._delete_progress(user_id)
 
@@ -1617,3 +1625,5 @@ class StressSearchExercise:
 
         if user_id in self.user_sessions:
             del self.user_sessions[user_id]
+
+        return True

@@ -41,8 +41,24 @@ CRISIS_RESOURCES_MESSAGE = (
 
 class BotHandlers:
 
+    def _results_unavailable_notice(self, user_id):
+        """Вызывать, когда get_user_results() вернул None — это сбой
+        сети/сервера, а НЕ «упражнений действительно нет». Раньше оба
+        случая маскировались под [] (см. api_client.py::get_user_results),
+        и при временном сбое пользователю показывалось «путь пуст»/«нет
+        пройденных упражнений», хотя история могла быть совсем не пустой."""
+        self.send_message(
+            user_id,
+            "⚠️ Не получилось загрузить твою историю — сервис временно "
+            "недоступен. Попробуй зайти чуть позже.",
+            main_menu()
+        )
+
     def show_review_menu(self, user_id):
         results = self.api.get_user_results(user_id)
+        if results is None:
+            self._results_unavailable_notice(user_id)
+            return
         if not results:
             self.send_message(user_id, "🌫️ У тебя пока нет пройденных упражнений.", main_menu())
             return
@@ -65,7 +81,10 @@ class BotHandlers:
         self.send_message(user_id, message, back_keyboard())
 
     def show_daily_plan(self, user_id):
-        results = self.api.get_user_results(user_id) or []
+        results = self.api.get_user_results(user_id)
+        if results is None:
+            self._results_unavailable_notice(user_id)
+            return
         self.send_message(user_id, format_daily_plan_message(results), main_menu())
 
     def handle_send_review(self, user_id, text_clean):
@@ -77,6 +96,10 @@ class BotHandlers:
         if "назад" in text_clean:
             self.user_states[user_id] = 'main'
             self.send_message(user_id, "🔦 Возвращаемся.", main_menu())
+            return
+
+        if results is None:
+            self._results_unavailable_notice(user_id)
             return
 
         ex_type = exercises_map.get(text_clean[0]) if text_clean and text_clean[0].isdigit() else None
@@ -234,7 +257,7 @@ class BotHandlers:
                 'selecting_exercise', 'selecting_stress_part',
                 'reminders', 'sending_review',
             )
-            menu_entry_words = ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история', 'план']
+            menu_entry_words = ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история', 'мой план на день']
             if text_lower not in menu_entry_words and not in_menu_flow:
                 comment_sent = self.api.add_comment(active_review['id'], text, is_admin=False)
                 if comment_sent:
@@ -458,7 +481,10 @@ class BotHandlers:
 
     def show_results(self, user_id):
         results = self.api.get_user_results(user_id)
-        
+        if results is None:
+            self._results_unavailable_notice(user_id)
+            return
+
         streak_info = self.api.update_streak(user_id)
         streak_text = ""
         if streak_info:
@@ -540,6 +566,10 @@ class BotHandlers:
 
     def show_full_history(self, user_id):
         results = self.api.get_user_results(user_id)
+
+        if results is None:
+            self._results_unavailable_notice(user_id)
+            return
 
         if not results:
             self.send_message(

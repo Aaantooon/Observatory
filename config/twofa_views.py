@@ -16,6 +16,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 from django_otp import login as otp_login
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
@@ -87,7 +88,15 @@ def setup_2fa(request):
 @login_required
 @staff_member_required
 def verify_2fa(request):
+    # Проверяем ?next= через url_has_allowed_host_and_scheme (тот же паттерн,
+    # что уже используется в myapp/vk_id_auth.py::vk_login_start) — иначе
+    # можно подсунуть внешний адрес и увести staff-пользователя после
+    # прохождения 2FA на чужой сайт (открытый редирект).
     next_url = request.GET.get('next') or request.POST.get('next') or '/admin/'
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        next_url = '/admin/'
 
     if request.user.is_verified():
         return redirect(next_url)

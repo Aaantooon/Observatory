@@ -129,6 +129,14 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def due(self, request):
         """Получить уведомления, которые пора отправить"""
         now = timezone.now()
+        # Напоминания 'daily' задаются пользователем как локальное время
+        # (например "08:00" по Москве, см. vk_bot/notifications.py) — но
+        # now.strftime()/.date() без localtime() работает в UTC (settings.py:
+        # USE_TZ=True, TIME_ZONE='Europe/Moscow', а timezone.now() всегда
+        # возвращает UTC-aware datetime независимо от TIME_ZONE). Без этой
+        # поправки все дневные напоминания срабатывали на 3 часа позже, чем
+        # настроил пользователь.
+        local_now = timezone.localtime(now)
         result = []
         for n in Notification.objects.filter(is_active=True):
             if n.schedule_type == 'once':
@@ -137,8 +145,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
                     result.append(n)
             elif n.schedule_type == 'daily':
                 target_time = n.schedule_data.get('time', '')
-                current_time = now.strftime('%H:%M')
-                already_today = n.last_sent and n.last_sent.date() == now.date()
+                current_time = local_now.strftime('%H:%M')
+                already_today = n.last_sent and timezone.localtime(n.last_sent).date() == local_now.date()
                 if current_time == target_time and not already_today:
                     result.append(n)
         serializer = self.get_serializer(result, many=True)
@@ -219,12 +227,17 @@ class ResultViewSet(viewsets.ModelViewSet):
         
         try:
             user = User.objects.get(vk_id=str(user_vk_id))
-            
-            # Ищем упражнение по типу
-            exercise = Exercise.objects.filter(type=exercise_type).first()
-            if not exercise:
-                exercise = Exercise.objects.create(title=exercise_type, type=exercise_type)
-            
+
+            # Ищем упражнение по типу. get_or_create вместо filter().first()
+            # + create() — при filter+create два параллельных запроса на ещё
+            # не существующий exercise_type (например, первый результат
+            # нового упражнения от двух разных пользователей одновременно)
+            # оба видели пустой filter() и оба создавали свою запись Exercise
+            # с одинаковым type — задваивая справочник упражнений.
+            exercise, _ = Exercise.objects.get_or_create(
+                type=exercise_type, defaults={'title': exercise_type}
+            )
+
             result = Result.objects.create(
                 user=user,
                 exercise=exercise,
