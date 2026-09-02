@@ -23,7 +23,12 @@ class APIClient:
             if response.status_code == 200:
                 users = response.json()
                 if users and len(users) > 0:
-                    return users
+                    # GET-найден отдаёт список (queryset), POST-создание
+                    # ниже — единственный dict. Раньше это расхождение было
+                    # безобидным только потому, что вызывающий код
+                    # (handlers.py) не читал возврат — но любой будущий
+                    # caller словил бы код, работающий только "иногда".
+                    return users[0]
             
             response = requests.post(
                 f"{self.base_url}/users/",
@@ -166,19 +171,6 @@ class APIClient:
             logger.error(f"Send review error: {e}")
         return None
 
-    def get_review_status(self, user_vk_id, exercise_type):
-        try:
-            response = requests.get(
-                f"{self.base_url}/admin/review/status/?vk_id={user_vk_id}&exercise_type={exercise_type}",
-                headers=self.headers,
-                timeout=5
-            )
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            logger.error(f"Get review status error: {e}")
-        return None
-
     def add_comment(self, review_id, comment, is_admin=False):
         try:
             response = requests.post(
@@ -194,20 +186,6 @@ class APIClient:
                 return response.json()
         except Exception as e:
             logger.error(f"Add comment error: {e}")
-        return None
-
-    def complete_review(self, review_id, approved):
-        try:
-            response = requests.post(
-                f"{self.base_url}/admin/review/{review_id}/complete/",
-                json={"approved": approved},
-                headers=self.headers,
-                timeout=5
-            )
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            logger.error(f"Complete review error: {e}")
         return None
 
     def create_notification(self, user_vk_id, exercise_type, schedule_type, schedule_data):
@@ -230,6 +208,10 @@ class APIClient:
         return None
 
     def get_notifications(self, user_vk_id):
+        # Возвращает None при сбое запроса и [] только когда напоминаний
+        # действительно нет — раньше оба случая маскировались под [], и
+        # вызывающий код (handlers.py, "Отключить напоминания") не мог
+        # отличить "нечего отключать" от "не смогли узнать".
         try:
             response = requests.get(
                 f"{self.base_url}/notifications/?vk_id={user_vk_id}",
@@ -238,9 +220,10 @@ class APIClient:
             )
             if response.status_code == 200:
                 return response.json()
+            logger.warning(f"API Error getting notifications: {response.status_code}")
         except Exception as e:
             logger.error(f"Get notifications error: {e}")
-        return []
+        return None
 
     def delete_notification(self, notification_id):
         try:
@@ -254,19 +237,6 @@ class APIClient:
         except Exception as e:
             logger.error(f"Delete notification error: {e}")
         return False
-
-    def get_user_stats(self, user_vk_id):
-        try:
-            response = requests.get(
-                f"{self.base_url}/users/stats/?vk_id={user_vk_id}",
-                headers=self.headers,
-                timeout=5
-            )
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            logger.error(f"Get stats error: {e}")
-        return None
 
     def get_due_notifications(self):
         try:
@@ -293,8 +263,6 @@ class APIClient:
         except Exception as e:
             logger.error(f"Mark notification sent error: {e}")
         return False
-    def get_review_status_by_type(self, vk_id, exercise_type):
-        return self.get_review_status(vk_id, exercise_type)
 
     def get_pending_admin_comments(self):
         try:

@@ -33,7 +33,28 @@ class StopTechniqueExercise(BaseExercise):
 
     def _handle_save_and_start_over(self, user_id, session):
         prev_count = session.get('count', 0)
-        self._finish(user_id, session)
+
+        has_content = bool(
+            session.get('thoughts') or session.get('feelings') or session.get('wants')
+        )
+        if not has_content:
+            # Нечего сохранять — ни на один из 3 вопросов ещё не ответили.
+            # Раньше это всё равно уходило в _finish() и создавало на
+            # сервере пустую "остановку" без единого слова.
+            self.send_message(
+                user_id,
+                "🌫️ Пока нечего сохранять — ты ещё не ответил(а) ни на один вопрос. Начинаем заново."
+            )
+            self._handle_start_over(user_id, prev_count)
+            return
+
+        if not self._finish(user_id, session):
+            # _finish() уже сообщил о сбое и сохранил текущие ответы как
+            # черновик прогресса (см. _report_save_failure) — раньше сюда
+            # заходили безусловно и следующей же строкой удаляли этот самый
+            # черновик и открывали пустую сессию, теряя ответы насовсем.
+            return
+
         self._handle_start_over(user_id, prev_count)
 
     def start(self, user_id):
@@ -301,7 +322,7 @@ class StopTechniqueExercise(BaseExercise):
 
         if not self.save_result(user_id, result):
             self._report_save_failure(user_id, session, main_menu())
-            return
+            return False
         self.delete_progress(user_id)
         self.end_session(user_id)
 
@@ -319,6 +340,7 @@ class StopTechniqueExercise(BaseExercise):
             f"Нажми «Упражнения» → «Стоп-техника»",
             main_menu()
         )
+        return True
 
     def _handle_cancel(self, user_id, session):
         self.save_progress(user_id, session)

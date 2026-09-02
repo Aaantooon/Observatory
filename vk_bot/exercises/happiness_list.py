@@ -19,11 +19,22 @@ class HappinessListExercise(BaseExercise):
 
     def _handle_save_and_start_over(self, user_id, session):
         items = session.get('items', [])
-        if items:
-            self._finish(user_id, session)
-        else:
+        if not items:
             self.delete_progress(user_id)
             self.end_session(user_id)
+            self._start_new(user_id)
+            return
+
+        if not self._finish(user_id, session):
+            # _finish() уже сообщил о сбое и сохранил items как черновик
+            # прогресса (см. _report_save_failure) — раньше отсюда всё
+            # равно безусловно уходили в _start_new(), которая тут же
+            # подменяла текущую сессию пустой ({'items': []}). Пользователю
+            # говорили "ничего не потеряно", а его список пунктов в тот же
+            # момент пропадал из вида — восстановить его можно было, только
+            # выйдя из упражнения и зайдя заново.
+            return
+
         self._start_new(user_id)
 
     def start(self, user_id):
@@ -195,7 +206,7 @@ class HappinessListExercise(BaseExercise):
 
         if not self.save_result(user_id, {'items': items, 'total': len(items)}):
             self._report_save_failure(user_id, session, main_menu())
-            return
+            return False
         self.delete_progress(user_id)
         self.end_session(user_id)
 
@@ -212,6 +223,7 @@ class HappinessListExercise(BaseExercise):
             ) + "\n\n✨ Сохраняй этот список и дополняй!",
             main_menu()
         )
+        return True
 
     def _handle_cancel(self, user_id, session):
         self.save_progress(user_id, {'items': session.get('items', [])})

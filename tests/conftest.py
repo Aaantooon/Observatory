@@ -60,6 +60,10 @@ class FakeAPIClient:
         self.fail_save_progress = False
         self.fail_mark_notification_sent = False
         self.fail_mark_comment_sent = False
+        self.fail_get_notifications = False  # имитирует сетевой сбой -> None (не [])
+        self.fail_delete_notification_ids = set()  # id, для которых delete_notification вернёт False
+        self.fail_send_for_review = False
+        self.fail_add_comment = False
 
     def save_progress(self, user_vk_id, exercise_type, data):
         if self.fail_save_progress:
@@ -113,11 +117,15 @@ class FakeAPIClient:
 
     def add_comment(self, review_id, comment, is_admin=False):
         self.comments.append({"review_id": review_id, "comment": comment, "is_admin": is_admin})
+        if self.fail_add_comment:
+            return None
         return {"status": "ok"}
 
     def send_for_review(self, user_vk_id, exercise_type, data):
         entry = {"user_vk_id": user_vk_id, "exercise_type": exercise_type, "data": data}
         self.sent_for_review.append(entry)
+        if self.fail_send_for_review:
+            return None
         return {"review_id": len(self.sent_for_review)}
 
     def get_due_notifications(self):
@@ -147,6 +155,10 @@ class FakeAPIClient:
         return {"id": len(self.created_notifications), **entry}
 
     def get_notifications(self, user_vk_id):
+        # None имитирует сетевой сбой (см. api_client.get_notifications) —
+        # отличается от [] (у пользователя реально нет напоминаний).
+        if self.fail_get_notifications:
+            return None
         return [
             {"id": n_id, **n}
             for n_id, n in enumerate(self.created_notifications, start=1)
@@ -154,6 +166,8 @@ class FakeAPIClient:
         ]
 
     def delete_notification(self, notification_id):
+        if notification_id in self.fail_delete_notification_ids:
+            return False
         self.deleted_notification_ids.add(notification_id)
         return True
 
@@ -167,6 +181,12 @@ class FakeNotificationSystem:
         self.api = api_client
         self.running = False
         self.reminder_calls = []  # list of ("continue", user_id, kind, hours) / ("diary", user_id, time_str)
+        # В реальном NotificationSystem оба метода — тонкая обёртка над
+        # api.create_notification, который возвращает dict при успехе и None
+        # при сбое сети/сервера (см. api_client.py). По умолчанию имитируем
+        # успех (truthy) — handlers.py теперь проверяет результат перед тем,
+        # как подтвердить пользователю, что напоминание настроено.
+        self.fail_reminder_setup = False
 
     def start(self):
         self.running = True
@@ -176,8 +196,12 @@ class FakeNotificationSystem:
 
     def setup_reminder_to_continue(self, user_id, kind, hours=1):
         self.reminder_calls.append(("continue", user_id, kind, hours))
-        return None
+        if self.fail_reminder_setup:
+            return None
+        return {"id": len(self.reminder_calls), "exercise_type": kind}
 
     def setup_diary_reminder(self, user_id, time_str):
         self.reminder_calls.append(("diary", user_id, time_str))
-        return None
+        if self.fail_reminder_setup:
+            return None
+        return {"id": len(self.reminder_calls), "exercise_type": "diary"}

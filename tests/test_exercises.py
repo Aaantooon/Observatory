@@ -1180,16 +1180,19 @@ def test_conscious_choice_full_flow_to_finish():
     ex.handle_message(UID, "➡️ Продолжить")        # пропускаем минусы -> step 9 (другие плюсы)
     assert ex.user_sessions[UID]["step"] == 9
 
-    ex.handle_message(UID, "энергия")               # alt_plus -> step 10 -> _finish()
+    ex.handle_message(UID, "энергия")               # alt_plus -> единственный пункт разобран -> _finish()
     assert UID not in ex.user_sessions, "Упражнение должно завершиться после шага 9"
     assert len(api.results) == 1
     result = api.results[0]["result_data"]
     assert result["must_items"] == ["Кормить детей"]
-    assert result["answers"]["who_took"] == "Никто не отнял"
-    assert result["answers"]["who_greater"] == "Я сам"
-    assert "устану" in result["choice_analysis"]
-    assert "энергия" in result["alternatives"]
-    assert "—" in result["alternatives"], "Пропущенные минусы должны отметиться прочерком"
+    assert len(result["analysis"]) == 1
+    entry = result["analysis"][0]
+    assert entry["must"] == "Кормить детей"
+    assert entry["who_took"] == "Никто не отнял"
+    assert entry["who_greater"] == "Я сам"
+    assert "устану" in entry["choice_analysis"]
+    assert "энергия" in entry["alternatives"]
+    assert "—" in entry["alternatives"], "Пропущенные минусы должны отметиться прочерком"
 
 
 def test_conscious_choice_skip_all_minus_plus_via_continue():
@@ -1208,8 +1211,114 @@ def test_conscious_choice_skip_all_minus_plus_via_continue():
 
     assert UID not in ex.user_sessions, "Упражнение должно завершиться, даже если все минусы/плюсы пропущены"
     result = api.results[-1]["result_data"]
-    assert result["choice_analysis"] == "Минусы: —, Плюсы: —"
-    assert result["alternatives"] == "Минусы: —, Плюсы: —"
+    entry = result["analysis"][0]
+    assert entry["choice_analysis"] == "Минусы: —, Плюсы: —"
+    assert entry["alternatives"] == "Минусы: —, Плюсы: —"
+
+
+def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
+    """Правка (редизайн по типу stress_search): раньше глубокий разбор
+    (шаги 2-9) проходил только для ПОСЛЕДНЕГО записанного пункта — остальные
+    пункты сохранялись в must_items, но полностью выпадали из итогового
+    анализа. Теперь цикл разбора проходит по КАЖДОМУ пункту по очереди."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "Ходить на работу")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> начало разбора, пункт 1/2
+
+    session = ex.user_sessions[UID]
+    assert session["step"] == 2
+    assert session["analysis_index"] == 0
+    assert session["current_must"] == "Кормить детей"
+    assert "1/2" in vk.last_message
+
+    # разбираем пункт 1 полностью (шаги 2-9)
+    ex.handle_message(UID, "Никто не отнял")   # -> 3
+    ex.handle_message(UID, "Я сам")            # -> 4
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 5
+    ex.handle_message(UID, "устану 1")         # -> 6
+    ex.handle_message(UID, "улыбка 1")         # -> 7
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 8
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 9
+
+    # ещё не должно было завершиться — есть второй пункт
+    assert UID in ex.user_sessions
+    ex.handle_message(UID, "энергия 1")        # завершает пункт 1 -> должен начаться пункт 2
+
+    session = ex.user_sessions[UID]
+    assert UID in ex.user_sessions, "Упражнение не должно было завершиться — есть ещё пункт 2"
+    assert session["step"] == 2, "Должен был начаться разбор пункта 2 с шага 2"
+    assert session["analysis_index"] == 1
+    assert session["current_must"] == "Ходить на работу"
+    assert "2/2" in vk.last_message
+    assert len(session["analysis_results"]) == 1, "Разбор пункта 1 должен был сохраниться промежуточно"
+    # состояние предыдущего пункта не должно протекать в разбор нового
+    assert "current_answer" not in session
+
+    # разбираем пункт 2
+    ex.handle_message(UID, "Родители")         # -> 3
+    ex.handle_message(UID, "Никто")            # -> 4
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 5
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 6 (пропуск минусов)
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (пропуск плюсов)
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 8
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 9
+    ex.handle_message(UID, "энергия 2")        # завершает пункт 2 -> оба разобраны -> _finish()
+
+    assert UID not in ex.user_sessions, "После разбора ВСЕХ пунктов упражнение должно завершиться"
+    assert len(api.results) == 1
+    result = api.results[0]["result_data"]
+    assert result["must_items"] == ["Кормить детей", "Ходить на работу"]
+    assert len(result["analysis"]) == 2, "Должны быть разобраны ОБА пункта, а не только последний"
+
+    a1, a2 = result["analysis"]
+    assert a1["must"] == "Кормить детей"
+    assert a1["who_took"] == "Никто не отнял"
+    assert a1["who_greater"] == "Я сам"
+    assert "устану 1" in a1["choice_analysis"]
+    assert "энергия 1" in a1["alternatives"]
+
+    assert a2["must"] == "Ходить на работу"
+    assert a2["who_took"] == "Родители"
+    assert a2["who_greater"] == "Никто"
+    assert a2["choice_analysis"] == "Минусы: —, Плюсы: —"
+    assert "энергия 2" in a2["alternatives"]
+
+
+def test_conscious_choice_save_and_restart_with_no_items_does_not_save_empty_result():
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 0
+    assert "нечего сохранять" in vk.sent[-2]["message"].lower()
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["step"] == 1
+
+
+def test_conscious_choice_save_and_restart_failure_keeps_progress_instead_of_wiping_it():
+    """Дыра: раньше _handle_save_and_start_over вызывал _finish() и следом
+    БЕЗУСЛОВНО _handle_start_over() — даже если save_result() падал.
+    _finish() уже сохранял черновик прогресса, но _handle_start_over() тут
+    же удалял его и открывал пустую сессию, теряя весь разбор."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["must_items"] == ["Кормить детей"]
+    assert api.progress_store.get((UID, "conscious_choice"), {}).get("must_items") == ["Кормить детей"]
+
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["must_items"] == []
 
 
 def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
@@ -1281,8 +1390,14 @@ def test_my_roles_full_flow_two_step_analysis():
     assert ex.user_sessions[UID]["analysis_index"] == 1, "В тот же день вторая роль не должна начинаться"
     assert "всё равно продолжить" in vk.last_message.lower()
 
-    # новый день — роль 2 (Друг для Саши)
+    # новый день — роль 2 (Друг для Саши). Правка: первое сообщение после
+    # смены дня заново показывает роль 2 (а не тратится как псевдо-ответ на
+    # вопрос, который ещё ни разу не показывался) — реальные ответы уходят
+    # только следующими двумя сообщениями.
     ex._today_str = lambda: "2026-08-30"
+    ex.handle_message(UID, "проснулся")
+    assert ex.user_sessions[UID]["analysis_step"] == 1
+    assert "идеально" in vk.last_message.lower()
     ex.handle_message(UID, "дружба")
     ex.handle_message(UID, "ссора")
     assert ex.user_sessions[UID]["analysis_index"] == 2
@@ -1293,6 +1408,7 @@ def test_my_roles_full_flow_two_step_analysis():
 
     # ещё один новый день — роль 3 (Смелый), последняя, упражнение завершается
     ex._today_str = lambda: "2026-08-31"
+    ex.handle_message(UID, "проснулся")
     ex.handle_message(UID, "смелость")
     ex.handle_message(UID, "трусость")
     assert UID not in ex.user_sessions, "После анализа всех ролей упражнение должно завершиться"
@@ -1346,8 +1462,12 @@ def test_my_roles_daily_limit_can_be_overridden_for_one_extra_role():
 
 def test_my_roles_daily_limit_prompt_becomes_stale_after_midnight():
     """Если сообщение о лимите ещё висит на экране, а календарный день уже
-    сменился, следующий текст должен обработаться как обычный ответ, а не
-    как устаревшее напоминание про кнопки."""
+    сменился, лимит больше не действует — но правка: раньше следующее
+    сообщение (что бы в нём ни было) проглатывалось как "ответ" на вопрос
+    про идеальный сценарий следующей роли, а сама роль и вопрос к ней
+    пользователю ни разу не показывались. Теперь на такое сообщение бот
+    заново показывает роль (сообщение-триггер не тратится как псевдо-ответ),
+    и только следующий текст реально станет ответом."""
     ex, vk, api = make(MyRolesExercise)
     ex._today_str = lambda: "2026-08-31"
     ex.start(UID)
@@ -1363,9 +1483,42 @@ def test_my_roles_daily_limit_prompt_becomes_stale_after_midnight():
 
     ex._today_str = lambda: "2026-09-01"  # наступил новый день
     ex.handle_message(UID, "новый идеальный ответ")
-    assert ex.user_sessions[UID]["analysis_step"] == 2, "Должно было обработаться как ответ 'Идеально', а не как нажатие кнопки"
-    assert ex.user_sessions[UID]["current_ideal"] == "новый идеальный ответ"
     assert "_daily_limit_prompt" not in ex.user_sessions[UID]
+    assert ex.user_sessions[UID]["analysis_step"] == 1, "Роль должна была показаться заново с шага 1"
+    assert "current_ideal" not in ex.user_sessions[UID], (
+        "Триггерное сообщение не должно было засчитаться как ответ на вопрос"
+    )
+    assert "идеально" in vk.last_message.lower(), "Должен был снова показаться вопрос про идеальный сценарий"
+
+    # А вот СЛЕДУЮЩЕЕ сообщение — уже реальный ответ на заново показанный вопрос
+    ex.handle_message(UID, "настоящий идеальный ответ")
+    assert ex.user_sessions[UID]["current_ideal"] == "настоящий идеальный ответ"
+    assert ex.user_sessions[UID]["analysis_step"] == 2
+
+
+def test_my_roles_advance_text_during_analysis_does_not_get_swallowed():
+    """Правка: фаза 'analyze' ждёт только свободный текст-ответ, кнопок
+    навигации там нет — но раньше global-перехват ADVANCE_TEXTS в
+    handle_message срабатывал ДО диспетчера по фазам. Если ответ
+    пользователя на вопрос анализа случайно совпадал по тексту с одной из
+    этих кнопок (например буквально "продолжить" или "завершить"),
+    сообщение уходило в _advance_phase, где для 'analyze' нет ни одной
+    ветки — ответ молча терялся, бот не отвечал вообще ничем."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль Б")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Роль В")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> analyze, роль 1, шаг 1
+
+    before = len(vk.sent)
+    ex.handle_message(UID, "продолжить")  # текст совпадает с ADVANCE_TEXTS
+    assert len(vk.sent) == before + 1, "Сообщение не должно было потеряться без ответа"
+    assert ex.user_sessions[UID]["current_ideal"] == "продолжить"
+    assert ex.user_sessions[UID]["analysis_step"] == 2
+    assert "ужасно" in vk.last_message.lower()
 
 
 def test_my_roles_daily_limit_blocks_second_role_same_day():
@@ -1397,6 +1550,29 @@ def test_my_roles_daily_limit_blocks_second_role_same_day():
     ex.handle_message(UID, "случайный текст")
     assert ex.user_sessions[UID]["analysis_index"] == 1
     assert "current_ideal" not in ex.user_sessions[UID]
+
+
+def test_my_roles_handle_analysis_out_of_range_index_finishes_instead_of_crashing():
+    """Защитный тест на добавленный bounds-check: если analysis_index когда-либо
+    окажется за пределами all_roles (не должно случаться при нормальной
+    работе, но раньше не проверялось вообще и грозило IndexError), метод
+    должен честно завершить упражнение, а не уронить обработчик."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Роль А")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> interpersonal
+    ex.handle_message(UID, "➡️ Продолжить")   # interpersonal пуст -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> intrapersonal
+    ex.handle_message(UID, "➡️ Продолжить")   # intrapersonal пуст -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> analyze, 1 роль всего
+
+    session = ex.user_sessions[UID]
+    session['analysis_index'] = 5  # намеренно рассинхронизировано
+
+    ex._handle_analysis(UID, "любой текст", session)
+
+    assert UID not in ex.user_sessions, "Должно было честно завершиться, а не упасть"
+    assert len(api.results) == 1
 
 
 def test_my_roles_used_analysis_today_helpers():
@@ -1740,6 +1916,84 @@ def test_stop_technique_blank_text_from_sticker_does_not_advance():
     assert ex.user_sessions[UID]["phase"] == "feelings"
 
 
+def test_diary_save_and_restart_with_no_answers_does_not_save_empty_result():
+    """Гейт: «Сохранить и начать заново» на самом первом экране (ни на один
+    из 6 шагов ещё не ответили) раньше всё равно создавал на сервере
+    полностью пустую запись дневника."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 0, "Пустая запись не должна была сохраниться"
+    # sent[-2] — предупреждение; последнее сообщение — уже приглашение
+    # новой сессии из _handle_start_over
+    assert "нечего сохранять" in vk.sent[-2]["message"].lower()
+    assert UID in ex.user_sessions, "Новая сессия должна была открыться"
+    assert ex.user_sessions[UID]["phase"] == "dream"
+
+
+def test_diary_save_and_restart_failure_keeps_answers_instead_of_wiping_them():
+    """Дыра: если save_result() падает, _finish() уже сохраняет ответы как
+    черновик прогресса и честно сообщает о сбое — но раньше
+    _handle_save_and_start_over() всё равно СРАЗУ ЖЕ вызывал
+    _handle_start_over(), который удалял этот самый черновик (delete_progress)
+    и открывал пустую сессию — ответы терялись насовсем, хотя пользователю
+    сказали "ничего не потеряно"."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")  # dream -> mood, есть хоть что-то
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    # Сессия НЕ должна была сброситься — ответ "Гулял по парку" всё ещё на месте
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["dream"] == "Гулял по парку"
+    assert ex.user_sessions[UID]["phase"] == "mood"
+    # И черновик прогресса должен был реально уйти на сервер (see _report_save_failure)
+    assert api.progress_store.get((UID, "diary"), {}).get("dream") == "Гулял по парку"
+
+    # Повторная попытка той же кнопкой после того, как сервис отошёл — работает
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["phase"] == "dream", "Теперь должна была открыться новая сессия"
+
+
+def test_stop_technique_save_and_restart_with_no_answers_does_not_save_empty_result():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 0, "Пустая 'остановка' без единого ответа не должна была сохраниться"
+    assert "нечего сохранять" in vk.sent[-2]["message"].lower()
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["phase"] == "thoughts"
+
+
+def test_stop_technique_save_and_restart_failure_keeps_answers_instead_of_wiping_them():
+    ex, vk, api = make(StopTechniqueExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Думаю о работе")  # thoughts -> feelings
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["thoughts"] == "Думаю о работе"
+    assert ex.user_sessions[UID]["phase"] == "feelings"
+    assert api.progress_store.get((UID, "stop_technique"), {}).get("thoughts") == "Думаю о работе"
+
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["phase"] == "thoughts"
+
+
 def test_conscious_choice_advance_without_answer_shows_error_at_each_gated_step():
     """Шаги 1-3 обязательны (нельзя продолжить без ответа). Шаги 4-9
     (подтверждение выбора + минусы/плюсы по отдельности для "Анализа
@@ -1842,6 +2096,50 @@ def test_happiness_list_save_result_failure_is_reported_honestly():
     ex.handle_message(UID, "➡️ Продолжить")
     assert len(api.results) == 1
     assert UID not in ex.user_sessions
+
+
+def test_happiness_list_save_and_restart_failure_keeps_items_instead_of_wiping_them():
+    """Дыра: раньше «Сохранить и начать заново» с непустым списком вызывал
+    _finish() и БЕЗУСЛОВНО следом _start_new() — даже если save_result()
+    падал. _finish() уже честно сообщал о сбое и сохранял items как
+    черновик прогресса, но _start_new() тут же подменял текущую сессию
+    пустой ({'items': []}) — пользователю говорили "ничего не потеряно", а
+    его список пунктов в тот же момент пропадал из вида."""
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кофе утром — 8")
+
+    api.fail_save_result = True
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+
+    assert len(api.results) == 0
+    assert "Не получилось сохранить" in vk.last_message
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["items"] == [{"text": "Кофе утром", "score": 8}], (
+        "Список не должен был обнулиться при сбое сохранения"
+    )
+    assert api.progress_store.get((UID, "happiness_list"), {}).get("items") == [
+        {"text": "Кофе утром", "score": 8}
+    ]
+
+    # повторная попытка после восстановления сервиса должна отработать штатно
+    api.fail_save_result = False
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 1
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["items"] == [], "Теперь должна была открыться новая пустая сессия"
+
+
+def test_happiness_list_save_and_restart_with_empty_list_starts_fresh_without_saving():
+    """Ветка 'нечего сохранять' не должна ломаться отдельно от ветки со
+    сбоем — с пустым списком сразу чистый рестарт, без обращения к
+    save_result вообще."""
+    ex, vk, api = make(HappinessListExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "💾 Сохранить и начать заново")
+    assert len(api.results) == 0
+    assert UID in ex.user_sessions
+    assert ex.user_sessions[UID]["items"] == []
 
 
 def test_stress_search_save_result_failure_is_reported_honestly():
@@ -2208,13 +2506,30 @@ def test_conscious_choice_back_to_start_and_end_navigation():
     assert ex.user_sessions[UID]["step"] == 3
     assert "Текущий ответ" in vk.last_message
 
+    # «В начало» во время разбора ведёт на начало разбора ТЕКУЩЕГО пункта
+    # (шаг 2), а не откатывает к уже законченному и замороженному сбору
+    # пунктов (шаг 1) — там больше нечего редактировать.
     ex.handle_message(UID, "🏠 В начало")
-    assert ex.user_sessions[UID]["step"] == 1
+    assert ex.user_sessions[UID]["step"] == 2
 
     ex.handle_message(UID, "🏁 В конец")
     assert ex.user_sessions[UID]["step"] == 4, (
         "«В конец» должно вести на самый дальний из достигнутых шагов"
     )
+
+
+def test_conscious_choice_back_floor_is_start_of_current_item_analysis():
+    """Пол для «Назад» — шаг 2 (начало разбора текущего пункта), а не шаг 1
+    (сбор пунктов) — раньше с шага 2 «Назад» уводил обратно на уже
+    законченный и замороженный экран сбора пунктов."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "➡️ Продолжить")  # -> step 2
+
+    ex.handle_message(UID, "⬅️ Назад")
+    assert ex.user_sessions[UID]["step"] == 2, "Из шага 2 назад некуда — сбор пунктов уже заморожен"
+    assert "первый шаг" in vk.last_message
 
 
 def test_conscious_choice_back_at_step1_is_noop():

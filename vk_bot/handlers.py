@@ -89,13 +89,24 @@ class BotHandlers:
             self.send_message(user_id, "Это упражнение ещё не пройдено.", back_keyboard())
             return
 
-        self.api.send_for_review(user_id, ex_type, result.get('result_data', {}))
+        sent = self.api.send_for_review(user_id, ex_type, result.get('result_data', {}))
         self.user_states[user_id] = 'main'
-        self.send_message(
-            user_id,
-            "✅ Отправлено на проверку! Ожидай комментарий от наблюдателя.",
-            main_menu()
-        )
+        if sent:
+            self.send_message(
+                user_id,
+                "✅ Отправлено на проверку! Ожидай комментарий от наблюдателя.",
+                main_menu()
+            )
+        else:
+            # Раньше это сообщение отправлялось безусловно — если запрос
+            # к серверу падал, клиент считал, что психолог уже видит
+            # упражнение, и ждал комментарий, который никогда не придёт.
+            self.send_message(
+                user_id,
+                "⚠️ Не получилось отправить — сервис на секунду недоступен. "
+                "Попробуй ещё раз через минуту (пункт «Проверка» в меню).",
+                main_menu()
+            )
         
     def __init__(self, vk_session):
         self.vk = vk_session
@@ -206,14 +217,40 @@ class BotHandlers:
         active_review = self.api.get_active_review(user_id)
         if active_review and active_review.get('status') == 'in_review':
             text_lower = self._normalize_text(text)
-            # Пока клиент выбирает/запускает упражнение (ещё нет активной
-            # сессии — она проверяется выше), тоже не перехватываем: иначе
-            # открытый Review не даёт вообще начать новое упражнение.
+            # Пока клиент выбирает/запускает упражнение, настраивает
+            # напоминания или выбирает, что отправить на проверку (ещё нет
+            # активной сессии упражнения — она проверяется выше), тоже не
+            # перехватываем: иначе открытый Review не даёт вообще
+            # пользоваться остальным меню. Раньше сюда попадали только
+            # первые клики ('напоминания'/'проверка' в главном меню) — а
+            # любое дальнейшее нажатие ВНУТРИ этих разделов ('1 час',
+            # 'отключить', номер упражнения, 'назад' и т.д.) не входило ни
+            # в белый список, ни в in_exercise_selection, и улетало
+            # психологу как комментарий вместо того, чтобы отработать —
+            # разделы «Напоминания» и «Отправить на проверку» были
+            # фактически недоступны при открытой проверке.
             current_state = self.user_states.get(user_id)
-            in_exercise_selection = current_state in ('selecting_exercise', 'selecting_stress_part')
-            if text_lower not in ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история'] and not in_exercise_selection:
-                self.api.add_comment(active_review['id'], text, is_admin=False)
-                self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())
+            in_menu_flow = current_state in (
+                'selecting_exercise', 'selecting_stress_part',
+                'reminders', 'sending_review',
+            )
+            menu_entry_words = ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история', 'план']
+            if text_lower not in menu_entry_words and not in_menu_flow:
+                comment_sent = self.api.add_comment(active_review['id'], text, is_admin=False)
+                if comment_sent:
+                    self.send_message(user_id, "✅ Ответ отправлен наблюдателю.", main_menu())
+                else:
+                    # Это ответ клиента психологу В РАМКАХ ЖИВОЙ ПРОВЕРКИ —
+                    # самое чувствительное место в боте: раньше при сбое
+                    # запроса сообщение всё равно считалось "отправленным",
+                    # и ответ клиента терялся навсегда, а он был уверен,
+                    # что психолог его видел.
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось отправить ответ — сервис на секунду недоступен. "
+                        "Попробуй написать ещё раз через минуту.",
+                        main_menu()
+                    )
                 return
 
         if user_id not in self.user_states:
@@ -328,19 +365,70 @@ class BotHandlers:
                     main_menu()
                 )
             elif "1 час" in text_clean:
-                self.notifications.setup_reminder_to_continue(user_id, 'general', hours=1)
-                self.send_message(user_id, "✅ Напомню через 1 час.", get_reminder_keyboard())
+                result = self.notifications.setup_reminder_to_continue(user_id, 'general', hours=1)
+                if result:
+                    self.send_message(user_id, "✅ Напомню через 1 час.", get_reminder_keyboard())
+                else:
+                    # create_notification возвращает None при сбое запроса —
+                    # раньше это игнорировалось, и пользователь думал, что
+                    # напоминание настроено, хотя оно не сохранилось.
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось настроить напоминание — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        get_reminder_keyboard()
+                    )
             elif "3 часа" in text_clean:
-                self.notifications.setup_reminder_to_continue(user_id, 'general', hours=3)
-                self.send_message(user_id, "✅ Напомню через 3 часа.", get_reminder_keyboard())
+                result = self.notifications.setup_reminder_to_continue(user_id, 'general', hours=3)
+                if result:
+                    self.send_message(user_id, "✅ Напомню через 3 часа.", get_reminder_keyboard())
+                else:
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось настроить напоминание — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        get_reminder_keyboard()
+                    )
             elif "завтра утром" in text_clean:
-                self.notifications.setup_diary_reminder(user_id, "08:00")
-                self.send_message(user_id, "✅ Напомню завтра утром в 08:00.", get_reminder_keyboard())
+                result = self.notifications.setup_diary_reminder(user_id, "08:00")
+                if result:
+                    self.send_message(user_id, "✅ Напомню завтра утром в 08:00.", get_reminder_keyboard())
+                else:
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось настроить напоминание — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        get_reminder_keyboard()
+                    )
             elif "отключить" in text_clean:
-                notifications = self.api.get_notifications(user_id) or []
-                for n in notifications:
-                    self.api.delete_notification(n.get('id'))
-                self.send_message(user_id, "🔕 Напоминания отключены.", get_reminder_keyboard())
+                # get_notifications теперь возвращает None при сбое запроса и
+                # [] только когда напоминаний правда нет (см. api_client.py) —
+                # раньше оба случая маскировались под [], и сбой сети молча
+                # выглядел как «отключил», хотя ничего не удалялось.
+                notifications = self.api.get_notifications(user_id)
+                if notifications is None:
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось получить список напоминаний — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        get_reminder_keyboard()
+                    )
+                elif not notifications:
+                    self.send_message(user_id, "🔕 Активных напоминаний не найдено.", get_reminder_keyboard())
+                else:
+                    failed = 0
+                    for n in notifications:
+                        if not self.api.delete_notification(n.get('id')):
+                            failed += 1
+                    if failed == 0:
+                        self.send_message(user_id, "🔕 Напоминания отключены.", get_reminder_keyboard())
+                    else:
+                        self.send_message(
+                            user_id,
+                            f"⚠️ Не все напоминания удалось отключить ({failed} из "
+                            f"{len(notifications)} не получилось). Попробуй ещё раз через минуту.",
+                            get_reminder_keyboard()
+                        )
             else:
                 self.send_message(user_id, "⏰ Выбери настройку из кнопок.", get_reminder_keyboard())
     def show_exercises(self, user_id):

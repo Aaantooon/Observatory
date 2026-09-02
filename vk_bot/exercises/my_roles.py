@@ -225,10 +225,17 @@ class MyRolesExercise(BaseExercise):
 
         if session.get('_daily_limit_prompt'):
             if not self._used_analysis_today(session):
-                # день сменился, пока сообщение о лимите ещё висело —
-                # лимит больше не действует, обрабатываем сообщение как
-                # обычный ответ (не показываем устаревшее напоминание)
+                # День сменился, пока сообщение о лимите ещё висело — лимит
+                # больше не действует. Раньше это сообщение (что бы в нём ни
+                # было) проваливалось прямо в _handle_analysis как "ответ"
+                # на вопрос про идеальный сценарий для СЛЕДУЮЩЕЙ роли — а
+                # сама роль и вопрос к ней пользователю ни разу не
+                # показывались (он не мог знать, что отвечает не на то).
+                # Правильно — показать роль заново через _analyze_roles, а
+                # не тратить случайное сообщение как псевдо-ответ.
                 session.pop('_daily_limit_prompt', None)
+                self._analyze_roles(user_id, session)
+                return
             elif text_lower in OVERRIDE_LIMIT_TEXTS:
                 session.pop('_daily_limit_prompt', None)
                 self.save_progress(user_id, session)
@@ -242,7 +249,15 @@ class MyRolesExercise(BaseExercise):
                 )
                 return
 
-        if text_lower in ADVANCE_TEXTS:
+        # Фаза 'analyze' не понимает "Продолжить"/"Завершить" как навигацию —
+        # там всегда ждут свободный текст-ответ (идеальный/ужасный сценарий
+        # роли). Раньше ADVANCE_TEXTS перехватывался тут ДО диспетчера по
+        # фазам: если ответ пользователя случайно совпадал по тексту с одной
+        # из этих кнопок (например буквально написал «продолжить»),
+        # сообщение уходило в _handle_phase_complete → _advance_phase, где
+        # для 'analyze' нет ни одной ветки — ответ молча терялся, бот не
+        # реагировал вообще ничем.
+        if session.get('phase') != 'analyze' and text_lower in ADVANCE_TEXTS:
             self._handle_phase_complete(user_id, session)
             return
 
@@ -480,6 +495,14 @@ class MyRolesExercise(BaseExercise):
     def _handle_analysis(self, user_id, text, session):
         all_roles = self._all_roles(session)
         index = session.get('analysis_index', 0)
+        if index >= len(all_roles):
+            # Защита от IndexError — в норме сюда не должны попадать с
+            # индексом за пределами списка (см. bounds-check в
+            # _analyze_roles/_resume_analyze), но если какой-то ещё не
+            # предусмотренный путь всё же до этого доведёт, лучше честно
+            # завершить упражнение, чем уронить обработчик сообщения.
+            self._finish(user_id, session)
+            return
         role = all_roles[index]
         step = session.get('analysis_step', 1)
 

@@ -1,3 +1,4 @@
+
 """
 Тесты vk_bot/api_client.py — реального HTTP-клиента к серверу Django.
 
@@ -85,7 +86,12 @@ def test_headers_include_token_and_content_type():
 def test_get_or_create_user_returns_existing_user_without_posting():
     client, fake = make(FakeResponse(200, [{"vk_id": "123"}]))
     result = client.get_or_create_user("123", "Аня", "И")
-    assert result == [{"vk_id": "123"}]
+    # Раньше здесь возвращался сырой список (queryset) — расхождение с
+    # веткой создания ниже, которая всегда отдаёт единственный dict.
+    # Единый dict-результат защищает будущий код, читающий возврат, от
+    # "работает только иногда" в зависимости от того, был пользователь
+    # уже создан или нет.
+    assert result == {"vk_id": "123"}
     assert len(fake.calls) == 1, "Если пользователь уже найден, POST не должен уйти"
 
 
@@ -153,7 +159,6 @@ def test_get_methods_return_empty_list_on_failure_or_exception():
     cases = [
         ("get_exercises", ()),
         ("get_user_results", ("123",)),
-        ("get_notifications", ("123",)),
         ("get_due_notifications", ()),
         ("get_pending_admin_comments", ()),
     ]
@@ -165,6 +170,21 @@ def test_get_methods_return_empty_list_on_failure_or_exception():
         assert getattr(client, method_name)(*args) == [], f"{method_name}: исключение должно дать []"
 
 
+def test_get_notifications_returns_none_on_failure_not_empty_list():
+    """Отдельно от остальных GET-со-списком: get_notifications должен уметь
+    отличить "напоминаний правда нет" ([]) от "не смогли узнать" (None) —
+    handlers.py ("Отключить напоминания") иначе не может честно сообщить
+    о сбое вместо того, чтобы соврать "отключены"."""
+    client, fake = make(FakeResponse(500, None))
+    assert client.get_notifications("123") is None
+
+    client, fake = make(RuntimeError("упало"))
+    assert client.get_notifications("123") is None
+
+    client, fake = make(FakeResponse(200, []))
+    assert client.get_notifications("123") == []
+
+
 def test_get_user_results_success_returns_server_json():
     client, fake = make(FakeResponse(200, [{"exercise_type": "diary"}]))
     assert client.get_user_results("123") == [{"exercise_type": "diary"}]
@@ -172,7 +192,7 @@ def test_get_user_results_success_returns_server_json():
 
 # ---------------------------------------------------------------------------
 # GET-методы с None-по-умолчанию (get_progress, update_streak,
-# get_review_status, get_user_stats, get_active_review)
+# get_active_review)
 # ---------------------------------------------------------------------------
 
 def test_get_progress_success_and_failure():
@@ -278,19 +298,7 @@ def test_mark_comment_sent_returns_false_on_bad_status():
 
 
 # ---------------------------------------------------------------------------
-# get_review_status_by_type — просто делегирует в get_review_status
-# ---------------------------------------------------------------------------
-
-def test_get_review_status_by_type_delegates():
-    client, fake = make(FakeResponse(200, {"status": "in_review"}))
-    result = client.get_review_status_by_type("123", "diary")
-    assert result == {"status": "in_review"}
-    verb, url, kwargs = fake.calls[0]
-    assert "vk_id=123" in url and "exercise_type=diary" in url
-
-
-# ---------------------------------------------------------------------------
-# add_comment / complete_review / send_for_review — POST-методы,
+# add_comment / send_for_review — POST-методы,
 # успех и сетевая ошибка не должны ронять бота
 # ---------------------------------------------------------------------------
 
@@ -300,14 +308,6 @@ def test_add_comment_success_and_exception():
 
     client, fake = make(ConnectionError("нет сети"))
     assert client.add_comment(1, "текст") is None
-
-
-def test_complete_review_success_and_exception():
-    client, fake = make(FakeResponse(200, {"closed": True}))
-    assert client.complete_review(1, approved=True) == {"closed": True}
-
-    client, fake = make(ConnectionError("нет сети"))
-    assert client.complete_review(1, approved=True) is None
 
 
 def test_send_for_review_success_and_exception():
@@ -335,17 +335,6 @@ def test_save_progress_success_and_failure_and_exception():
     assert client.save_progress("123", "diary", {}) is None
 
 
-def test_get_user_stats_success_and_failure_and_exception():
-    client, fake = make(FakeResponse(200, {"streak": 3}))
-    assert client.get_user_stats("123") == {"streak": 3}
-
-    client, fake = make(FakeResponse(404, None))
-    assert client.get_user_stats("123") is None
-
-    client, fake = make(TimeoutError("таймаут"))
-    assert client.get_user_stats("123") is None
-
-
 def test_update_streak_network_exception_returns_none():
     client, fake = make(ConnectionError("нет сети"))
     assert client.update_streak("123") is None
@@ -354,11 +343,6 @@ def test_update_streak_network_exception_returns_none():
 def test_mark_notification_sent_network_exception_returns_false():
     client, fake = make(RuntimeError("сеть упала"))
     assert client.mark_notification_sent(1) is False
-
-
-def test_get_review_status_network_exception_returns_none():
-    client, fake = make(ConnectionError("нет сети"))
-    assert client.get_review_status("123", "diary") is None
 
 
 def test_get_active_review_network_exception_returns_none():

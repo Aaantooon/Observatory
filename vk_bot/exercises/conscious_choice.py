@@ -19,6 +19,8 @@ class ConsciousChoiceExercise(BaseExercise):
             'phase': 'must',
             'must_items': [],
             'current_must': None,
+            'analysis_index': 0,
+            'analysis_results': [],
             'step': 1,
             '_max_step': 1,
         }
@@ -40,7 +42,24 @@ class ConsciousChoiceExercise(BaseExercise):
         self._show_step(user_id, session)
 
     def _handle_save_and_start_over(self, user_id, session):
-        self._finish(user_id, session)
+        if not session.get('must_items'):
+            # Нечего сохранять — ни одного пункта ещё не записано. Раньше
+            # это всё равно уходило в _finish() и создавало на сервере
+            # пустой результат без единого пункта.
+            self.send_message(
+                user_id,
+                "🌫️ Пока нечего сохранять — ты ещё не добавил(а) ни одного пункта. Начинаем заново."
+            )
+            self._handle_start_over(user_id)
+            return
+
+        if not self._finish(user_id, session):
+            # _finish() уже сообщил о сбое и сохранил текущие ответы как
+            # черновик прогресса (см. _report_save_failure) — раньше сюда
+            # заходили безусловно и следующей же строкой удаляли этот самый
+            # черновик и открывали пустую сессию, теряя всё насовсем.
+            return
+
         self._handle_start_over(user_id)
 
     def start(self, user_id):
@@ -98,10 +117,13 @@ class ConsciousChoiceExercise(BaseExercise):
             )
         elif step == 2:
             must = session.get('current_must')
+            item_num = session.get('analysis_index', 0) + 1
+            total = len(session.get('must_items', []))
             note = self._existing_answer_note(session.get('current_answer'))
             self.send_message(
                 user_id,
                 f"{prefix}"
+                f"Разбираем пункт {item_num}/{total}\n\n"
                 f"Шаг 2: Я имею право не хотеть\n\n"
                 f"Ты написал: «{must}»\n\n"
                 f"Это ролевые ожидания.\n"
@@ -221,7 +243,6 @@ class ConsciousChoiceExercise(BaseExercise):
 
         if step == 1:
             session['must_items'].append(text)
-            session['must_index'] = len(session['must_items']) - 1
             self.save_progress(user_id, session)
             count = len(session['must_items'])
             progress = self._get_progress_bar(count, target=MAX_EXERCISE_ITEMS)
@@ -249,7 +270,7 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 2:
             session['current_answer'] = text
             session['step'] = 3
-            self._bump_max_step(session)
+   self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -304,14 +325,43 @@ class ConsciousChoiceExercise(BaseExercise):
             session['alternatives'] = self._format_pros_cons(
                 session.get('alt_minus', ''), text
             )
-            session['step'] = 10
-            self._bump_max_step(session)
+            self._complete_current_item(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
+    def _complete_current_item(self, session):
+        """Пакует разбор текущего пункта (шаги 2-9) в analysis_results и
+        решает, что дальше: перейти к разбору СЛЕДУЮЩЕГО пункта (сброс на
+        шаг 2 — как в stress_search) или, если пункты закончились, на шаг
+        10 (финиш). Раньше единственный разбор просто шёл в _finish
+        напрямую — остальные пункты списка молча оставались без анализа."""
+        session.setdefault('analysis_results', []).append({
+            'must': session.get('current_must'),
+            'who_took': session.get('current_answer'),
+            'who_greater': session.get('who_greater'),
+            'choice_analysis': session.get('choice_analysis', ''),
+            'alternatives': session.get('alternatives', ''),
+        })
+        for key in ('current_answer', 'who_greater', 'choice_minus', 'choice_plus',
+                    'choice_analysis', 'alt_minus', 'alt_plus', 'alternatives'):
+            session.pop(key, None)
+
+        session['analysis_index'] = session.get('analysis_index', 0) + 1
+        items = session.get('must_items', [])
+        if session['analysis_index'] < len(items):
+            session['current_must'] = items[session['analysis_index']]
+            session['step'] = 2
+            session['_max_step'] = 2
+        else:
+            session['step'] = 10
+
     def _handle_back(self, user_id, session):
         step = session.get('step', 1)
-        if step <= 1:
+        # Пол — 2, а не 1: с началом разбора (шаг 1 -> сбор пунктов уже
+        # завершён и заморожен, см. _handle_next) возврата в фазу сбора
+        # больше нет — там нечего редактировать, а "Назад" с первого
+        # вопроса разбора раньше уводил обратно на экран сбора пунктов.
+        if step <= 2:
             self.send_message(
                 user_id,
                 "🔙 Это первый шаг — дальше назад некуда.",
@@ -323,7 +373,11 @@ class ConsciousChoiceExercise(BaseExercise):
         self._show_step(user_id, session)
 
     def _handle_to_start(self, user_id, session):
-        session['step'] = 1
+        # На экране сбора (шаг 1) — некуда идти, там всего один шаг. В
+        # разборе — "в начало" означает начало разбора ТЕКУЩЕГО пункта
+        # (шаг 2), а не откат к уже законченному сбору пунктов.
+        step = session.get('step', 1)
+        session['step'] = 1 if step <= 1 else 2
         self.save_progress(user_id, session)
         self._show_step(user_id, session)
 
@@ -336,7 +390,8 @@ class ConsciousChoiceExercise(BaseExercise):
         step = session.get('step', 1)
 
         if step == 1:
-            if not session.get('must_items'):
+            items = session.get('must_items', [])
+            if not items:
                 self.send_message(
                     user_id,
                     "❌ Добавь хотя бы один пункт",
@@ -344,21 +399,16 @@ class ConsciousChoiceExercise(BaseExercise):
                 )
                 return
 
-            must_index = session.get('must_index', 0)
-            items = session.get('must_items', [])
-
-            if must_index >= len(items):
-                self.send_message(
-                    user_id,
-                    "✅ Все пункты записаны!\n"
-                    "Нажми «➡️ Продолжить» для следующего шага",
-                    conscious_choice_keyboard()
-                )
-                return
-
-            session['current_must'] = items[must_index]
+            # Разбор идёт по КАЖДОМУ записанному пункту по очереди (см.
+            # _complete_current_item) — раньше тут был индекс, который на
+            # практике всегда указывал на последний добавленный пункт, и
+            # разбор (шаги 2-9) проходил только для него одного, а
+            # остальные до 19 пунктов оставались собраны, но не разобраны.
+            session['analysis_index'] = 0
+            session['analysis_results'] = []
+            session['current_must'] = items[0]
             session['step'] = 2
-            self._bump_max_step(session)
+            session['_max_step'] = 2
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -409,8 +459,7 @@ class ConsciousChoiceExercise(BaseExercise):
             session['alternatives'] = self._format_pros_cons(
                 session.get('alt_minus', ''), session.get('alt_plus', '')
             )
-            session['step'] = 10
-            self._bump_max_step(session)
+            self._complete_current_item(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
@@ -487,26 +536,28 @@ class ConsciousChoiceExercise(BaseExercise):
         )
 
     def _finish(self, user_id, session):
+        # analysis — по одной записи на КАЖДЫЙ пункт из must_items (см.
+        # _complete_current_item). Раньше здесь брались current_answer/
+        # who_greater/choice_analysis/alternatives напрямую из сессии —
+        # это всегда были данные только ПОСЛЕДНЕГО разобранного пункта,
+        # остальные до 19 пунктов терялись из итогового результата.
         result = {
             'must_items': session.get('must_items', []),
-            'answers': {
-                'who_took': session.get('current_answer'),
-                'who_greater': session.get('who_greater')
-            },
-            'choice_analysis': session.get('choice_analysis', ''),
-            'alternatives': session.get('alternatives', '')
+            'analysis': session.get('analysis_results', []),
         }
 
         if not self.save_result(user_id, result):
             self._report_save_failure(user_id, session, main_menu())
-            return
+            return False
         self.delete_progress(user_id)
         self.end_session(user_id)
 
+        analyzed = len(result['analysis'])
         self.send_message(
             user_id,
             "✨ ПУТЬ ЗАВЕРШЁН\n\n"
-            "🧘 Осознанный выбор — это свобода.\n\n"
+            f"🧘 Разобрано пунктов: {analyzed}\n\n"
+            "Осознанный выбор — это свобода.\n\n"
             "· Ты имеешь право выбирать\n"
             "· Ты имеешь право не хотеть\n"
             "· Ты имеешь право делать или не делать\n\n"
@@ -517,6 +568,7 @@ class ConsciousChoiceExercise(BaseExercise):
             "✨ Береги себя ❤️",
             main_menu()
         )
+        return True
 
     def _handle_cancel(self, user_id, session):
         self.save_progress(user_id, session)

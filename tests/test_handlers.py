@@ -58,6 +58,21 @@ def test_active_review_intercepts_any_message_as_comment():
     assert UID not in bh.my_roles.user_sessions
 
 
+def test_active_review_comment_failure_reports_honestly():
+    """Правка: это ответ клиента психологу в рамках живой проверки — раньше
+    при сбое add_comment сообщение всё равно считалось "отправленным", и
+    ответ клиента терялся навсегда, а он был уверен, что психолог его видел."""
+    bh, vk, api = make_handlers()
+    api.set_active_review(UID, review_id=42, status="in_review")
+    api.fail_add_comment = True
+
+    bh.handle_message(UID, "1", "Тест", "Тестов")
+
+    assert len(api.comments) == 1
+    assert "Ответ отправлен наблюдателю" not in vk.last_message
+    assert "Не получилось" in vk.last_message
+
+
 def test_active_review_allows_main_menu_words_through():
     """Слова главного меню ('упражнения', 'мои результаты' и т.п.) НЕ
     перехватываются в комментарий — по ним можно выйти из блокировки."""
@@ -499,6 +514,22 @@ def test_send_review_valid_selection_sends_for_review():
     assert bh.user_states[UID] == "main"
 
 
+def test_send_review_failure_reports_honestly():
+    """Правка: раньше "Отправлено на проверку!" показывалось безусловно —
+    если send_for_review падал на сервере (None), клиент считал, что
+    психолог уже видит упражнение, и ждал комментарий, который никогда не
+    придёт."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.results = [{"user_vk_id": UID, "exercise_type": "diary", "result_data": {"mood": "ок"}}]
+    api.fail_send_for_review = True
+    bh.handle_message(UID, "Проверка", "Аня", "И")
+    bh.handle_message(UID, "5", "Аня", "И")
+    assert "Отправлено на проверку" not in vk.last_message
+    assert "Не получилось" in vk.last_message
+    assert bh.user_states[UID] == "main"
+
+
 # ---------------------------------------------------------------------------
 # state == 'reminders' — настройка напоминаний
 # ---------------------------------------------------------------------------
@@ -556,12 +587,69 @@ def test_reminders_disable():
 
 def test_reminders_disable_with_none_survives():
     """Если у пользователя нет ни одного напоминания, get_notifications
-    может вернуть пусто — обработчик не должен падать."""
+    возвращает [] (не None) — обработчик не должен падать и не должен
+    врать, что что-то отключил, раз отключать было нечего."""
     bh, vk, api = make_handlers()
     _greet(bh)
     bh.handle_message(UID, "Напоминания", "Аня", "И")
     bh.handle_message(UID, "Отключить", "Аня", "И")
-    assert "отключены" in vk.last_message
+    assert "не найдено" in vk.last_message
+
+
+def test_reminders_setup_1_hour_reports_failure_honestly():
+    """Правка: раньше setup_reminder_to_continue вызывался, а результат
+    игнорировался — если create_notification падал на сервере, пользователь
+    всё равно видел "Напомню через 1 час", хотя ничего не сохранилось."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.notifications.fail_reminder_setup = True
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "1 час", "Аня", "И")
+    assert "через 1 час" not in vk.last_message
+    assert "Не получилось" in vk.last_message
+
+
+def test_reminders_setup_tomorrow_morning_reports_failure_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.notifications.fail_reminder_setup = True
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Завтра утром", "Аня", "И")
+    assert "08:00" not in vk.last_message
+    assert "Не получилось" in vk.last_message
+
+
+def test_reminders_disable_reports_when_get_notifications_fails():
+    """get_notifications вернул None (сбой сети) — раньше это маскировалось
+    под [] и пользователь слышал "отключены", хотя бот даже не смог узнать,
+    что вообще отключать."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.fail_get_notifications = True
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Отключить", "Аня", "И")
+    assert "Не получилось" in vk.last_message
+    assert "отключены" not in vk.last_message
+
+
+def test_reminders_disable_reports_partial_failure():
+    """Если часть delete_notification не удалась, ответ должен честно
+    сказать, что не всё получилось, а не бодро отрапортовать "отключены"."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.created_notifications.append({
+        "user_vk_id": UID, "exercise_type": "diary",
+        "schedule_type": "daily", "schedule_data": {"time": "08:00"},
+    })
+    api.created_notifications.append({
+        "user_vk_id": UID, "exercise_type": "stop_technique",
+        "schedule_type": "daily", "schedule_data": {"time": "12:00"},
+    })
+    api.fail_delete_notification_ids = {2}
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Отключить", "Аня", "И")
+    assert "1 из 2" in vk.last_message
+    assert api.deleted_notification_ids == {1}
 
 
 def test_reminders_invalid_text_reprompts():
