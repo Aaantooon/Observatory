@@ -242,30 +242,10 @@ class ConsciousChoiceExercise(BaseExercise):
             return
 
         if step == 1:
-            session['must_items'].append(text)
+            items = self._split_must_items(text)
+            session['must_items'].extend(items)
             self.save_progress(user_id, session)
-            count = len(session['must_items'])
-            progress = self._get_progress_bar(count, target=MAX_EXERCISE_ITEMS)
-            milestone = self._milestone_line(count, target=MAX_EXERCISE_ITEMS)
-            milestone_text = f"{milestone}\n" if milestone else ""
-
-            if count >= MAX_EXERCISE_ITEMS:
-                self.send_message(
-                    user_id,
-                    f"🎉 Отлично! Ты собрал {count} пунктов.\n"
-                    f"{progress}\n\n"
-                    "Нажми «➡️ Продолжить», чтобы перейти дальше.",
-                    conscious_choice_keyboard()
-                )
-            else:
-                self.send_message(
-                    user_id,
-                    f"✅ Добавлено: {text} ({count}/{MAX_EXERCISE_ITEMS})\n"
-                    f"{progress}\n"
-                    f"{milestone_text}\n"
-                    "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
-                    conscious_choice_keyboard()
-                )
+            self._send_must_items_added(user_id, items, len(session['must_items']))
 
         elif step == 2:
             session['current_answer'] = text
@@ -328,6 +308,67 @@ class ConsciousChoiceExercise(BaseExercise):
             self._complete_current_item(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
+
+    def _split_must_items(self, text):
+        """Разбивает вставленный текст на отдельные пункты — по переносам
+        строк, а внутри каждой строки ещё и по ';' (частый случай: человек
+        вставляет сразу целый список одним сообщением, каждый пункт на
+        своей строке и/или через точку с запятой). Пустые куски и висящие
+        знаки препинания по краям убираются. См. _split_roles в my_roles.py
+        — тот же приём."""
+        items = []
+        for line in text.split('\n'):
+            for part in line.split(';'):
+                cleaned = part.strip(' \t;,.-—•·')
+                if cleaned:
+                    items.append(cleaned)
+        return items
+
+    def _send_must_items_added(self, user_id, items, count, target=MAX_EXERCISE_ITEMS):
+        if not items:
+            self.send_message(
+                user_id,
+                "🤔 Не нашёл в этом сообщении ни одного пункта — попробуй ещё раз.",
+                conscious_choice_keyboard()
+            )
+            return
+
+        progress = self._get_progress_bar(count, target)
+        milestone = self._milestone_line(count, target)
+        milestone_text = f"{milestone}\n" if milestone else ""
+
+        if count >= target:
+            self.send_message(
+                user_id,
+                f"🎉 Отлично! Ты собрал {count} пунктов.\n"
+                f"{progress}\n\n"
+                "Нажми «➡️ Продолжить», чтобы перейти дальше.",
+                conscious_choice_keyboard()
+            )
+            return
+
+        if len(items) == 1:
+            self.send_message(
+                user_id,
+                f"✅ Добавлено: {items[0]} ({count}/{target})\n"
+                f"{progress}\n"
+                f"{milestone_text}\n"
+                "Пиши следующий пункт, а когда закончишь — жми «➡️ Продолжить»",
+                conscious_choice_keyboard()
+            )
+        else:
+            listed = "\n".join(f"{i+1}. {item}" for i, item in enumerate(items))
+            self.send_message(
+                user_id,
+                f"✅ Добавлено пунктов: {len(items)}\n"
+                f"{listed}\n\n"
+                f"Всего: {count}/{target}\n"
+                f"{progress}\n"
+                f"{milestone_text}\n"
+                "Можешь писать по одному пункту или сразу списком (каждый — с новой строки) — "
+                "а когда закончишь, жми «➡️ Продолжить»",
+                conscious_choice_keyboard()
+            )
 
     def _complete_current_item(self, session):
         """Пакует разбор текущего пункта (шаги 2-9) в analysis_results и

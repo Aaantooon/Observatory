@@ -1530,6 +1530,33 @@ def test_conscious_choice_step1_shows_progress_and_target_nudge():
     assert "Отлично! Ты собрал 20 пунктов" in vk.last_message
 
 
+def test_conscious_choice_pasted_multiline_list_splits_into_separate_items():
+    """Тот же баг, что был в 'Мои роли' (см.
+    test_my_roles_pasted_multiline_list_splits_into_separate_roles):
+    пользователь вставляет сразу весь список одним сообщением, каждый
+    пункт на своей строке — раньше это сохранялось как ОДИН пункт ('1/20')
+    вместо того, чтобы разложиться на отдельные."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+
+    pasted = (
+        "Должен работать\n"
+        "Должен зарабатывать\n"
+        "Должен быть ответственным\n"
+        "Должен заботиться о близких\n"
+        "Должен быть сильным"
+    )
+    ex.handle_message(UID, pasted)
+
+    items = ex.user_sessions[UID]["must_items"]
+    assert len(items) == 5, "Каждая строка списка должна была стать отдельным пунктом"
+    assert items[0] == "Должен работать"
+    assert items[4] == "Должен быть сильным"
+    assert "(1/20)" not in vk.last_message
+    assert "Добавлено пунктов: 5" in vk.last_message
+    assert "Всего: 5/20" in vk.last_message
+
+
 def test_conscious_choice_full_flow_to_finish():
     """Шаги 4 и 5 ("Анализ выбора" и "Альтернативы") разбиты на отдельные
     экраны — сначала показывается сам выбор (подтверждение "Продолжить"),
