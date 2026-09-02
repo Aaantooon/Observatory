@@ -65,21 +65,21 @@ def stress_search_parts_keyboard():
 
 def exercise_keyboard(can_finish=False):
     """Основная клавиатура «Поиска стресса» — и в части 1 (сбор образов),
-    и в паузе между образами в части 2 (разбор). Кнопка «Завершить и
-    отправить» показывается только когда уже достаточно материала для
-    психолога (см. вызывающий код в stress_search.py — два независимых
-    порога: MIN_ITEMS_TO_FINISH_EARLY в части 1, MIN_ANALYZED_TO_FINISH_EARLY
-    в части 2), чтобы не звать отправлять на проверку то, что ещё рано
-    смотреть."""
+    и в паузе между образами в части 2 (разбор). Компактная раскладка — по
+    две кнопки в ряд, чтобы клавиатура не растягивалась на 4 строки.
+    Кнопка «Завершить и отправить» показывается только когда уже достаточно
+    материала для психолога (см. вызывающий код в stress_search.py — два
+    независимых порога: MIN_ITEMS_TO_FINISH_EARLY в части 1,
+    MIN_ANALYZED_TO_FINISH_EARLY в части 2), чтобы не звать отправлять на
+    проверку то, что ещё рано смотреть — и стоит сразу под «Продолжить»,
+    а не в самом низу."""
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    if can_finish:
+        keyboard.add_button("✅ Завершить и отправить", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_line()
     keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
-    if can_finish:
-        keyboard.add_line()
-        keyboard.add_button("✅ Завершить и отправить", color=VkKeyboardColor.POSITIVE)
     return keyboard.get_keyboard()
 
 def analysis_keyboard():
