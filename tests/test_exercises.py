@@ -1733,6 +1733,83 @@ def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
     assert "Жми «Продолжить»" in vk.last_message
 
 
+def test_my_roles_preanalyze_confirm_shows_counts_with_empty_marker():
+    """Экран перед стартом разбора должен показывать счёт по каждому
+    разделу с целью (N/target), а пустой раздел — с заметным ⚠️, чтобы
+    не потерялся среди чисел (запрошено пользователем: 'индикатор, если
+    не хватает ролей')."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")   # social(1) -> сразу interpersonal
+    ex.handle_message(UID, "➡️ Продолжить")   # interpersonal(0) -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> intrapersonal
+    ex.handle_message(UID, "Смелый")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> экран подтверждения перед разбором
+
+    msg = vk.last_message
+    assert "Социальных: 1/20" in msg
+    assert "Межличностных: 0/20 ⚠️ пусто" in msg
+    assert "Внутриличностных: 1/10" in msg
+    assert "⚠️ пусто" not in msg.split("Межличностных")[0], "Непустые разделы не должны помечаться"
+
+
+def test_my_roles_preanalyze_confirm_return_to_phase_and_back():
+    """«Нет, буду писать» должно дать выбрать раздел, вернуть туда, и по
+    следующему «Продолжить» из этого раздела — снова показать экран
+    подтверждения (со свежими цифрами), а не покатиться дальше по обычной
+    цепочке разделов."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Друг для Саши")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Смелый")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> экран подтверждения
+
+    ex.handle_message(UID, "✏️ Нет, буду писать")
+    assert vk.last_buttons == ["1. Социальные", "2. Межличностные", "3. Внутриличностные"]
+
+    ex.handle_message(UID, "1. Социальные")
+    session = ex.user_sessions[UID]
+    assert session["phase"] == "social"
+    assert session["_reviewing_phase"] is True
+    assert "Часть 1: Социальные роли" in vk.last_message
+
+    ex.handle_message(UID, "Ещё роль")
+    ex.handle_message(UID, "➡️ Продолжить")   # должно вернуть на экран подтверждения, а не в interpersonal
+
+    assert ex.user_sessions[UID]["phase"] == "social", "Не должно было провалиться в обычную цепочку разделов"
+    assert "РОЛИ СОБРАНЫ" in vk.last_message
+    assert "Социальных: 2/20" in vk.last_message
+    assert "_reviewing_phase" not in ex.user_sessions[UID]
+
+    ex.handle_message(UID, "✅ Да, дальше")
+    assert ex.user_sessions[UID]["phase"] == "analyze"
+
+
+def test_my_roles_preanalyze_confirm_transient_flags_do_not_survive_save_and_exit():
+    """Как и '_confirm_empty_phase', новые флаги '_pre_analyze_confirm' и
+    '_choosing_return_phase' — транзитные, не должны буквально сохраниться
+    через 'Сохранить и выйти'."""
+    ex, vk, api = make(MyRolesExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Продавец")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Друг для Саши")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Смелый")
+    ex.handle_message(UID, "➡️ Продолжить")   # -> экран подтверждения, _pre_analyze_confirm=True
+    ex.handle_message(UID, "💾 Сохранить и выйти")
+
+    saved = api.progress_store.get((UID, "my_roles"))
+    assert saved is not None
+    assert "_pre_analyze_confirm" not in saved
+    assert "_choosing_return_phase" not in saved
+    assert "_reviewing_phase" not in saved
+
+
 def test_my_roles_full_flow_two_step_analysis():
     """Разбор каждой роли — два отдельных шага: сначала 'Идеально', потом
     'Ужасно' (заменили хрупкий формат 'Идеально: ..., Ужасно: ...' одной

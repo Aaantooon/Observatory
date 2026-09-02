@@ -447,14 +447,22 @@ class MyRolesExercise(BaseExercise):
         self.send_message(
             user_id,
             "🎭 РОЛИ СОБРАНЫ\n\n"
-            f"· Социальных: {social}\n"
-            f"· Межличностных: {interpersonal}\n"
-            f"· Внутриличностных: {intrapersonal}\n\n"
+            f"{self._phase_count_line('Социальных', social, MAX_EXERCISE_ITEMS)}\n"
+            f"{self._phase_count_line('Межличностных', interpersonal, MAX_EXERCISE_ITEMS)}\n"
+            f"{self._phase_count_line('Внутриличностных', intrapersonal, 10)}\n\n"
             "Прежде чем начать разбор — проверь, всё ли дописал(а): вернуться "
             "и добавить роль в разбор будет уже нельзя.\n\n"
             "Всё дописал(а)? Или хочешь вернуться и дополнить какую-то часть?",
             confirm_skip_keyboard()
         )
+
+    def _phase_count_line(self, label, count, target):
+        """Строка счёта по разделу на экране перед разбором — с ⚠️, если
+        раздел так и остался пустым, чтобы это сразу бросалось в глаза, а
+        не терялось среди чисел (жёсткого минимума ролей нет, "можно и
+        меньше" — но пустой раздел стоит заметить перед разбором)."""
+        marker = " ⚠️ пусто" if count == 0 else ""
+        return f"· {label}: {count}/{target}{marker}"
 
     def _send_return_phase_choice(self, user_id):
         self.send_message(
