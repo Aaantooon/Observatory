@@ -44,10 +44,14 @@ class StressSearchExercise:
             logger.error(f"Send message error to {user_id}: {e}")
 
     def _get_progress_bar(self, count, target=100):
+        """Луч фонарика, пробивающий туман: ▮ — уже освещённый участок
+        пути, · — ещё скрытый в тумане."""
         percent = min(100, int((count / target) * 100))
-        filled = "▰" * (percent // 5)
-        empty = "▱" * (20 - len(filled))
-        return f"▰{filled}{empty}▱ {percent}%"
+        segments = 20
+        filled_n = percent * segments // 100
+        filled = "▮" * filled_n
+        empty = "·" * (segments - filled_n)
+        return f"🔦{filled}{empty} {percent}%"
 
     def _get_separator(self):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
@@ -1162,7 +1166,6 @@ class StressSearchExercise:
 
         self.send_message(
             user_id,
-            "✨ ПУТЬ ЗАВЕРШЁН\n\n"
             f"· 🔦 Ты осветил {total} образов в тумане\n"
             f"· 🧠 Разобрано: {analyzed}\n"
             f"{realism_line}"
