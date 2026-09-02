@@ -103,6 +103,18 @@ def confirm_skip_keyboard():
     keyboard.add_button("✏️ Нет, буду писать", color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
+def role_phase_choice_keyboard():
+    """Клавиатура выбора части «Мои роли», в которую человек хочет
+    вернуться и дописать роли — на экране перед стартом разбора (см.
+    _show_preanalyze_confirm в my_roles.py)."""
+    keyboard = VkKeyboard(one_time=True)
+    keyboard.add_button("1. Социальные", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("2. Межличностные", color=VkKeyboardColor.PRIMARY)
+    keyboard.add_line()
+    keyboard.add_button("3. Внутриличностные", color=VkKeyboardColor.PRIMARY)
+    return keyboard.get_keyboard()
+
 def simple_continue_keyboard():
     """Клавиатура с единственной кнопкой «Продолжить» — для экранов, где не
     нужен выбор да/нет, а просто подтверждение «готов, двигаюсь дальше»."""

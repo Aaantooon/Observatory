@@ -306,6 +306,7 @@ def test_my_roles_no_minimum_items_restriction():
     assert ex.user_sessions[UID]["phase"] == "intrapersonal"
 
     ex.handle_message(UID, "➡️ Продолжить")  # снова 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")   # -> фаза 'analyze'
     # список ролей пуст -> анализировать нечего, упражнение сразу завершается
     assert UID not in ex.user_sessions, "С пустым списком ролей анализ должен сразу завершить упражнение"
@@ -559,6 +560,7 @@ def test_my_roles_resume_screen_shows_analysis_progress_and_today_status():
     ex.handle_message(UID, "➡️ Продолжить")   # interpersonal(0) -> переспрос
     ex.handle_message(UID, "✅ Да, дальше")    # -> intrapersonal
     ex.handle_message(UID, "➡️ Продолжить")   # intrapersonal(0) -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")    # -> analyze, роль 1, шаг 1
 
     ex2, vk2, _ = make(MyRolesExercise)
@@ -1747,7 +1749,8 @@ def test_my_roles_full_flow_two_step_analysis():
     ex.handle_message(UID, "Друг для Саши")        # interpersonal role
     ex.handle_message(UID, "➡️ Продолжить")        # -> intrapersonal
     ex.handle_message(UID, "Смелый")               # intrapersonal role
-    ex.handle_message(UID, "➡️ Продолжить")        # -> analyze, роль 1 ("Продавец"), шаг 1
+    ex.handle_message(UID, "➡️ Продолжить")        # -> экран подтверждения перед разбором
+    ex.handle_message(UID, "✅ Да, дальше")         # -> analyze, роль 1 ("Продавец"), шаг 1
 
     session = ex.user_sessions[UID]
     assert session["phase"] == "analyze"
@@ -1823,7 +1826,8 @@ def test_my_roles_daily_limit_can_be_overridden_for_one_extra_role():
     ex.handle_message(UID, "Роль Б")
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "Роль В")
-    ex.handle_message(UID, "➡️ Продолжить")   # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "➡️ Продолжить")   # -> экран подтверждения перед разбором
+    ex.handle_message(UID, "✅ Да, дальше")    # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "идеально 1")
     ex.handle_message(UID, "ужасно 1")        # роль 1 разобрана сегодня
 
@@ -1863,6 +1867,7 @@ def test_my_roles_daily_limit_prompt_becomes_stale_after_midnight():
     ex.handle_message(UID, "Роль Б")
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "➡️ Продолжить")  # intrapersonal: 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "идеально 1")
     ex.handle_message(UID, "ужасно 1")
@@ -1898,7 +1903,8 @@ def test_my_roles_advance_text_during_analysis_does_not_get_swallowed():
     ex.handle_message(UID, "Роль Б")
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "Роль В")
-    ex.handle_message(UID, "➡️ Продолжить")  # -> analyze, роль 1, шаг 1
+    ex.handle_message(UID, "➡️ Продолжить")  # -> экран подтверждения перед разбором
+    ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
 
     before = len(vk.sent)
     ex.handle_message(UID, "продолжить")  # текст совпадает с ADVANCE_TEXTS
@@ -1920,6 +1926,7 @@ def test_my_roles_daily_limit_blocks_second_role_same_day():
     ex.handle_message(UID, "Роль Б")
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "➡️ Продолжить")  # intrapersonal: 0 ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "идеально 1")
     ex.handle_message(UID, "ужасно 1")        # роль 1 разобрана сегодня
@@ -1951,6 +1958,7 @@ def test_my_roles_handle_analysis_out_of_range_index_finishes_instead_of_crashin
     ex.handle_message(UID, "➡️ Продолжить")   # interpersonal пуст -> переспрос
     ex.handle_message(UID, "✅ Да, дальше")    # -> intrapersonal
     ex.handle_message(UID, "➡️ Продолжить")   # intrapersonal пуст -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")    # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")    # -> analyze, 1 роль всего
 
     session = ex.user_sessions[UID]
@@ -2051,6 +2059,7 @@ def test_my_roles_resume_mid_analysis_does_not_lose_ideal_answer():
     ex.handle_message(UID, "➡️ Продолжить")  # 0 interpersonal ролей -> переспрос
     ex.handle_message(UID, "✅ Да, дальше")   # -> intrapersonal
     ex.handle_message(UID, "➡️ Продолжить")  # 0 intrapersonal ролей -> переспрос
+    ex.handle_message(UID, "✅ Да, дальше")   # -> экран подтверждения перед разбором
     ex.handle_message(UID, "✅ Да, дальше")   # -> analyze, роль 1, шаг 1
     ex.handle_message(UID, "всё отлично")     # -> шаг 2 ('current_ideal' сохранён)
 

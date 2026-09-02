@@ -2,7 +2,7 @@ from datetime import date
 from .base import BaseExercise
 from keyboards import (
     exercise_keyboard, finish_keyboard, back_keyboard, main_menu, cancel_keyboard, continue_keyboard,
-    confirm_skip_keyboard, daily_limit_keyboard,
+    confirm_skip_keyboard, daily_limit_keyboard, role_phase_choice_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     CONFIRM_YES_TEXTS, CONFIRM_NO_TEXTS, OVERRIDE_LIMIT_TEXTS,
 )
@@ -26,19 +26,25 @@ class MyRolesExercise(BaseExercise):
             'step': 1
         }
 
+    # Транзитные флаги "жду да/нет" внутри текущего разговора — не часть
+    # настоящего прогресса. См. save_progress().
+    _TRANSIENT_FLAGS = (
+        '_confirm_empty_phase', '_pre_analyze_confirm',
+        '_choosing_return_phase', '_reviewing_phase',
+    )
+
     def save_progress(self, user_id, data):
-        """Как и BaseExercise.save_progress, но никогда не персистит
-        '_confirm_empty_phase' — это чисто транзитный флаг "жду да/нет"
+        """Как и BaseExercise.save_progress, но никогда не персистит флаги
+        из _TRANSIENT_FLAGS — это чисто транзитные "жду да/нет"/"жду выбор"
         внутри текущего разговора, а не часть настоящего прогресса. Если
-        сохранить его буквально (например, через 'Сохранить и выйти' пока
+        сохранить их буквально (например, через 'Сохранить и выйти' пока
         висит вопрос-подтверждение), start() при возобновлении молча
         восстановит флаг без повторного показа вопроса — и следующий
-        реальный ответ пользователя будет проглочен мёртвой проверкой
-        _confirm_empty_phase, человек застрянет без видимой причины. Раз
-        флаг просто отсутствует после resume, обычный поток продолжается
-        как обычно — потерян только сам вопрос "точно оставить пустым?",
-        а это не страшно потерять."""
-        data_to_persist = {k: v for k, v in data.items() if k != '_confirm_empty_phase'}
+        реальный ответ пользователя будет проглочен мёртвой проверкой.
+        Раз флаг просто отсутствует после resume, обычный поток продолжается
+        как обычно (в худшем случае просто ещё раз покажется обычный экран
+        раздела) — потерян только сам вопрос, а это не страшно потерять."""
+        data_to_persist = {k: v for k, v in data.items() if k not in self._TRANSIENT_FLAGS}
         return super().save_progress(user_id, data_to_persist)
 
     def _handle_start_over(self, user_id):
@@ -223,6 +229,36 @@ class MyRolesExercise(BaseExercise):
             )
             return
 
+        if session.get('_pre_analyze_confirm'):
+            if text_lower in CONFIRM_YES_TEXTS:
+                session.pop('_pre_analyze_confirm', None)
+                self._start_analyze_phase(user_id, session)
+                return
+            if text_lower in CONFIRM_NO_TEXTS:
+                session.pop('_pre_analyze_confirm', None)
+                session['_choosing_return_phase'] = True
+                self.save_progress(user_id, session)
+                self._send_return_phase_choice(user_id)
+                return
+            self.send_message(
+                user_id,
+                "🕯️ Нажми «✅ Да, дальше» или «✏️ Нет, буду писать».",
+                confirm_skip_keyboard()
+            )
+            return
+
+        if session.get('_choosing_return_phase'):
+            chosen_phase = self._parse_return_phase(text_lower)
+            if chosen_phase is None:
+                self._send_return_phase_choice(user_id)
+                return
+            session.pop('_choosing_return_phase', None)
+            session['phase'] = chosen_phase
+            session['_reviewing_phase'] = True
+            self.save_progress(user_id, session)
+            self._show_instruction(user_id, session)
+            return
+
         if session.get('_daily_limit_prompt'):
             if not self._used_analysis_today(session):
                 # День сменился, пока сообщение о лимите ещё висело — лимит
@@ -351,6 +387,16 @@ class MyRolesExercise(BaseExercise):
     }
 
     def _handle_phase_complete(self, user_id, session):
+        if session.pop('_reviewing_phase', False):
+            # Пользователь сам попросил вернуться сюда дописать роли (см.
+            # _show_preanalyze_confirm) — по «Продолжить» отсюда идём не по
+            # обычной цепочке разделов, а сразу назад на экран
+            # предразборного подтверждения, иначе он снова прошёл бы через
+            # уже пройденные разделы.
+            self.save_progress(user_id, session)
+            self._show_preanalyze_confirm(user_id, session)
+            return
+
         phase = session.get('phase')
         role_key = self.PHASE_ROLE_KEY.get(phase)
 
@@ -384,11 +430,54 @@ class MyRolesExercise(BaseExercise):
             self._show_instruction(user_id, session)
 
         elif phase == 'intrapersonal':
-            session['phase'] = 'analyze'
-            session['analysis_index'] = 0
-            session['analysis_results'] = []
-            self.save_progress(user_id, session)
-            self._analyze_roles(user_id, session)
+            self._show_preanalyze_confirm(user_id, session)
+
+    def _show_preanalyze_confirm(self, user_id, session):
+        """Экран перед стартом разбора — последний шанс вернуться и
+        дописать роли: дальше, в 'analyze', добавить новую роль в разбор
+        уже нельзя. Показывает счёт по всем 3 разделам сразу, а не только
+        по тому, что человек только что закончил — так видно, если что-то
+        забыто ещё в более ранней части."""
+        social = self._count_roles(session.get('social_roles', []))
+        interpersonal = self._count_roles(session.get('interpersonal_roles', []))
+        intrapersonal = self._count_roles(session.get('intrapersonal_roles', []))
+
+        session['_pre_analyze_confirm'] = True
+        self.save_progress(user_id, session)
+        self.send_message(
+            user_id,
+            "🎭 РОЛИ СОБРАНЫ\n\n"
+            f"· Социальных: {social}\n"
+            f"· Межличностных: {interpersonal}\n"
+            f"· Внутриличностных: {intrapersonal}\n\n"
+            "Прежде чем начать разбор — проверь, всё ли дописал(а): вернуться "
+            "и добавить роль в разбор будет уже нельзя.\n\n"
+            "Всё дописал(а)? Или хочешь вернуться и дополнить какую-то часть?",
+            confirm_skip_keyboard()
+        )
+
+    def _send_return_phase_choice(self, user_id):
+        self.send_message(
+            user_id,
+            "🕯️ В какую часть вернуться?",
+            role_phase_choice_keyboard()
+        )
+
+    def _parse_return_phase(self, text_lower):
+        if "социальн" in text_lower or text_lower.strip() == "1":
+            return 'social'
+        if "межличностн" in text_lower or text_lower.strip() == "2":
+            return 'interpersonal'
+        if "внутриличностн" in text_lower or text_lower.strip() == "3":
+            return 'intrapersonal'
+        return None
+
+    def _start_analyze_phase(self, user_id, session):
+        session['phase'] = 'analyze'
+        session['analysis_index'] = 0
+        session['analysis_results'] = []
+        self.save_progress(user_id, session)
+        self._analyze_roles(user_id, session)
 
     def _all_roles(self, session):
         """Собирает роли из всех 3 частей в один список для анализа.
