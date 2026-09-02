@@ -187,6 +187,7 @@
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="/forum/">Форум</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/achievements/' in request.path %}active{% endif %}" href="{% url 'achievements' %}">Достижения</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/statistics/' in request.path %}active{% endif %}" href="{% url 'statistics' %}">Статистика</a></li>
 
                 <!-- ===== АВТОРИЗАЦИЯ ЧЕРЕЗ VK ===== -->
                 {% if user.is_authenticated %}
@@ -242,7 +243,7 @@
 </div>
 
 <div class="footer">
-    <small>🔆 Путь наблюдателя — каждый день немного света · <a href="{% url 'privacy_policy' %}" style="color:#5a6a7e;">Политика конфиденциальности</a> · <a href="{% url 'terms_of_service' %}" style="color:#5a6a7e;">Пользовательское соглашение</a></small>
+    <small>🔆 Путь наблюдателя — каждый день немного света · <a href="{% url 'faq' %}" style="color:#5a6a7e;">Вопросы и ответы</a> · <a href="{% url 'privacy_policy' %}" style="color:#5a6a7e;">Политика конфиденциальности</a> · <a href="{% url 'terms_of_service' %}" style="color:#5a6a7e;">Пользовательское соглашение</a></small>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>

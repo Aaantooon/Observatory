@@ -37,6 +37,11 @@ def terms_of_service_view(request):
         'title': 'Пользовательское соглашение — Путь наблюдателя'
     })
 
+def faq_view(request):
+    return render(request, 'faq.html', {
+        'title': 'Вопросы и ответы — Путь наблюдателя'
+    })
+
 def robots_txt(request):
     # Разрешаем всё, кроме служебных разделов (админка, CRM психолога, API).
     lines = [

@@ -10,7 +10,10 @@
 БД), менять его для существующего достижения нельзя — это создаст новую
 запись и выдаст достижение повторно всем, у кого оно уже было.
 """
-from .models import Achievement, UserAchievement, UserCourseProgress, UserStreak, GameAssociation, ModuleTestResult, ModuleComment
+from .models import (
+    Achievement, UserAchievement, UserCourseProgress, UserStreak, GameAssociation,
+    ModuleTestResult, ModuleComment, Bookmark, UserProfile,
+)
 
 
 def _course_progress(user):
@@ -101,6 +104,25 @@ ACHIEVEMENTS = [
         'icon': '💬',
         'order': 70,
         'check': lambda user: ModuleComment.objects.filter(user=user).exists(),
+    },
+    {
+        'code': 'collector',
+        'title': 'Собиратель',
+        'description': 'Сохрани первый модуль в закладки',
+        'icon': '🔖',
+        'order': 80,
+        'check': lambda user: Bookmark.objects.filter(user=user).exists(),
+    },
+    {
+        'code': 'open_book',
+        'title': 'Открытая книга',
+        'description': 'Заполни профиль полностью — о себе, город и сайт',
+        'icon': '📖',
+        'order': 90,
+        'check': lambda user: (
+            (p := UserProfile.objects.filter(user=user).first()) is not None
+            and bool(p.bio.strip()) and bool(p.location.strip()) and bool(p.website.strip())
+        ),
     },
 ]
 

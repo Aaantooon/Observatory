@@ -46,6 +46,7 @@ urlpatterns = [
     path('map/', views.map_reactflow_view, name='map'),
     path('privacy/', views.privacy_policy_view, name='privacy_policy'),
     path('terms/', views.terms_of_service_view, name='terms_of_service'),
+    path('faq/', views.faq_view, name='faq'),
     path('robots.txt', views.robots_txt, name='robots_txt'),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
     path('observer/', views.observer_view, name='observer'),

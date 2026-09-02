@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Статистика — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stat-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .stat-header {
+        text-align: center;
+        padding: 30px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+    }
+    .stat-header h1 {
+        font-size: 2.2rem;
+        font-weight: 300;
+        color: #d4d9e6;
+        letter-spacing: 2px;
+    }
+    .stat-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.05rem;
+    }
+    .stat-card {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
+    .stat-card h2 {
+        color: #e2c044;
+        font-weight: 300;
+        letter-spacing: 1px;
+        font-size: 1.3rem;
+        margin-bottom: 16px;
+    }
+    .stat-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .stat-num {
+        background: rgba(0,0,0,0.15);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+    }
+    .stat-num .value {
+        font-size: 1.8rem;
+        color: #d4d9e6;
+    }
+    .stat-num .label {
+        color: #5a6a7e;
+        font-size: 0.8rem;
+        margin-top: 4px;
+    }
+    .stat-num.good .value { color: #4ac06a; }
+    .stat-num.warn .value { color: #c08a4a; }
+    .stat-empty {
+        color: #5a6a7e;
+        text-align: center;
+        padding: 20px;
+    }
+    .top-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .top-list li {
+        padding: 8px 0;
+        color: #d4d9e6;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .top-list li:last-child { border-bottom: none; }
+    .top-list .score { color: #e2c044; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stat-container">
+    <div class="stat-header">
+        <h1>📊 Статистика</h1>
+        <p class="subtitle">Стресс отпускаешь, счастье собираешь — путь виден в цифрах</p>
+    </div>
+
+    {% if not has_bot_account %}
+        <div class="stat-card">
+            <p class="stat-empty">
+                🌫️ Пока не видно данных из бота — статистика строится по упражнениям
+                «Поиск стресса» и «Список счастья», пройденным в VK-боте «Путь наблюдателя».
+                Пройди хотя бы одно из них, и здесь появятся цифры.
+            </p>
+        </div>
+    {% else %}
+        <div class="stat-card">
+            <h2>🌫️ Поиск стресса</h2>
+            {% if stress_stats %}
+                <div class="stat-row">
+                    <div class="stat-num">
+                        <div class="value">{{ stress_stats.total }}</div>
+                        <div class="label">образов записано</div>
+                    </div>
+                    <div class="stat-num good">
+                        <div class="value">{{ stress_stats.released }}</div>
+                        <div class="label">🟢 уже отпущено</div>
+                    </div>
+                    <div class="stat-num warn">
+                        <div class="value">{{ stress_stats.still_scary }}</div>
+                        <div class="label">🔴 ещё пугают</div>
+                    </div>
+                    <div class="stat-num">
+                        <div class="value">{{ stress_stats.avg_before|floatformat:1 }}</div>
+                        <div class="label">средняя оценка</div>
+                    </div>
+                </div>
+                {% if stress_stats.avg_after %}
+                    <p style="color:#8a8a8a;font-size:0.9rem;">
+                        🔦 После разбора {{ stress_stats.analyzed_count }} образ(ов) средняя реалистичность
+                        снизилась до <span style="color:#e2c044;">{{ stress_stats.avg_after|floatformat:1 }}</span>
+                        (было {{ stress_stats.avg_before|floatformat:1 }}) — путь заметен не только в чувствах, но и в цифрах.
+                    </p>
+                {% else %}
+                    <p style="color:#5a6a7e;font-size:0.9rem;">
+                        Образы записаны, но разбор ещё не начат — продолжи в боте, чтобы увидеть, как меняется оценка.
+                    </p>
+                {% endif %}
+            {% else %}
+                <p class="stat-empty">Упражнение «Поиск стресса» ещё не пройдено ни разу.</p>
+            {% endif %}
+        </div>
+
+        <div class="stat-card">
+            <h2>✨ Список счастья</h2>
+            {% if happiness_stats %}
+                <div class="stat-row">
+                    <div class="stat-num">
+                        <div class="value">{{ happiness_stats.total }}</div>
+                        <div class="label">пунктов собрано</div>
+                    </div>
+                    <div class="stat-num good">
+                        <div class="value">{{ happiness_stats.avg_score|floatformat:1 }}</div>
+                        <div class="label">средняя оценка</div>
+                    </div>
+                </div>
+                <ul class="top-list">
+                    {% for item in happiness_stats.top %}
+                        <li>{{ item.text }} — <span class="score">{{ item.score }}/10</span></li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="stat-empty">Упражнение «Список счастья» ещё не пройдено ни разу.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

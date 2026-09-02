@@ -2,21 +2,144 @@
 
 {% block title %}Тропы — Путь наблюдателя{% endblock %}
 
+{% block extra_head %}
+<style>
+    .paths-intro {
+        max-width: 700px;
+        margin: 0 auto 40px auto;
+        padding: 30px 20px;
+        text-align: center;
+    }
+    .paths-intro h1 {
+        color: #e2c044;
+        font-weight: 300;
+        letter-spacing: 2px;
+        font-size: 1.8rem;
+        margin-bottom: 20px;
+    }
+    .paths-intro p {
+        color: #b0a898;
+        line-height: 1.9;
+    }
+    .paths-intro em { color: #e2c044; font-style: normal; }
+
+    .trail-grid {
+        max-width: 900px;
+        margin: 0 auto 40px auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 16px;
+        padding: 0 20px;
+    }
+    .trail-card {
+        background: rgba(22,33,62,0.35);
+        border: 1px solid rgba(226,192,68,0.1);
+        border-radius: 16px;
+        padding: 22px;
+    }
+    .trail-card .trail-icon { font-size: 1.8rem; margin-bottom: 8px; }
+    .trail-card h3 {
+        color: #e2c044;
+        font-size: 1.05rem;
+        font-weight: 400;
+        margin-bottom: 8px;
+    }
+    .trail-card p {
+        color: #8a9aaa;
+        font-size: 0.88rem;
+        line-height: 1.6;
+    }
+
+    .beacon-row {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 20px 40px 20px;
+        text-align: center;
+    }
+    .beacon-row h2 {
+        color: #d4d9e6;
+        font-weight: 300;
+        letter-spacing: 1px;
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+    }
+    .beacon-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+    }
+    .beacon-links a {
+        display: inline-block;
+        padding: 10px 20px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 50px;
+        color: #d4d9e6;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+    .beacon-links a:hover {
+        border-color: rgba(226,192,68,0.4);
+        color: #e2c044;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container">
-    <h1 class="text-center" style="color: #e2c044;">🗺️ Тропы</h1>
-    <p class="text-center text-muted">Здесь будут твои маршруты и пути</p>
-    
-    <div class="row mt-4">
-        <div class="col-md-6 mx-auto">
-            <div class="card bg-dark text-light border-secondary">
-                <div class="card-body">
-                    <h5 class="card-title text-warning">🚶 В разработке</h5>
-                    <p class="card-text">Страница "Тропы" пока в процессе создания.</p>
-                    <p class="text-muted small">Вернись позже — здесь будут твои маршруты!</p>
-                </div>
-            </div>
-        </div>
+<div class="paths-intro">
+    <h1>🗺️ Тропы</h1>
+    <p>
+        В тумане нет одной правильной дороги. Есть тропы — каждая ведёт через своё:
+        через <em>страх</em>, через <em>радость</em>, через <em>роли</em>, которые ты носишь,
+        через <em>выбор</em>, который всегда был твоим.<br><br>
+        Фонарик не выбирает тропу за тебя. Он просто освещает её, пока ты идёшь.
+        Тропы — в боте ВКонтакте «Путь наблюдателя»: напиши ему, чтобы начать любую из них.
+    </p>
+</div>
+
+<div class="trail-grid">
+    <div class="trail-card">
+        <div class="trail-icon">🌫️</div>
+        <h3>Тропа поиска стресса</h3>
+        <p>Находишь то, что забирает энергию, и учишься замечать это раньше, чем оно накопится.</p>
+    </div>
+    <div class="trail-card">
+        <div class="trail-icon">✨</div>
+        <h3>Тропа счастья</h3>
+        <p>Собираешь список того, что действительно радует, — иногда его нужно перечитывать, чтобы вспомнить.</p>
+    </div>
+    <div class="trail-card">
+        <div class="trail-icon">🎭</div>
+        <h3>Тропа ролей</h3>
+        <p>Разбираешь роли, которые носишь для других, и находишь, где заканчивается роль и начинаешься ты.</p>
+    </div>
+    <div class="trail-card">
+        <div class="trail-icon">🙏</div>
+        <h3>Тропа осознанного выбора</h3>
+        <p>Учишься видеть разницу между «должен» и «выбираю» — право не хотеть тоже право.</p>
+    </div>
+    <div class="trail-card">
+        <div class="trail-icon">📔</div>
+        <h3>Тропа дневника</h3>
+        <p>Оставляешь след каждого дня — не для отчёта, а чтобы потом увидеть пройденный путь целиком.</p>
+    </div>
+    <div class="trail-card">
+        <div class="trail-icon">✋</div>
+        <h3>Тропа стоп-техники</h3>
+        <p>Учишься останавливаться на бегу — иногда это и есть весь путь: просто остановиться и оглядеться.</p>
+    </div>
+</div>
+
+<div class="beacon-row">
+    <h2>🔦 Другие маяки на пути</h2>
+    <div class="beacon-links">
+        <a href="{% url 'course_index' %}">📖 Курс</a>
+        <a href="{% url 'map' %}">🗺️ Ментальная карта</a>
+        <a href="/forum/">💬 Форум</a>
+        <a href="{% url 'achievements' %}">🏆 Достижения</a>
+        <a href="{% url 'statistics' %}">📊 Статистика</a>
     </div>
 </div>
 {% endblock %}

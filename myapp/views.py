@@ -418,6 +418,76 @@ def achievements_view(request):
     })
 
 
+# Порог «отпущено» для образов стресса — должен совпадать с
+# RELEASED_RATE_THRESHOLD в vk_bot/exercises/stress_search.py (0-3 —
+# уже не пугает). Не импортируется оттуда напрямую: vk_bot — отдельный
+# процесс, обращающийся к сайту через bot_api по HTTP, а не общий модуль
+# в этом Django-проекте.
+STRESS_RELEASED_THRESHOLD = 3
+
+
+@login_required
+def statistics_view(request):
+    """Страница «Статистика» — сравнение стресса и счастья по данным
+    упражнений бота, было в «Не начато / в планах» СВОДКА_ПРОЕКТА.md.
+    Данные упражнений хранятся в bot_api.Result (пишет их vk_bot через
+    HTTP API), пользователь бота (bot_api.User) — не то же самое, что
+    пользователь сайта (auth.User); связь между ними — по схеме имени,
+    которую задаёт вход через VK ID (myapp/vk_id_auth.py:
+    username = f"vk_{vk_id}"), та же схема уже используется в CRM
+    (crm/views.py::client_detail, там наоборот — от bot_api.User к
+    auth.User)."""
+    from bot_api.models import User as BotUser, Result
+
+    bot_user = None
+    if request.user.username.startswith('vk_'):
+        vk_id = request.user.username[len('vk_'):]
+        bot_user = BotUser.objects.filter(vk_id=vk_id).first()
+
+    stress_stats = None
+    happiness_stats = None
+
+    if bot_user:
+        stress_result = Result.objects.filter(
+            user=bot_user, exercise__type='stress_search'
+        ).order_by('-completed_at').first()
+        if stress_result and stress_result.result_data:
+            items = stress_result.result_data.get('items') or []
+            analysis = stress_result.result_data.get('analysis') or []
+            if items:
+                rates = [i.get('rate', 0) for i in items]
+                released = sum(1 for r in rates if r <= STRESS_RELEASED_THRESHOLD)
+                stress_stats = {
+                    'total': len(items),
+                    'avg_before': sum(rates) / len(rates),
+                    'released': released,
+                    'still_scary': len(items) - released,
+                    'analyzed_count': len(analysis),
+                }
+                new_rates = [a['new_rate'] for a in analysis if 'new_rate' in a]
+                if new_rates:
+                    stress_stats['avg_after'] = sum(new_rates) / len(new_rates)
+
+        happiness_result = Result.objects.filter(
+            user=bot_user, exercise__type='happiness_list'
+        ).order_by('-completed_at').first()
+        if happiness_result and happiness_result.result_data:
+            items = happiness_result.result_data.get('items') or []
+            if items:
+                scores = [i.get('score', 0) for i in items]
+                happiness_stats = {
+                    'total': len(items),
+                    'avg_score': sum(scores) / len(scores),
+                    'top': sorted(items, key=lambda x: x.get('score', 0), reverse=True)[:3],
+                }
+
+    return render(request, 'myapp/statistics.html', {
+        'has_bot_account': bot_user is not None,
+        'stress_stats': stress_stats,
+        'happiness_stats': happiness_stats,
+    })
+
+
 @login_required
 def submit_test_result_api(request):
     """Сохраняет результат теста модуля (module.test_questions) —
