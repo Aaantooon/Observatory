@@ -70,6 +70,9 @@
             opacity:0.06;pointer-events:none;transition:opacity 0.8s;filter:blur(1px)}
         #breath-indicator{position:fixed;bottom:100px;left:30px;color:#0a1a2a;font-size:0.4rem;
             z-index:15;letter-spacing:4px;opacity:0.06;pointer-events:none}
+        #achievements-link{position:fixed;top:24px;right:28px;color:#4a6a8a;font-size:1.15rem;
+            z-index:100;text-decoration:none;opacity:0.25;transition:opacity 0.5s;pointer-events:auto}
+        #achievements-link:hover{opacity:0.8}
         
         @media(max-width:768px){#ui{min-width:200px;padding:10px 16px;bottom:15px}
         #label3d{font-size:0.8rem}#modal .box{padding:24px}#intro h1{font-size:1.5rem}}
@@ -88,6 +91,7 @@
 </div>
 
 <div id="vignette"></div>
+<a id="achievements-link" href="/achievements/" title="Достижения">🏆</a>
 <div id="flashlight-icon">🔦</div>
 <div id="breath-indicator">❄️ ДЫХАНИЕ</div>
 <div id="label3d"></div>
