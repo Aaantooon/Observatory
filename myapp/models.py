@@ -241,3 +241,60 @@ class Bookmark(models.Model):
 
     def __str__(self):
         return f"{self.user.username} → {self.module.title}"
+
+
+# ===== ДОСТИЖЕНИЯ ("стать Наблюдателем") =====
+# Заготовка геймификации — числилась в СВОДКА_ПРОЕКТА.md как "не начато".
+# Код достижения — стабильный идентификатор из myapp/achievements.py
+# (ACHIEVEMENTS ниже), а не первичный ключ — так список достижений можно
+# менять/дополнять в коде, не трогая уже выданные записи в БД.
+class Achievement(models.Model):
+    code = models.CharField(max_length=50, unique=True, verbose_name="Код")
+    title = models.CharField(max_length=200, verbose_name="Название")
+    description = models.CharField(max_length=300, verbose_name="Описание")
+    icon = models.CharField(max_length=10, default="🏆", verbose_name="Иконка (эмодзи)")
+    order = models.PositiveIntegerField(default=0, verbose_name="Порядок показа")
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = "Достижение"
+        verbose_name_plural = "Достижения"
+
+    def __str__(self):
+        return f"{self.icon} {self.title}"
+
+
+class UserAchievement(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements')
+    achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE, related_name='unlocked_by')
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'achievement']
+        ordering = ['-unlocked_at']
+        verbose_name = "Полученное достижение"
+        verbose_name_plural = "Полученные достижения"
+
+    def __str__(self):
+        return f"{self.user.username} — {self.achievement.title}"
+
+
+# ===== РЕЗУЛЬТАТЫ ТЕСТОВ МОДУЛЕЙ =====
+# Тест на странице модуля (module.test_questions) раньше проверялся только
+# в браузере (JS) — результат нигде не сохранялся, поэтому его нельзя было
+# ни увидеть в CRM/статистике, ни использовать как условие достижения.
+class ModuleTestResult(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='test_results')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='test_results')
+    score_percent = models.PositiveIntegerField(verbose_name="Результат (%)")
+    attempts = models.PositiveIntegerField(default=1, verbose_name="Попыток")
+    best_score_percent = models.PositiveIntegerField(verbose_name="Лучший результат (%)")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'module']
+        verbose_name = "Результат теста"
+        verbose_name_plural = "Результаты тестов"
+
+    def __str__(self):
+        return f"{self.user.username} — {self.module.title}: {self.best_score_percent}%"

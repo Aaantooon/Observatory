@@ -18,7 +18,7 @@ sitemaps = {
 urlpatterns = [
     path('admin/', admin_site.urls),  # Используем кастомную админку
     path('api/', include('bot_api.urls')),
-    #path('forum/', include('machina.urls')),
+    path('forum/', include('machina.urls')),
     # Только login/logout из django.contrib.auth — реальный вход только
     # через VK ID (/vk/login/), у пользователей нет пароля, поэтому
     # password_change/password_reset НЕ подключаем: у них нет шаблонов

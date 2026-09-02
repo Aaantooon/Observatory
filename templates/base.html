@@ -185,6 +185,8 @@
                 <li class="nav-item"><a class="nav-link {% if '/course/' in request.path %}active{% endif %}" href="{% url 'course_index' %}">Курс</a></li>
                 <li class="nav-item"><a class="nav-link {% if request.path == '/map/' %}active{% endif %}" href="{% url 'map' %}">Карта</a></li>
                 <li class="nav-item"><a class="nav-link {% if '/put/' in request.path %}active{% endif %}" href="{% url 'put' %}">Тропы</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/forum/' in request.path %}active{% endif %}" href="/forum/">Форум</a></li>
+                <li class="nav-item"><a class="nav-link {% if '/achievements/' in request.path %}active{% endif %}" href="{% url 'achievements' %}">Достижения</a></li>
 
                 <!-- ===== АВТОРИЗАЦИЯ ЧЕРЕЗ VK ===== -->
                 {% if user.is_authenticated %}

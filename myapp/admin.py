@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     Module, UserCourseProgress, ModuleComment, MindMapNodePosition,
-    GameAssociation, UserStreak, UserProfile,
+    GameAssociation, UserStreak, UserProfile, Achievement, UserAchievement,
+    ModuleTestResult,
 )
 
 
@@ -47,3 +48,23 @@ class UserStreakAdmin(admin.ModelAdmin):
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'location', 'notifications_enabled', 'updated_at')
     search_fields = ('user__username', 'location')
+
+
+@admin.register(Achievement)
+class AchievementAdmin(admin.ModelAdmin):
+    list_display = ('icon', 'title', 'code', 'order')
+    ordering = ('order',)
+    search_fields = ('code', 'title', 'description')
+
+
+@admin.register(UserAchievement)
+class UserAchievementAdmin(admin.ModelAdmin):
+    list_display = ('user', 'achievement', 'unlocked_at')
+    search_fields = ('user__username', 'achievement__title')
+    list_filter = ('achievement',)
+
+
+@admin.register(ModuleTestResult)
+class ModuleTestResultAdmin(admin.ModelAdmin):
+    list_display = ('user', 'module', 'best_score_percent', 'attempts', 'updated_at')
+    search_fields = ('user__username', 'module__title')

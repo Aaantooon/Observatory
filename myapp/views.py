@@ -6,7 +6,8 @@ from django.contrib import messages
 from django.db.models import Q
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
-from .models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition
+from .models import Module, UserCourseProgress, GameAssociation, UserStreak, ModuleComment, UserProfile, Bookmark, MindMapNodePosition, Achievement, UserAchievement, ModuleTestResult
+from . import achievements as achievements_module
 import json
 import csv
 from datetime import date
@@ -121,6 +122,8 @@ def complete_module(request, module_number):
         streak, _ = UserStreak.objects.get_or_create(user=request.user)
         streak.update_streak()
         messages.success(request, f'🎉 Модуль "{module.title}" успешно завершён!')
+        for achievement in achievements_module.check_and_award(request.user):
+            messages.success(request, f'{achievement.icon} Новое достижение: «{achievement.title}»!')
     return redirect('course_module', module_number=module_number)
 
 
@@ -166,12 +169,17 @@ def complete_module_api(request):
         progress.complete_module(module)
         streak, _ = UserStreak.objects.get_or_create(user=request.user)
         streak.update_streak()
+        new_achievements = achievements_module.check_and_award(request.user)
         return JsonResponse({
             'success': True,
             'progress_percent': progress.get_progress_percent(),
             'is_finished': progress.completed_at is not None,
             'streak': streak.current_streak,
             'max_streak': streak.max_streak,
+            'new_achievements': [
+                {'icon': a.icon, 'title': a.title, 'description': a.description}
+                for a in new_achievements
+            ],
             'next_module': {
                 'id': progress.current_module.id if progress.current_module else None,
                 'number': progress.current_module.number if progress.current_module else None,
@@ -207,6 +215,7 @@ def association_api(request):
             object_name=object_name,
             association=association
         )
+        new_achievements = achievements_module.check_and_award(request.user)
         return JsonResponse({
             'success': True,
             'association': {
@@ -214,7 +223,11 @@ def association_api(request):
                 'object': assoc.object_name,
                 'association': assoc.association,
                 'created_at': assoc.created_at.isoformat()
-            }
+            },
+            'new_achievements': [
+                {'icon': a.icon, 'title': a.title, 'description': a.description}
+                for a in new_achievements
+            ],
         })
     except Http404:
         # Несуществующий/неопубликованный модуль — настоящий 404, а не
@@ -238,6 +251,8 @@ def add_comment(request, module_number):
             text=text
         )
         messages.success(request, '💬 Комментарий добавлен')
+        for achievement in achievements_module.check_and_award(request.user):
+            messages.success(request, f'{achievement.icon} Новое достижение: «{achievement.title}»!')
     return redirect('course_module', module_number=module_number)
 
 
@@ -365,6 +380,92 @@ def edit_profile(request):
 
 
 @login_required
+def achievements_view(request):
+    """Страница «Достижения» — заготовка геймификации из раздела
+    'Не начато / в планах' СВОДКА_ПРОЕКТА.md. Заодно на каждый заход
+    подчищает список: проверяет условия, которые могли выполниться без
+    прохода через один из хуков ниже (например, если достижение
+    добавили в ACHIEVEMENTS уже после того, как условие фактически
+    выполнилось)."""
+    new_achievements = achievements_module.check_and_award(request.user)
+    unlocked_ids = set(
+        UserAchievement.objects.filter(user=request.user).values_list('achievement_id', flat=True)
+    )
+    all_achievements = Achievement.objects.all()
+    # Каталог мог ещё не наполниться (ни одно достижение никем не
+    # получено — Achievement создаётся лениво в check_and_award при
+    # первой выдаче) — тогда показываем определения из кода как есть,
+    # все статус "заблокировано", ничего не создавая в БД молча на GET.
+    if not all_achievements.exists():
+        items = [
+            {'icon': d['icon'], 'title': d['title'], 'description': d['description'], 'unlocked': False, 'unlocked_at': None}
+            for d in achievements_module.ACHIEVEMENTS
+        ]
+    else:
+        by_id = {ua.achievement_id: ua.unlocked_at for ua in UserAchievement.objects.filter(user=request.user)}
+        items = [
+            {
+                'icon': a.icon, 'title': a.title, 'description': a.description,
+                'unlocked': a.id in unlocked_ids, 'unlocked_at': by_id.get(a.id),
+            }
+            for a in all_achievements
+        ]
+    return render(request, 'myapp/achievements.html', {
+        'items': items,
+        'unlocked_count': len(unlocked_ids),
+        'total_count': len(items),
+        'new_achievements': new_achievements,
+    })
+
+
+@login_required
+def submit_test_result_api(request):
+    """Сохраняет результат теста модуля (module.test_questions) —
+    раньше тест проверялся только в браузере (JS), результат нигде не
+    оставался: не было видно ни в CRM, ни в статистике, ни как условие
+    достижения. Хранит лучший результат и число попыток на пару
+    (пользователь, модуль)."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    try:
+        data = json.loads(request.body)
+        module_id = data.get('module_id')
+        score_percent = data.get('score_percent')
+        if module_id is None or score_percent is None:
+            return JsonResponse({'error': 'module_id и score_percent обязательны'}, status=400)
+        score_percent = max(0, min(100, int(score_percent)))
+        module = get_object_or_404(Module, id=module_id, is_published=True)
+
+        result, created = ModuleTestResult.objects.get_or_create(
+            user=request.user, module=module,
+            defaults={'score_percent': score_percent, 'best_score_percent': score_percent, 'attempts': 1},
+        )
+        if not created:
+            result.score_percent = score_percent
+            result.attempts += 1
+            result.best_score_percent = max(result.best_score_percent, score_percent)
+            result.save()
+
+        new_achievements = achievements_module.check_and_award(request.user)
+        return JsonResponse({
+            'success': True,
+            'best_score_percent': result.best_score_percent,
+            'attempts': result.attempts,
+            'new_achievements': [
+                {'icon': a.icon, 'title': a.title, 'description': a.description}
+                for a in new_achievements
+            ],
+        })
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({'error': 'Invalid payload'}, status=400)
+    except Http404:
+        raise
+    except Exception:
+        logger.exception("Ошибка при сохранении результата теста (user=%s)", request.user.id)
+        return JsonResponse({'error': 'Не удалось сохранить результат'}, status=500)
+
+
+@login_required
 def toggle_bookmark(request, module_number):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -415,6 +516,26 @@ def mindmap_data(request):
             'type': 'root',
             'url': '/flashlight/',
         },
+    })
+
+    # Достижения — отдельная ветка от корня, не привязана к конкретному
+    # модулю (в отличие от ассоциаций ниже).
+    unlocked_achievements_count = UserAchievement.objects.filter(user=request.user).count()
+    nodes.append({
+        'id': 'achievements',
+        'type': 'mindmap',
+        'position': node_position('achievements', 50, 80),
+        'data': {
+            'label': f'🏆 Достижения ({unlocked_achievements_count})',
+            'type': 'achievements',
+            'url': '/achievements/',
+        },
+    })
+    edges.append({
+        'id': 'e_root_achievements',
+        'source': 'root',
+        'target': 'achievements',
+        'style': {'stroke': '#e2c044', 'strokeWidth': 2},
     })
 
     # Модули

@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Достижения — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ach-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+    .ach-header {
+        text-align: center;
+        padding: 30px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        margin-bottom: 30px;
+    }
+    .ach-header h1 {
+        font-size: 2.2rem;
+        font-weight: 300;
+        color: #d4d9e6;
+        letter-spacing: 2px;
+    }
+    .ach-header .subtitle {
+        color: #8a8a8a;
+        font-size: 1.05rem;
+    }
+    .ach-count {
+        color: #e2c044;
+        font-size: 1.3rem;
+        margin-top: 10px;
+    }
+    .ach-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+    }
+    .ach-card {
+        background: rgba(22,33,62,0.3);
+        border: 1px solid rgba(255,255,255,0.04);
+        border-radius: 14px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    .ach-card.unlocked {
+        border-color: rgba(226,192,68,0.2);
+        background: rgba(226,192,68,0.04);
+    }
+    .ach-card.locked {
+        opacity: 0.45;
+    }
+    .ach-card .icon {
+        font-size: 2.4rem;
+        margin-bottom: 10px;
+        filter: grayscale(1);
+    }
+    .ach-card.unlocked .icon {
+        filter: none;
+    }
+    .ach-card .title {
+        color: #d4d9e6;
+        font-size: 1rem;
+        margin-bottom: 4px;
+    }
+    .ach-card.unlocked .title {
+        color: #e2c044;
+    }
+    .ach-card .desc {
+        color: #5a6a7e;
+        font-size: 0.85rem;
+    }
+    .ach-card .unlocked-at {
+        color: #4a5a6a;
+        font-size: 0.7rem;
+        margin-top: 8px;
+        letter-spacing: 0.5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ach-container">
+    <div class="ach-header">
+        <h1>🏆 Достижения</h1>
+        <p class="subtitle">Стать Наблюдателем — шаг за шагом</p>
+        <div class="ach-count">{{ unlocked_count }} / {{ total_count }}</div>
+    </div>
+
+    <div class="ach-grid">
+        {% for item in items %}
+        <div class="ach-card {% if item.unlocked %}unlocked{% else %}locked{% endif %}">
+            <div class="icon">{{ item.icon }}</div>
+            <div class="title">{{ item.title }}</div>
+            <div class="desc">{{ item.description }}</div>
+            {% if item.unlocked and item.unlocked_at %}
+                <div class="unlocked-at">Получено {{ item.unlocked_at|date:"d.m.Y" }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

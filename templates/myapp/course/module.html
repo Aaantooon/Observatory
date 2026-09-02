@@ -291,6 +291,35 @@
             result.innerHTML = `🔄 <span style="color:#c04a4a;">${percent}%</span> — Рекомендую вернуться к модулю.`;
             result.style.border = '1px solid rgba(192,74,74,0.2)';
         }
+
+        // Результат раньше нигде не сохранялся (только в браузере) — теперь
+        // уходит на сервер: виден в CRM/статистике и учитывается достижением
+        // «Отличник» (100%). Ошибка сохранения не мешает увидеть свой
+        // результат — она просто ничего не показывает дополнительно.
+        function getCookie(name) {
+            const value = "; " + document.cookie;
+            const parts = value.split("; " + name + "=");
+            if (parts.length === 2) return parts.pop().split(";").shift();
+        }
+        fetch('{% url "api_submit_test_result" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ module_id: {{ module.id }}, score_percent: percent }),
+        })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data && data.new_achievements && data.new_achievements.length) {
+                    const names = data.new_achievements.map(a => `${a.icon} «${a.title}»`).join(', ');
+                    const banner = document.createElement('div');
+                    banner.style.cssText = 'margin-top:12px;padding:10px 16px;border-radius:10px;background:rgba(226,192,68,0.1);border:1px solid rgba(226,192,68,0.3);color:#e2c044;font-size:0.9rem;';
+                    banner.textContent = `🏆 Новое достижение: ${names}`;
+                    result.after(banner);
+                }
+            })
+            .catch(() => {});
     });
     </script>
     {% endif %}

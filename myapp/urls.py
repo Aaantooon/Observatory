@@ -14,7 +14,9 @@ urlpatterns = [
     path('api/stats/', views.course_progress_api, name='api_stats'),
     path('api/mindmap/', views.mindmap_data, name='api_mindmap'),
     path('api/mindmap/save-position/', views.mindmap_save_position, name='api_mindmap_save_position'),
+    path('api/course/test-result/', views.submit_test_result_api, name='api_submit_test_result'),
     path('search/', views.search_course, name='search_course'),
     path('export/', views.export_progress, name='export_progress'),
     path('profile/edit/', views.edit_profile, name='edit_profile'),
+    path('achievements/', views.achievements_view, name='achievements'),
 ]
