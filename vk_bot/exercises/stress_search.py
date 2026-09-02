@@ -17,6 +17,11 @@ from keyboards import (
 #      столько образов — можно отправить, не разбирая остальные записанные.
 MIN_ITEMS_TO_FINISH_EARLY = 10
 MIN_ANALYZED_TO_FINISH_EARLY = 3
+# Оценка образа при записи (1-10) — это интенсивность страха/энергозатрат.
+# Низкая (0-3) — фонарик уже полностью освещает образ, он не пугает, стресс
+# по сути отпущен сам собой. Выше — образ ещё в тумане, заберёт время и
+# энергию, с ним стоит поработать в части 2.
+RELEASED_RATE_THRESHOLD = 3
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +102,20 @@ class StressSearchExercise:
             f"{MIN_ANALYZED_TO_FINISH_EARLY} образов (сейчас разобрано {analyzed}, ещё "
             f"{remaining})\n"
         )
+
+    def _stress_split_line(self, session):
+        """Постоянная строка-счётчик по всей записанной карте (не только по
+        показанным в подтверждении пунктам): сколько образов уже сами по
+        себе не пугают (оценка 0-{RELEASED_RATE_THRESHOLD}, фонарик их уже
+        осветил), а сколько ещё в тумане и потребуют разбора в части 2.
+        Ничего из написанного не теряется — это просто карта того, что уже
+        нанесено."""
+        items = session.get('items', [])
+        if not items:
+            return ""
+        released = sum(1 for i in items if i.get('rate', 0) <= RELEASED_RATE_THRESHOLD)
+        scary = len(items) - released
+        return f"🟢 {released} уже отпущено · 🔴 {scary} ещё пугают и заберут время на разбор\n"
 
     def _score_emoji(self, score):
         """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""
@@ -452,7 +471,8 @@ class StressSearchExercise:
                 user_id,
                 "🔦 ПРОДОЛЖАЕМ ПУТЬ\n\n"
                 f"· Уже записано: {count} образов\n"
-                f"· {progress}\n\n"
+                f"· {progress}\n"
+                f"{self._stress_split_line(session)}\n"
                 "🕯️ Пиши следующий образ, а когда закончишь — жми «Продолжить».\n"
                 f"{self._items_finish_hint(count)}",
                 exercise_keyboard(can_finish)
@@ -585,6 +605,7 @@ class StressSearchExercise:
             f"{milestone_text}\n"
             f"{reply}\n\n"
             f"{self._get_separator()}\n"
+            f"{self._stress_split_line(session)}"
             f"· Пиши следующий образ, а когда закончишь — жми «Продолжить»\n"
             f"{self._items_finish_hint(count)}",
             exercise_keyboard(can_finish)
@@ -676,7 +697,10 @@ class StressSearchExercise:
         # вставить очень длинный список, и даже при обрезке каждой строки
         # десятки строк всё равно легко перевалят за лимит VK. Заодно и
         # само сообщение не превращается в простыню — свет фонарика
-        # выхватывает только первые шаги, остальное растворяется в тумане.
+        # выхватывает только первые шаги. Остальные при этом НЕ потеряны —
+        # они уже нанесены на карту (в session['items']), просто здесь не
+        # показаны построчно; общий счёт ниже (см. _stress_split_line)
+        # честно учитывает вообще все записанные образы.
         MAX_LISTED = 10
         shown_items = parsed_items[:MAX_LISTED]
         listed = "\n".join(
@@ -684,12 +708,13 @@ class StressSearchExercise:
             for i, (item_text, rate) in enumerate(shown_items)
         )
         if len(parsed_items) > MAX_LISTED:
-            listed += f"\n🌫️ …и ещё {len(parsed_items) - MAX_LISTED} растворились в тумане"
+            listed += f"\n🌫️ …и ещё {len(parsed_items) - MAX_LISTED} — уже на карте, ниже общий счёт"
 
         message = (
             f"✅ Добавлено образов: {len(parsed_items)}\n"
             f"{listed}\n\n"
             f"· {progress}\n"
+            f"{self._stress_split_line(session)}"
             f"Всего: {count}/100\n"
         )
         if note:
