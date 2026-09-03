@@ -226,6 +226,18 @@ def main_menu():
         [("🔦 Упражнения", "primary"), ("📊 Мои результаты", "secondary")],
         [("⏰ Напоминания", "primary"), ("📨 Проверка", "secondary")],
         [("📅 Мой план на день", "primary")],
+        [("🔗 Привязать аккаунт", "secondary")],
+    ]
+    return _kb(rows, one_time=False)
+
+def account_link_menu_keyboard():
+    """Экран «Привязка аккаунта» (объединить VK и Telegram в один — см.
+    handlers.py::show_account_link_menu, platform_bots/README.md, раздел
+    «Модель пользователя»)."""
+    rows = [
+        [("🔑 Получить код", "primary")],
+        [("✍️ Ввести код", "primary")],
+        [("🔙 Назад", "secondary")],
     ]
     return _kb(rows, one_time=False)
 

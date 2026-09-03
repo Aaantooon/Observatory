@@ -1,7 +1,7 @@
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
 from api_client import APIClient
 from vk_adapter import VkAdapter
-from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard, account_link_menu_keyboard
 from exercises.stress_search import StressSearchExercise
 from exercises.happiness_list import HappinessListExercise
 from exercises.my_roles import MyRolesExercise
@@ -272,8 +272,9 @@ class BotHandlers:
             in_menu_flow = current_state in (
                 'selecting_exercise', 'selecting_stress_part',
                 'reminders', 'sending_review',
+                'account_link', 'account_link_enter_code',
             )
-            menu_entry_words = ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история', 'мой план на день']
+            menu_entry_words = ['упражнения', 'мои результаты', 'напоминания', 'проверка', 'вся история', 'мой план на день', 'привязать аккаунт']
             if text_lower not in menu_entry_words and not in_menu_flow:
                 comment_sent = self.api.add_comment(active_review['id'], text, is_admin=False)
                 if comment_sent:
@@ -327,6 +328,8 @@ class BotHandlers:
                 self.show_reminders(user_id)
             elif "план" in text_clean:
                 self.show_daily_plan(user_id)
+            elif "привяз" in text_clean:
+                self.show_account_link_menu(user_id)
             else:
                 self.send_message(
                     user_id,
@@ -477,6 +480,118 @@ class BotHandlers:
                         )
             else:
                 self.send_message(user_id, "⏰ Выбери настройку из кнопок.", get_reminder_keyboard())
+
+        elif state == 'account_link':
+            if "назад" in text_clean:
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "🔦 Возвращаемся на перекрёсток.",
+                    main_menu()
+                )
+            elif "получить код" in text_clean:
+                result = self.api.generate_link_code(user_id)
+                self.user_states[user_id] = 'main'
+                if result.get('ok'):
+                    minutes = result.get('expires_in_minutes', 10)
+                    self.send_message(
+                        user_id,
+                        f"🔑 Твой код: {result.get('code')}\n\n"
+                        f"Открой ДРУГОЙ мессенджер (тот, который хочешь объединить с "
+                        f"этим) и пришли туда этот код обычным сообщением в течение "
+                        f"{minutes} минут.",
+                        main_menu()
+                    )
+                elif result.get('error') == 'already_linked':
+                    self.send_message(
+                        user_id,
+                        "🔗 Твои аккаунты уже объединены — привязывать больше нечего.",
+                        main_menu()
+                    )
+                else:
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось создать код — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        main_menu()
+                    )
+            elif "ввести код" in text_clean:
+                self.user_states[user_id] = 'account_link_enter_code'
+                self.send_message(
+                    user_id,
+                    "✍️ Пришли код, который тебе показал другой мессенджер:",
+                    back_keyboard()
+                )
+            else:
+                self.send_message(user_id, "🔗 Выбери действие из кнопок.", account_link_menu_keyboard())
+
+        elif state == 'account_link_enter_code':
+            if "назад" in text_clean:
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "🔦 Возвращаемся на перекрёсток.",
+                    main_menu()
+                )
+            else:
+                code = re.sub(r'\D', '', text or '')
+                if not code:
+                    self.send_message(
+                        user_id,
+                        "Это не похоже на код — пришли те самые цифры, которые "
+                        "показал другой мессенджер.",
+                        back_keyboard()
+                    )
+                else:
+                    result = self.api.confirm_link_code(user_id, code)
+                    self.user_states[user_id] = 'main'
+                    if result.get('ok'):
+                        self.send_message(
+                            user_id,
+                            "✅ Готово! Аккаунты объединены — прогресс, напоминания и "
+                            "проверки теперь общие, из какого мессенджера ни зайди.",
+                            main_menu()
+                        )
+                    else:
+                        error_messages = {
+                            'invalid_or_expired': (
+                                "❌ Код неверный или уже устарел (коды живут 10 минут). "
+                                "Получи новый код в другом мессенджере и попробуй снова."
+                            ),
+                            'same_account': (
+                                "🔗 Это код из этого же аккаунта — привязывать не к чему. "
+                                "Получи код в ДРУГОМ мессенджере."
+                            ),
+                            'conflict': (
+                                "⚠️ Не получилось: второй мессенджер уже привязан к "
+                                "другому аккаунту."
+                            ),
+                        }
+                        self.send_message(
+                            user_id,
+                            error_messages.get(
+                                result.get('error'),
+                                "⚠️ Не получилось объединить аккаунты — сервис на секунду "
+                                "недоступен. Попробуй ещё раз через минуту."
+                            ),
+                            main_menu()
+                        )
+
+    def show_account_link_menu(self, user_id):
+        self.user_states[user_id] = 'account_link'
+        self.send_message(
+            user_id,
+            "🔗 ПРИВЯЗКА АККАУНТА\n\n"
+            "Если пишешь боту и из VK, и из Telegram — можно объединить их в "
+            "один аккаунт: прогресс, напоминания и проверки станут общими, из "
+            "какого мессенджера ни зайди.\n\n"
+            "1️⃣ Жми «Получить код» — покажем код на 10 минут\n"
+            "2️⃣ Пришли этот код обычным сообщением в ДРУГОЙ мессенджер\n\n"
+            "Или наоборот: если код уже показали в другом мессенджере — жми "
+            "«Ввести код».",
+            account_link_menu_keyboard()
+        )
+
     def show_exercises(self, user_id):
         self.user_states[user_id] = 'selecting_exercise'
 

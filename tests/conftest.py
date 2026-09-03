@@ -86,6 +86,19 @@ class FakeAPIClient:
         self.fail_delete_notification_ids = set()  # id, для которых delete_notification вернёт False
         self.fail_send_for_review = False
         self.fail_add_comment = False
+        # -- привязка аккаунта (platform_bots/README.md, «Модель пользователя») --
+        self.generated_link_codes = []  # list of user_id
+        self.confirmed_link_codes = []  # list of (user_id, code)
+        self.generate_link_code_result = {"ok": True, "code": "123456", "expires_in_minutes": 10}
+        self.confirm_link_code_result = {"ok": True, "status": "ok"}
+
+    def generate_link_code(self, user_id):
+        self.generated_link_codes.append(user_id)
+        return dict(self.generate_link_code_result)
+
+    def confirm_link_code(self, user_id, code):
+        self.confirmed_link_codes.append((user_id, code))
+        return dict(self.confirm_link_code_result)
 
     def save_progress(self, user_vk_id, exercise_type, data):
         if self.fail_save_progress:

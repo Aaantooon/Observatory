@@ -64,7 +64,7 @@ from rest_framework.test import APIClient  # noqa: E402
 from rest_framework.authtoken.models import Token  # noqa: E402
 from rest_framework import status  # noqa: E402
 
-from bot_api.models import User, Exercise, Notification  # noqa: E402
+from bot_api.models import User, Exercise, Notification, Result, Review, ExerciseProgress, AccountLinkCode  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -416,3 +416,199 @@ def test_save_result_and_full_review_lifecycle_by_telegram_id(api):
         "comment": "Хорошо", "is_admin": False,
     }, format="json")
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Привязка одного человека к нескольким платформам (шаг из
+# platform_bots/README.md, «Модель пользователя») — /api/link/generate/ и
+# /api/link/confirm/, bot_api/views.py::AccountLinkViewSet, _merge_users.
+# ---------------------------------------------------------------------------
+
+def test_generate_link_code_returns_code_and_expiry(api):
+    User.objects.create(vk_id="100", first_name="А", last_name="А")
+
+    resp = api.post("/api/link/generate/", {"vk_id": "100"}, format="json")
+    assert resp.status_code == 200, resp.data
+    assert len(resp.data["code"]) == 6 and resp.data["code"].isdigit()
+    assert resp.data["expires_in_minutes"] == 10
+
+
+def test_generate_link_code_for_already_linked_user_fails():
+    from django.test import TestCase
+    from django.contrib.auth.models import User as AuthUser
+    from rest_framework.test import APIClient as DRFClient
+    from rest_framework.authtoken.models import Token
+
+    tc = TestCase()
+    tc._pre_setup()
+    try:
+        auth_user = AuthUser.objects.create_user(username="bot2", password="x")
+        token = Token.objects.create(user=auth_user)
+        client = DRFClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        User.objects.create(vk_id="101", telegram_id="201", first_name="А", last_name="А")
+        resp = client.post("/api/link/generate/", {"vk_id": "101"}, format="json")
+        assert resp.status_code == 400
+        assert resp.data["error"] == "already_linked"
+    finally:
+        tc._post_teardown()
+
+
+def test_generate_link_code_user_not_found(api):
+    resp = api.post("/api/link/generate/", {"vk_id": "no-such-user"}, format="json")
+    assert resp.status_code == 404
+    assert resp.data["error"] == "user_not_found"
+
+
+def test_confirm_link_code_merges_users_and_moves_data(api):
+    source = User.objects.create(vk_id="100", first_name="А", last_name="А", streak=2)
+    from datetime import date
+    User.objects.filter(pk=source.pk).update(last_activity_date=date(2026, 9, 1))
+    target = User.objects.create(telegram_id="200", first_name="А", last_name="А", streak=5)
+    User.objects.filter(pk=target.pk).update(last_activity_date=date(2026, 9, 3))
+    source.refresh_from_db()
+    target.refresh_from_db()
+
+    exercise = Exercise.objects.create(title="Дневник", type="diary")
+    Result.objects.create(user=target, exercise=exercise, result_data={"mood": "ok"})
+    Review.objects.create(user=target, exercise_type="diary", data={})
+    ExerciseProgress.objects.create(user=target, exercise_type="diary", data={"mood": "ok"})
+    ExerciseProgress.objects.create(user=source, exercise_type="stress_search", data={"items": []})
+    Notification.objects.create(
+        user=target, exercise_type="diary", schedule_type="daily",
+        schedule_data={"time": "08:00", "type": "morning"},
+    )
+    Notification.objects.create(
+        user=source, exercise_type="stop_technique", schedule_type="daily",
+        schedule_data={"time": "12:00", "type": "stop_technique"},
+    )
+
+    gen = api.post("/api/link/generate/", {"vk_id": "100"}, format="json")
+    code = gen.data["code"]
+
+    resp = api.post("/api/link/confirm/", {"telegram_id": "200", "code": code}, format="json")
+    assert resp.status_code == 200, resp.data
+    assert resp.data == {"status": "ok"}
+
+    assert not User.objects.filter(pk=target.pk).exists(), "target_user должен быть удалён после слияния"
+
+    source.refresh_from_db()
+    assert source.vk_id == "100" and source.telegram_id == "200"
+    assert source.streak == 5, "стрик должен взять максимум из двух"
+    assert source.last_activity_date == date(2026, 9, 3), "дата активности — более поздняя из двух"
+
+    assert Result.objects.filter(user=source).count() == 1
+    assert Review.objects.filter(user=source).count() == 1
+    assert ExerciseProgress.objects.filter(user=source).count() == 2, (
+        "оба непересекающихся прогресса (diary с target, stress_search с source) должны сохраниться"
+    )
+    assert Notification.objects.filter(user=source).count() == 2, (
+        "оба непересекающихся напоминания должны сохраниться"
+    )
+
+
+def test_confirm_link_code_keeps_more_recent_progress_on_conflict(api):
+    source = User.objects.create(vk_id="110", first_name="А", last_name="А")
+    target = User.objects.create(telegram_id="210", first_name="А", last_name="А")
+
+    old_progress = ExerciseProgress.objects.create(user=source, exercise_type="diary", data={"mood": "old"})
+    new_progress = ExerciseProgress.objects.create(user=target, exercise_type="diary", data={"mood": "new"})
+    from django.utils import timezone
+    from datetime import timedelta
+    ExerciseProgress.objects.filter(pk=old_progress.pk).update(updated_at=timezone.now() - timedelta(days=1))
+
+    gen = api.post("/api/link/generate/", {"vk_id": "110"}, format="json")
+    code = gen.data["code"]
+    resp = api.post("/api/link/confirm/", {"telegram_id": "210", "code": code}, format="json")
+    assert resp.status_code == 200, resp.data
+
+    remaining = ExerciseProgress.objects.filter(user_id=source.pk, exercise_type="diary")
+    assert remaining.count() == 1, "при конфликте должна остаться ровно одна запись прогресса"
+    assert remaining.first().data == {"mood": "new"}, "должна победить более свежая (по updated_at) версия"
+
+
+def test_confirm_link_code_deduplicates_identical_notifications(api):
+    source = User.objects.create(vk_id="120", first_name="А", last_name="А")
+    target = User.objects.create(telegram_id="220", first_name="А", last_name="А")
+
+    schedule = {"time": "08:00", "type": "morning"}
+    Notification.objects.create(user=source, exercise_type="diary", schedule_type="daily", schedule_data=schedule)
+    Notification.objects.create(user=target, exercise_type="diary", schedule_type="daily", schedule_data=schedule)
+
+    gen = api.post("/api/link/generate/", {"vk_id": "120"}, format="json")
+    code = gen.data["code"]
+    resp = api.post("/api/link/confirm/", {"telegram_id": "220", "code": code}, format="json")
+    assert resp.status_code == 200, resp.data
+
+    assert Notification.objects.filter(user_id=source.pk).count() == 1, (
+        "одинаковое напоминание с обеих платформ не должно задваиваться после слияния"
+    )
+
+
+def test_confirm_link_code_invalid_code_fails(api):
+    User.objects.create(telegram_id="230", first_name="А", last_name="А")
+    resp = api.post("/api/link/confirm/", {"telegram_id": "230", "code": "000000"}, format="json")
+    assert resp.status_code == 400
+    assert resp.data["error"] == "invalid_or_expired"
+
+
+def test_confirm_link_code_expired_code_fails(api):
+    from django.utils import timezone
+    from datetime import timedelta
+
+    source = User.objects.create(vk_id="130", first_name="А", last_name="А")
+    target = User.objects.create(telegram_id="240", first_name="А", last_name="А")
+    link = AccountLinkCode.objects.create(code="555555", source_user=source)
+    AccountLinkCode.objects.filter(pk=link.pk).update(
+        created_at=timezone.now() - timedelta(minutes=AccountLinkCode.LIFETIME_MINUTES + 1)
+    )
+
+    resp = api.post("/api/link/confirm/", {"telegram_id": "240", "code": "555555"}, format="json")
+    assert resp.status_code == 400
+    assert resp.data["error"] == "invalid_or_expired"
+    assert User.objects.filter(pk=target.pk).exists(), "истёкший код не должен ничего сливать"
+
+
+def test_confirm_link_code_same_account_fails(api):
+    User.objects.create(vk_id="140", first_name="А", last_name="А")
+
+    gen = api.post("/api/link/generate/", {"vk_id": "140"}, format="json")
+    code = gen.data["code"]
+
+    resp = api.post("/api/link/confirm/", {"vk_id": "140", "code": code}, format="json")
+    assert resp.status_code == 400
+    assert resp.data["error"] == "same_account"
+
+
+def test_confirm_link_code_conflicting_platform_ids_fails(api):
+    source = User.objects.create(vk_id="V1", first_name="А", last_name="А")
+    target = User.objects.create(vk_id="V9", telegram_id="T1", first_name="Б", last_name="Б")
+
+    gen = api.post("/api/link/generate/", {"vk_id": "V1"}, format="json")
+    code = gen.data["code"]
+
+    resp = api.post("/api/link/confirm/", {"telegram_id": "T1", "code": code}, format="json")
+    assert resp.status_code == 409
+    assert resp.data["error"] == "conflict"
+
+    source.refresh_from_db()
+    assert source.telegram_id is None, "при конфликте ничего не должно измениться"
+    assert User.objects.filter(pk=target.pk).exists(), "при конфликте target не должен удаляться"
+
+
+def test_confirm_link_code_cannot_be_reused(api):
+    source = User.objects.create(vk_id="150", first_name="А", last_name="А")
+    target1 = User.objects.create(telegram_id="250", first_name="А", last_name="А")
+    User.objects.create(telegram_id="251", first_name="В", last_name="В")
+
+    gen = api.post("/api/link/generate/", {"vk_id": "150"}, format="json")
+    code = gen.data["code"]
+
+    resp1 = api.post("/api/link/confirm/", {"telegram_id": "250", "code": code}, format="json")
+    assert resp1.status_code == 200, resp1.data
+    assert not User.objects.filter(pk=target1.pk).exists()
+
+    resp2 = api.post("/api/link/confirm/", {"telegram_id": "251", "code": code}, format="json")
+    assert resp2.status_code == 400
+    assert resp2.data["error"] == "invalid_or_expired", "уже использованный код нельзя применить повторно"

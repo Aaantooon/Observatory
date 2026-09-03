@@ -373,3 +373,61 @@ def test_delete_notification_true_on_204_false_otherwise():
 
     client, fake = make(RuntimeError("сеть упала"))
     assert client.delete_notification(1) is False
+
+
+# ---------------------------------------------------------------------------
+# generate_link_code / confirm_link_code — привязка аккаунта к нескольким
+# платформам (platform_bots/README.md, «Модель пользователя»). В отличие от
+# большинства методов выше, эти два ВСЕГДА возвращают dict с ключом "ok"
+# (никогда None/True/False) — handlers.py различает конкретную причину
+# сбоя (см. bot_api/views.py::AccountLinkViewSet).
+# ---------------------------------------------------------------------------
+
+def test_generate_link_code_success_returns_ok_and_code():
+    client, fake = make(FakeResponse(200, {"code": "123456", "expires_in_minutes": 10}))
+    result = client.generate_link_code("123")
+    assert result == {"ok": True, "code": "123456", "expires_in_minutes": 10}
+    verb, url, kwargs = fake.calls[0]
+    assert verb == "POST" and "link/generate" in url
+    assert kwargs["json"] == {"vk_id": "123"}
+
+
+def test_generate_link_code_uses_telegram_id_for_telegram_platform():
+    client, fake = make(FakeResponse(200, {"code": "654321", "expires_in_minutes": 10}))
+    client.platform = "telegram"
+    client.generate_link_code("999")
+    verb, url, kwargs = fake.calls[0]
+    assert kwargs["json"] == {"telegram_id": "999"}
+
+
+def test_generate_link_code_bad_status_returns_ok_false_with_server_error():
+    client, fake = make(FakeResponse(400, {"error": "already_linked"}))
+    result = client.generate_link_code("123")
+    assert result == {"ok": False, "error": "already_linked"}
+
+
+def test_generate_link_code_network_exception_returns_ok_false():
+    client, fake = make(RuntimeError("сеть упала"))
+    result = client.generate_link_code("123")
+    assert result == {"ok": False, "error": "network"}
+
+
+def test_confirm_link_code_success_returns_ok_true():
+    client, fake = make(FakeResponse(200, {"status": "ok"}))
+    result = client.confirm_link_code("123", "654321")
+    assert result["ok"] is True
+    verb, url, kwargs = fake.calls[0]
+    assert verb == "POST" and "link/confirm" in url
+    assert kwargs["json"] == {"vk_id": "123", "code": "654321"}
+
+
+def test_confirm_link_code_bad_status_returns_ok_false_with_error():
+    client, fake = make(FakeResponse(400, {"error": "invalid_or_expired"}))
+    result = client.confirm_link_code("123", "000000")
+    assert result == {"ok": False, "error": "invalid_or_expired"}
+
+
+def test_confirm_link_code_network_exception_returns_ok_false():
+    client, fake = make(ConnectionError("нет сети"))
+    result = client.confirm_link_code("123", "654321")
+    assert result == {"ok": False, "error": "network"}

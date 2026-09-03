@@ -1600,10 +1600,11 @@ def test_conscious_choice_step2_skip_own_affirmation_uses_example_as_is():
 
 
 def test_conscious_choice_full_flow_to_finish():
-    """Шаги 4 и 5 ("Анализ выбора" и "Альтернативы") разбиты на отдельные
-    экраны — сначала показывается сам выбор (подтверждение "Продолжить"),
-    потом отдельно минусы, потом отдельно плюсы, каждый можно ответить
-    текстом или пропустить кнопкой "Продолжить"."""
+    """Шаг 4 ("Анализ выбора") показывает сразу и сам выбор, и просьбу
+    написать минусы одним сообщением (раньше это были два отдельных экрана
+    с "Продолжить" между ними без какого-либо ввода) — текст минусов можно
+    вписать сразу. Шаг 7 ("Альтернативы") по-прежнему отдельным
+    подтверждающим экраном, за которым идут отдельные минусы/плюсы."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     assert ex.user_sessions[UID]["step"] == 1
@@ -1621,15 +1622,12 @@ def test_conscious_choice_full_flow_to_finish():
     ex.handle_message(UID, "Никто не отнял")        # who_took -> step 3
     assert ex.user_sessions[UID]["step"] == 3
 
-    ex.handle_message(UID, "Я сам")                 # who_greater -> step 4 (ack "Я выбираю")
+    ex.handle_message(UID, "Я сам")                 # who_greater -> step 4 (выбор + минусы одним сообщением)
     assert ex.user_sessions[UID]["step"] == 4
     assert "Я выбираю" in vk.last_message
-
-    ex.handle_message(UID, "➡️ Продолжить")        # -> step 5 (минусы)
-    assert ex.user_sessions[UID]["step"] == 5
     assert "Не хочу" in vk.last_message
 
-    ex.handle_message(UID, "устану")                # choice_minus -> step 6 (плюсы)
+    ex.handle_message(UID, "устану")                # choice_minus -> step 6 (плюсы), без отдельного "Продолжить"
     assert ex.user_sessions[UID]["step"] == 6
     assert "Хочу" in vk.last_message
 
@@ -1661,7 +1659,8 @@ def test_conscious_choice_full_flow_to_finish():
 
 
 def test_conscious_choice_skip_all_minus_plus_via_continue():
-    """Все 4 экрана минусов/плюсов (шаги 5, 6, 8, 9) можно пропустить одной
+    """Все экраны минусов/плюсов (шаги 4, 6, 8, 9 — бывший шаг 5 теперь
+    показывается вместе с 4, см. _show_choice_minus) можно пропустить одной
     кнопкой «Продолжить», не отвечая ни разу — упражнение всё равно
     доходит до конца."""
     ex, vk, api = make(ConsciousChoiceExercise)
@@ -1672,7 +1671,7 @@ def test_conscious_choice_skip_all_minus_plus_via_continue():
     ex.handle_message(UID, "Никто не отнял")   # -> step 3
     ex.handle_message(UID, "Я сам")            # -> step 4
 
-    for _ in range(6):  # шаги 4,5,6,7,8,9 — каждый пропускается "Продолжить"
+    for _ in range(5):  # шаги 4,6,7,8,9 — каждый пропускается "Продолжить"
         ex.handle_message(UID, "➡️ Продолжить")
 
     assert UID not in ex.user_sessions, "Упражнение должно завершиться, даже если все минусы/плюсы пропущены"
@@ -1703,10 +1702,9 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     # разбираем пункт 1 полностью (шаги 2-9)
     ex.handle_message(UID, "Имею право 1")     # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")   # -> 3
-    ex.handle_message(UID, "Я сам")            # -> 4
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 5
-    ex.handle_message(UID, "устану 1")         # -> 6
-    ex.handle_message(UID, "улыбка 1")         # -> 7
+    ex.handle_message(UID, "Я сам")            # -> 4 (выбор + минусы одним сообщением)
+    ex.handle_message(UID, "устану 1")         # choice_minus -> 6
+    ex.handle_message(UID, "улыбка 1")         # choice_plus -> 7
     ex.handle_message(UID, "➡️ Продолжить")    # -> 8
     ex.handle_message(UID, "➡️ Продолжить")    # -> 9
 
@@ -1729,8 +1727,7 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     # разбираем пункт 2
     ex.handle_message(UID, "Имею право 2")     # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Родители")         # -> 3
-    ex.handle_message(UID, "Никто")            # -> 4
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 5
+    ex.handle_message(UID, "Никто")            # -> 4 (выбор + минусы одним сообщением)
     ex.handle_message(UID, "➡️ Продолжить")    # -> 6 (пропуск минусов)
     ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (пропуск плюсов)
     ex.handle_message(UID, "➡️ Продолжить")    # -> 8
@@ -1852,22 +1849,22 @@ def test_stress_search_save_and_restart_failure_keeps_items_instead_of_wiping_th
 
 
 def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
-    """Шаги 4 и 7 — экраны-подтверждения без поля ввода: если пользователь
-    вместо «Продолжить» пришлёт текст, шаг не должен смениться."""
+    """Шаг 7 — экран-подтверждение без поля ввода: если пользователь вместо
+    «Продолжить» пришлёт текст, шаг не должен смениться. Шаг 4 больше не
+    такой (после слияния с бывшим шагом 5, см. _show_choice_minus) — любой
+    текст там теперь принимается как минусы."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
     ex.handle_message(UID, "➡️ Продолжить")
     ex.handle_message(UID, "Имею право")       # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")
-    ex.handle_message(UID, "Я сам")            # -> step 4
+    ex.handle_message(UID, "Я сам")            # -> step 4 (выбор + минусы одним сообщением)
 
-    ex.handle_message(UID, "случайный текст")
-    assert ex.user_sessions[UID]["step"] == 4
-    assert "Жми «Продолжить»" in vk.last_message
+    ex.handle_message(UID, "случайный текст")  # принимается как минус -> step 6
+    assert ex.user_sessions[UID]["step"] == 6
+    assert ex.user_sessions[UID]["choice_minus"] == "случайный текст"
 
-    ex.handle_message(UID, "➡️ Продолжить")   # -> 5
-    ex.handle_message(UID, "устану")           # -> 6
     ex.handle_message(UID, "улыбка")           # -> 7
 
     ex.handle_message(UID, "случайный текст")

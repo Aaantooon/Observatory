@@ -319,4 +319,34 @@ class APIClient:
         except Exception as e:
             logger.error(f"Get active review error: {e}")
         return None
+
+    # -- Привязка одного человека к нескольким платформам (шаг из
+    # platform_bots/README.md, «Модель пользователя») — оба метода всегда
+    # возвращают dict с ключом "ok" (никогда None), чтобы handlers.py мог
+    # различить конкретную причину сбоя (например 'already_linked' от
+    # обычного сетевого сбоя) — см. bot_api/views.py::AccountLinkViewSet.
+
+    def generate_link_code(self, user_id):
+        try:
+            response = requests.post(
+                f"{self.base_url}/link/generate/",
+                json={self._id_field(): str(user_id)},
+                headers=self.headers, timeout=5
+            )
+            return {"ok": response.status_code == 200, **(response.json() or {})}
+        except Exception as e:
+            logger.error(f"Generate link code error: {e}")
+            return {"ok": False, "error": "network"}
+
+    def confirm_link_code(self, user_id, code):
+        try:
+            response = requests.post(
+                f"{self.base_url}/link/confirm/",
+                json={self._id_field(): str(user_id), "code": code},
+                headers=self.headers, timeout=5
+            )
+            return {"ok": response.status_code == 200, **(response.json() or {})}
+        except Exception as e:
+            logger.error(f"Confirm link code error: {e}")
+            return {"ok": False, "error": "network"}
     

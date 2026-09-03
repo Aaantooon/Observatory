@@ -1,4 +1,6 @@
+from datetime import timedelta
 from django.db import models
+from django.utils import timezone
 
 class User(models.Model):
     # null=True на обоих полях — намеренно (шаг 4 плана миграции ботов на
@@ -23,6 +25,39 @@ class User(models.Model):
     def __str__(self):
         platform_id = self.vk_id or self.telegram_id or '—'
         return f"{self.first_name} {self.last_name} (ID: {platform_id})"
+
+
+class AccountLinkCode(models.Model):
+    """Одноразовый короткоживущий код для объединения аккаунтов ОДНОГО
+    человека на разных платформах (VK + Telegram и т.д. — см.
+    platform_bots/README.md, раздел «Модель пользователя»). Поток: человек
+    в одном мессенджере запрашивает код (source_user — его текущий
+    аккаунт), называет его во втором мессенджере — сервер переносит все
+    данные (Result/ExerciseProgress/Notification/Review) со второго
+    аккаунта на source_user и удаляет второй, теперь пустой, User
+    (см. bot_api/views.py::AccountLinkViewSet.confirm — там же вся логика
+    слияния, здесь только сам код и его срок жизни).
+
+    `code` намеренно НЕ unique в БД — коды короткоживущие (LIFETIME_MINUTES),
+    а не глобально уникальные навсегда: цифровое пространство 000000-999999
+    иначе рано или поздно исчерпалось бы совпадением со СТАРЫМ (уже
+    использованным/истёкшим) кодом. Уникальность проверяется в момент
+    генерации только СРЕДИ ДЕЙСТВУЮЩИХ (см. generate() во view)."""
+    LIFETIME_MINUTES = 10
+
+    code = models.CharField(max_length=10, db_index=True)
+    source_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='link_codes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + timedelta(minutes=self.LIFETIME_MINUTES)
+
+    def is_valid(self):
+        return self.used_at is None and not self.is_expired()
+
+    def __str__(self):
+        return f"{self.code} -> {self.source_user}"
 
 
 class Exercise(models.Model):

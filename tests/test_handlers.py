@@ -662,6 +662,196 @@ def test_reminders_invalid_text_reprompts():
 
 
 # ---------------------------------------------------------------------------
+# state == 'account_link' / 'account_link_enter_code' — привязка VK+Telegram
+# (см. platform_bots/README.md, «Модель пользователя»; наша цель — сделать
+# максимально удобно, просто и понятно, поэтому отдельно проверяем и честные
+# сообщения об ошибках, и прощение мусорного ввода).
+# ---------------------------------------------------------------------------
+
+def test_account_link_menu_opens_from_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    assert bh.user_states[UID] == "account_link"
+    assert "ПРИВЯЗКА АККАУНТА" in vk.last_message
+
+
+def test_account_link_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+
+
+def test_account_link_invalid_menu_text_reprompts():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "чепуха", "Аня", "И")
+    assert "Выбери действие из кнопок" in vk.last_message
+    assert bh.user_states[UID] == "account_link"
+
+
+def test_account_link_generate_code_success_shows_code_and_expiry():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.generate_link_code_result = {"ok": True, "code": "654321", "expires_in_minutes": 10}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert "654321" in vk.last_message
+    assert "10 минут" in vk.last_message
+    assert api.generated_link_codes == [UID]
+    assert bh.user_states[UID] == "main"
+
+
+def test_account_link_generate_code_already_linked_reports_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.generate_link_code_result = {"ok": False, "error": "already_linked"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert "уже объединены" in vk.last_message
+    assert bh.user_states[UID] == "main"
+
+
+def test_account_link_generate_code_network_failure_reports_honestly():
+    """generate_link_code всегда возвращает dict с ключом "ok" (см.
+    api_client.py) — при сетевом сбое ok=False без конкретного известного
+    error, и это не должно молча выглядеть как успех или как already_linked."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.generate_link_code_result = {"ok": False, "error": "network"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert "Не получилось" in vk.last_message
+    assert "уже объединены" not in vk.last_message
+
+
+def test_account_link_enter_code_prompts_for_code():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    assert bh.user_states[UID] == "account_link_enter_code"
+    assert "Пришли код" in vk.last_message
+
+
+def test_account_link_enter_code_back_returns_to_main():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "назад", "Аня", "И")
+    assert bh.user_states[UID] == "main"
+
+
+def test_account_link_enter_code_success_merges_accounts():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": True, "status": "ok"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "123456", "Аня", "И")
+    assert "Готово" in vk.last_message
+    assert "объединены" in vk.last_message
+    assert api.confirmed_link_codes == [(UID, "123456")]
+    assert bh.user_states[UID] == "main"
+
+
+def test_account_link_enter_code_strips_non_digits_before_confirming():
+    """Наша цель — максимально удобно и просто: код можно вписать с
+    пробелами/дефисами/эмодзи-подсказкой вокруг цифр, бот должен вычленить
+    сами цифры, а не заставлять переписывать в "правильном" формате."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "код: 123-456 😊", "Аня", "И")
+    assert api.confirmed_link_codes == [(UID, "123456")]
+
+
+def test_account_link_enter_code_pure_garbage_reprompts_without_calling_api():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "не помню код", "Аня", "И")
+    assert "не похож" in vk.last_message.lower()
+    assert api.confirmed_link_codes == []
+    assert bh.user_states[UID] == "account_link_enter_code"
+
+
+def test_account_link_enter_code_invalid_or_expired_reports_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": False, "error": "invalid_or_expired"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "111111", "Аня", "И")
+    assert "устарел" in vk.last_message or "неверный" in vk.last_message
+
+
+def test_account_link_enter_code_same_account_reports_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": False, "error": "same_account"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "111111", "Аня", "И")
+    assert "этого же аккаунта" in vk.last_message
+
+
+def test_account_link_enter_code_conflict_reports_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": False, "error": "conflict"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "111111", "Аня", "И")
+    assert "другому аккаунту" in vk.last_message
+
+
+def test_account_link_enter_code_network_failure_reports_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": False, "error": "network"}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    bh.handle_message(UID, "111111", "Аня", "И")
+    assert "Не получилось" in vk.last_message
+
+
+def test_active_review_does_not_block_account_link_menu():
+    """То же смягчение блокировки Review, что и для меню упражнений (см.
+    test_active_review_does_not_block_exercise_selection_menu) — привязка
+    аккаунта не должна быть недоступна только потому, что открыта проверка."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.set_active_review(UID, review_id=42, status="in_review")
+
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    assert len(api.comments) == 0
+    assert bh.user_states[UID] == "account_link"
+
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert len(api.comments) == 0
+    assert api.generated_link_codes == [UID]
+
+
+def test_active_review_does_not_block_account_link_enter_code_state():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Ввести код", "Аня", "И")
+    api.set_active_review(UID, review_id=42, status="in_review")
+
+    bh.handle_message(UID, "123456", "Аня", "И")
+    assert len(api.comments) == 0
+    assert api.confirmed_link_codes == [(UID, "123456")]
+
+
+# ---------------------------------------------------------------------------
 # _normalize_text — эмодзи не мешают распознаванию ключевых слов
 # ---------------------------------------------------------------------------
 
