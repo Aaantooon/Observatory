@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from conftest import FakeVK, FakeAPIClient
+from conftest import FakeVK, FakeAPIClient, FakeTelegramAdapter
+
+import requests
 
 from notifications import NotificationSystem
 from vk_api.exceptions import ApiError
@@ -16,11 +18,27 @@ def make_api_error(code, msg="error"):
     return ApiError(None, "messages.send", {}, {}, {"error_code": code, "error_msg": msg})
 
 
+def make_http_error(status_code):
+    """Аналог make_api_error() для Telegram — TelegramAdapter._call()
+    поднимает requests.exceptions.HTTPError через response.raise_for_status(),
+    см. platform_bots/telegram_adapter.py::send_text."""
+    resp = requests.Response()
+    resp.status_code = status_code
+    return requests.exceptions.HTTPError(response=resp)
+
+
 def make():
     vk = FakeVK()
     api = FakeAPIClient()
     ns = NotificationSystem(vk, api)
     return ns, vk, api
+
+
+def make_telegram():
+    tg = FakeTelegramAdapter()
+    api = FakeAPIClient(platform='telegram')
+    ns = NotificationSystem(tg, api, platform='telegram')
+    return ns, tg, api
 
 
 def test_due_reminder_is_sent_and_marked():
@@ -303,3 +321,159 @@ def test_mark_comment_sent_failure_is_logged_loudly(caplog):
 
     assert len(vk.sent) == 1
     assert any("возможен повторный показ" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Telegram-ветка (шаг 5 плана platform_bots/README.md) — тот же
+# NotificationSystem, platform='telegram', отправка через
+# TelegramAdapter.send_text вместо self.vk.method(...). Существующие
+# VK-тесты выше не трогаем — только параллельные тесты для нового пути,
+# по той же схеме, что и test_bot_api_integration.py на шаге 4.
+# ---------------------------------------------------------------------------
+
+def test_due_reminder_is_sent_and_marked_telegram():
+    ns, tg, api = make_telegram()
+    api.get_due_notifications = lambda: [
+        {"id": 1, "user_telegram_id": "123", "user_vk_id": None, "exercise_type": "diary"}
+    ]
+
+    ns._check_notifications()
+
+    assert len(tg.sent) == 1
+    assert tg.sent[0]["user_id"] == 123
+    assert "дневник" in tg.sent[0]["message"].lower()
+    assert api.marked_notifications_sent == [1]
+
+
+def test_notification_for_other_platform_is_skipped_silently_telegram(caplog):
+    """/notifications/due/ отдаёт уведомления И VK, И Telegram пользователей
+    без фильтрации на сервере (см. bot_api/serializers.py::NotificationSerializer) —
+    Telegram-поток должен молча пропускать записи VK-пользователей, это
+    нормальная работа при совместной эксплуатации, а не битая запись, так
+    что warning быть не должно (в отличие от записи без обоих полей вообще,
+    см. следующий тест)."""
+    ns, tg, api = make_telegram()
+    api.get_due_notifications = lambda: [
+        {"id": 1, "user_vk_id": "555", "user_telegram_id": None, "exercise_type": "diary"},
+    ]
+
+    with caplog.at_level("WARNING"):
+        ns._check_notifications()
+
+    assert tg.sent == []
+    assert api.marked_notifications_sent == []
+    assert not any("Не найден" in r.message for r in caplog.records)
+
+
+def test_notification_without_any_platform_id_is_skipped_and_warns_telegram(caplog):
+    ns, tg, api = make_telegram()
+    api.get_due_notifications = lambda: [
+        {"id": 1, "exercise_type": "diary"},  # ни vk_id, ни telegram_id вообще
+        {"id": 2, "user_telegram_id": "999", "exercise_type": "diary"},
+    ]
+
+    with caplog.at_level("WARNING"):
+        ns._check_notifications()
+
+    assert len(tg.sent) == 1, "Битая запись должна быть пропущена, не разослана"
+    assert tg.sent[0]["user_id"] == 999
+    assert api.marked_notifications_sent == [2]
+    assert any("user_telegram_id" in r.message for r in caplog.records)
+
+
+def test_pending_admin_comment_is_sent_and_marked_telegram():
+    ns, tg, api = make_telegram()
+    api.get_pending_admin_comments = lambda: [
+        {"review_id": 10, "comment_index": 0, "user_telegram_id": "555", "user_vk_id": None,
+         "exercise_type": "my_roles", "text": "Хорошая работа"}
+    ]
+
+    ns._check_notifications()
+
+    assert len(tg.sent) == 1
+    assert tg.sent[0]["user_id"] == 555
+    assert "Хорошая работа" in tg.sent[0]["message"]
+    assert "my_roles" in tg.sent[0]["message"]
+    assert api.marked_comments_sent == [(10, 0)]
+
+
+def test_pending_admin_comment_send_error_does_not_mark_sent_telegram():
+    ns, tg, api = make_telegram()
+    api.get_pending_admin_comments = lambda: [
+        {"review_id": 11, "comment_index": 0, "user_telegram_id": "666", "exercise_type": "diary", "text": "текст"}
+    ]
+
+    def broken_send_text(chat_id, text):
+        raise RuntimeError("сеть упала")
+
+    tg.send_text = broken_send_text
+
+    ns._check_notifications()  # не должно упасть
+
+    assert api.marked_comments_sent == []
+
+
+def test_send_message_returns_true_on_success_telegram():
+    ns, tg, api = make_telegram()
+    assert ns.send_message(123, "привет") is True
+    assert len(tg.sent) == 1
+
+
+def test_send_message_does_not_raise_on_generic_exception_telegram():
+    ns, tg, api = make_telegram()
+
+    def broken_send_text(chat_id, text):
+        raise RuntimeError("сеть упала")
+
+    tg.send_text = broken_send_text
+    result = ns.send_message(123, "привет")
+    assert result is False
+
+
+def test_flood_control_stops_rest_of_notification_batch_telegram():
+    ns, tg, api = make_telegram()
+    api.get_due_notifications = lambda: [
+        {"id": 1, "user_telegram_id": "111", "exercise_type": "diary"},
+        {"id": 2, "user_telegram_id": "222", "exercise_type": "diary"},
+        {"id": 3, "user_telegram_id": "333", "exercise_type": "diary"},
+    ]
+
+    original_send_text = tg.send_text
+
+    def flood_after_first(chat_id, text):
+        if chat_id == 111:
+            return original_send_text(chat_id, text)
+        raise make_http_error(429)
+
+    tg.send_text = flood_after_first
+
+    ns._check_notifications()
+
+    assert len(tg.sent) == 1, "Первое сообщение должно было уйти, дальше — остановка на флуд-контроле"
+    assert tg.sent[0]["user_id"] == 111
+    assert api.marked_notifications_sent == [1]
+    assert 2 not in api.marked_notifications_sent
+    assert 3 not in api.marked_notifications_sent
+
+
+def test_non_flood_http_error_does_not_stop_batch_telegram():
+    ns, tg, api = make_telegram()
+    api.get_due_notifications = lambda: [
+        {"id": 1, "user_telegram_id": "111", "exercise_type": "diary"},
+        {"id": 2, "user_telegram_id": "222", "exercise_type": "diary"},
+    ]
+
+    original_send_text = tg.send_text
+
+    def not_flood_error(chat_id, text):
+        if chat_id == 111:
+            raise make_http_error(500)
+        return original_send_text(chat_id, text)
+
+    tg.send_text = not_flood_error
+
+    ns._check_notifications()
+
+    assert len(tg.sent) == 1
+    assert tg.sent[0]["user_id"] == 222
+    assert api.marked_notifications_sent == [2]

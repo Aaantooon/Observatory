@@ -9,14 +9,20 @@ class ReviewSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'user_vk_id', 'exercise_type', 'data', 'status', 'comments', 'created_at']
 
 class NotificationSerializer(serializers.ModelSerializer):
-    # Добавляем поле для VK ID пользователя
+    # user_vk_id / user_telegram_id — оба поля нужны, даже если у
+    # конкретного пользователя заполнено только одно (второе будет null):
+    # /notifications/due/ отдаёт уведомления И VK, И Telegram пользователей
+    # без фильтрации на сервере, а vk_bot/notifications.py::NotificationSystem
+    # сам решает по этим двум полям, какие записи для его платформы, а какие
+    # молча пропустить как "не мои" (см. _extract_platform_user_id).
     user_vk_id = serializers.ReadOnlyField(source='user.vk_id')
-    
+    user_telegram_id = serializers.ReadOnlyField(source='user.telegram_id')
+
     class Meta:
         model = Notification
         fields = [
-            'id', 'user', 'user_vk_id', 'exercise_type', 
-            'schedule_type', 'schedule_data', 'is_active', 
+            'id', 'user', 'user_vk_id', 'user_telegram_id', 'exercise_type',
+            'schedule_type', 'schedule_data', 'is_active',
             'created_at', 'last_sent'
         ]
         read_only_fields = ['created_at']

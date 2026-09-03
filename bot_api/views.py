@@ -82,7 +82,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pending_admin_comments(self, request):
-        """Комментарии админа, ещё не отправленные пользователю в боте"""
+        """Комментарии админа, ещё не отправленные пользователю в боте.
+
+        Отдаём и user_vk_id, и user_telegram_id (одно из них null,
+        зависит от платформы пользователя) — этот эндпоинт, как и
+        /notifications/due/, не фильтрует по платформе на сервере, оба
+        фоновых процесса (VK и Telegram) видят один и тот же список и сами
+        решают по этим двум полям, что им обрабатывать (см.
+        vk_bot/notifications.py::NotificationSystem._extract_platform_user_id)."""
         result = []
         for review in Review.objects.exclude(status='closed'):
             for i, c in enumerate(review.comments):
@@ -91,6 +98,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
                         'review_id': review.id,
                         'comment_index': i,
                         'user_vk_id': review.user.vk_id,
+                        'user_telegram_id': review.user.telegram_id,
                         'exercise_type': review.exercise_type,
                         'text': c.get('text')
                     })

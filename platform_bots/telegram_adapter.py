@@ -78,6 +78,22 @@ class TelegramAdapter(MessagingAdapter):
             # должен ронять вызывающий код упражнения.
             logger.error(f"[telegram] Send message error to {user_id}: {e}")
 
+    def send_text(self, chat_id, text: str) -> None:
+        """Как send_message, но БЕЗ клавиатуры и БЕЗ проглатывания
+        исключений — используется vk_bot/notifications.py::NotificationSystem
+        для фоновой рассылки напоминаний/комментариев психолога, шаг 5
+        плана platform_bots/README.md. send_message выше используется в
+        потоке диалога упражнения, где сбой одной отправки не должен ронять
+        обработку сообщения пользователя (см. exercises/base.py) — здесь
+        наоборот: вызывающая сторона (NotificationSystem) сама решает, ушло
+        ли сообщение, и должна ли она остановить рассылку в этом цикле
+        (Telegram отвечает 429 Too Many Requests при флуд-контроле — тот же
+        принцип, что коды 6/9 у VK API, см. notifications.py::TELEGRAM_FLOOD_STATUS).
+        raise_for_status() внутри self._call() поднимет
+        requests.exceptions.HTTPError при 429 (и любом другом не-2xx) —
+        NotificationSystem его отдельно распознаёт по response.status_code."""
+        self._call("sendMessage", chat_id=chat_id, text=text)
+
     def run(self, on_message) -> None:
         """Long polling через getUpdates — простейший вариант без
         webhook-сервера (не нужен домен/HTTPS-эндпоинт для старта).

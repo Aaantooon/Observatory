@@ -144,13 +144,10 @@ class BotHandlers:
         полю (vk_id или telegram_id, см. bot_api/models.py::User).
         start_notifications — фоновый поток NotificationSystem (шлёт
         напоминания и комментарии психолога САМ, не дожидаясь сообщения от
-        пользователя) сейчас умеет отправлять только через VK
-        (self.vk.method напрямую, см. notifications.py) — для Telegram его
-        пока не запускаем (main_telegram.py передаёт False), это отдельный
-        шаг на будущее. Настройка напоминаний из меню («Напоминания») при
-        этом всё равно работает и для Telegram — сама запись в БД
-        платформонезависима, не отправляется мгновенно, только на самом
-        деле их отправка сейчас произойдёт только для VK-пользователей."""
+        пользователя) умеет отправлять и через VK, и через Telegram (см.
+        notifications.py — platform=api_platform ниже выбирает нужный путь
+        отправки и нужное поле ID). Параметр в основном для тестов
+        (test_handlers.py — не поднимать фоновый поток на каждый тест)."""
         self.vk = vk_session
         if hasattr(vk_session, 'send_message'):
             self.platform = vk_session
@@ -166,7 +163,7 @@ class BotHandlers:
         self.diary = DiaryExercise(vk_session, self.api)
         self.stop_technique = StopTechniqueExercise(vk_session, self.api)
 
-        self.notifications = NotificationSystem(vk_session, self.api)
+        self.notifications = NotificationSystem(vk_session, self.api, platform=api_platform)
         if start_notifications:
             self.notifications.start()
 

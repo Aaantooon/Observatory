@@ -7,6 +7,22 @@ VK_BOT_DIR = Path(__file__).resolve().parent.parent / "vk_bot"
 sys.path.insert(0, str(VK_BOT_DIR))
 
 
+class FakeTelegramAdapter:
+    """Заменяет platform_bots/telegram_adapter.py::TelegramAdapter в тестах
+    Telegram-ветки vk_bot/notifications.py::NotificationSystem (шаг 5 плана
+    platform_bots/README.md). Только send_text — единственный метод, которым
+    пользуется NotificationSystem для фоновой рассылки (в отличие от
+    send_message с клавиатурой, который используется в потоке диалога
+    упражнения, см. FakeVK выше — там своя заглушка не нужна, тесты диалога
+    Telegram идут через FakeVK/hasattr-проверку по-другому)."""
+
+    def __init__(self):
+        self.sent = []  # list of dict(user_id, message)
+
+    def send_text(self, chat_id, text):
+        self.sent.append({"user_id": chat_id, "message": text})
+
+
 class FakeVK:
     """Заменяет vk_session — просто записывает все отправленные сообщения."""
 
@@ -182,9 +198,14 @@ class FakeNotificationSystem:
     """Заменяет NotificationSystem в тестах handlers.py — тот же интерфейс,
     но start() не поднимает фоновый поток (не нужен и не должен мешать тестам)."""
 
-    def __init__(self, vk_session, api_client):
+    def __init__(self, vk_session, api_client, platform='vk'):
+        # platform принимается для совместимости с реальным NotificationSystem
+        # (см. vk_bot/handlers.py — шаг 5 плана platform_bots/README.md,
+        # BotHandlers теперь зовёт NotificationSystem(..., platform=api_platform))
+        # — заглушке он не нужен, она не разделяет отправку по платформам.
         self.vk = vk_session
         self.api = api_client
+        self.platform = platform
         self.running = False
         self.reminder_calls = []  # list of ("continue", user_id, kind, hours) / ("diary", user_id, time_str)
         # В реальном NotificationSystem оба метода — тонкая обёртка над

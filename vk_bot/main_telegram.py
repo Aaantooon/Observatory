@@ -1,18 +1,16 @@
-# vk_bot/main_telegram.py — Telegram-версия бота, шаг 4/4 плана миграции на
-# несколько платформ (platform_bots/README.md). Отдельный процесс, отдельный
-# systemd-сервис (см. СВОДКА_ПРОЕКТА.md) — НЕ трогает и не перезапускает
-# VK-бота (main.py). Оба процесса работают параллельно и независимо, через
-# общий Django-бэкенд (bot_api), но с разными пространствами ID
-# пользователей (vk_id / telegram_id, см. bot_api/models.py::User и
-# platform_bots/README.md, раздел «Модель пользователя»).
+# vk_bot/main_telegram.py — Telegram-версия бота, шаги 4-5/5 плана миграции
+# на несколько платформ (platform_bots/README.md). Отдельный процесс,
+# отдельный systemd-сервис (см. СВОДКА_ПРОЕКТА.md) — НЕ трогает и не
+# перезапускает VK-бота (main.py). Оба процесса работают параллельно и
+# независимо, через общий Django-бэкенд (bot_api), но с разными
+# пространствами ID пользователей (vk_id / telegram_id, см.
+# bot_api/models.py::User и platform_bots/README.md, раздел «Модель
+# пользователя»).
 #
-# ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ этой первой версии (см. СВОДКА_ПРОЕКТА.md): фоновые
-# напоминания и проактивная доставка комментариев психолога
-# (notifications.py::NotificationSystem._check_loop) пока умеют слать
-# только через VK. Настройка напоминания через меню «Напоминания» всё равно
-# работает и для Telegram (запись сохраняется в БД), но реально отправлено
-# оно будет только когда для Telegram появится свой запуск этого фонового
-# цикла — отдельный шаг на будущее, сознательно отложенный.
+# С шага 5 (см. СВОДКА_ПРОЕКТА.md) фоновые напоминания и проактивная
+# доставка комментариев психолога (notifications.py::NotificationSystem)
+# тоже работают для Telegram — свой NotificationSystem(..., platform=
+# 'telegram') ниже, со своим фоновым потоком, независимым от VK-бота.
 import os
 import sys
 import time
@@ -64,8 +62,10 @@ def main():
     adapter = TelegramAdapter(TELEGRAM_BOT_TOKEN)
     # api_platform='telegram' — сервер ищет/создаёт пользователя по
     # telegram_id, а не по vk_id (см. bot_api/models.py::User).
-    # start_notifications=False — см. предупреждение в шапке файла.
-    handlers = BotHandlers(adapter, api_platform='telegram', start_notifications=False)
+    # start_notifications=True — фоновый поток NotificationSystem (шаг 5,
+    # см. шапку файла) теперь поднимается и для Telegram, отдельно от
+    # VK-бота (свой поток, свой процесс, свой systemd-сервис).
+    handlers = BotHandlers(adapter, api_platform='telegram', start_notifications=True)
 
     def on_message(user_id, text, first_name, last_name):
         # TelegramAdapter.run() ниже уже оборачивает каждый вызов on_message
