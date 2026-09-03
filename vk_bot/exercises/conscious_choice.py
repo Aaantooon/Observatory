@@ -88,7 +88,7 @@ class ConsciousChoiceExercise(BaseExercise):
 
             self.send_message(
                 user_id,
-                "🧘 ОСОЗНАННЫЙ ВЫБОР\n\n"
+                "🔦 ОСОЗНАННЫЙ ВЫБОР\n\n"
                 f"· Ты уже записал: {len(session.get('must_items', []))} пунктов\n\n"
                 "🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
@@ -116,7 +116,9 @@ class ConsciousChoiceExercise(BaseExercise):
             self.send_message(
                 user_id,
                 f"{prefix}"
-                "🧘 ОСОЗНАННЫЙ ВЫБОР\n\n"
+                "🔦 ОСОЗНАННЫЙ ВЫБОР\n\n"
+                "Туман \"надо\" прячет то, что на самом деле всегда было твоим выбором. "
+                "Возьми фонарик — сейчас пройдём через него по одному пункту.\n\n"
                 "Шаг 1: Что я должен?\n\n"
                 "Напиши по пунктам, что ты должен делать — можно по одному, "
                 "можно сразу несколько (каждый с новой строки или через «;»).\n"
@@ -146,7 +148,7 @@ class ConsciousChoiceExercise(BaseExercise):
                 self.send_message(
                     user_id,
                     f"{prefix}"
-                    f"Разбираем пункт {item_num}/{total}\n\n"
+                    f"🔦 Освещаем пункт {item_num}/{total}\n\n"
                     f"Шаг 2: Я имею право не хотеть.\n\n"
                     f"Написал: «{must}»\n\n"
                     f"Получается ролевые ожидания.\n"
@@ -642,7 +644,7 @@ class ConsciousChoiceExercise(BaseExercise):
         self.send_message(
             user_id,
             "✨ ПУТЬ ЗАВЕРШЁН\n\n"
-            f"🧘 Разобрано пунктов: {analyzed}\n\n"
+            f"🔦 Разобрано пунктов: {analyzed}\n\n"
             "Осознанный выбор — это свобода.\n\n"
             "· Ты имеешь право выбирать\n"
             "· Ты имеешь право не хотеть\n"
@@ -651,6 +653,8 @@ class ConsciousChoiceExercise(BaseExercise):
             "Пока не заболел — есть возможность.\n"
             "Ребёнок вырос — он сам готовит.\n"
             "Ребёнок не голоден — не надо кормить.\n\n"
+            "🔦 Каждый раз, доставая фонарик для пункта из списка \"надо\", ты находишь "
+            "дорогу, которую выбрал сам.\n\n"
             "✨ Береги себя ❤️",
             main_menu()
         )
@@ -661,7 +665,9 @@ class ConsciousChoiceExercise(BaseExercise):
         self.end_session(user_id)
         self.send_message(
             user_id,
-            "🌫️ Прогресс сохранён\n"
-            "Возвращайся, чтобы продолжить ✨",
+            "🌫️ Путь подождёт в тумане\n"
+            "· Прогресс сохранён\n"
+            "· Фонарик ждёт тебя, чтобы продолжить\n\n"
+            "✨ Возвращайся, когда будешь готов",
             main_menu()
         )
