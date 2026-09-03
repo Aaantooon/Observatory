@@ -637,6 +637,39 @@ class ConsciousChoiceExercise(BaseExercise):
             conscious_choice_keyboard()
         )
 
+    def _truncate_for_display(self, text, limit):
+        """Обрезает текст для сводки в финальном сообщении — как в
+        diary.py/stress_search.py: неограниченный пользовательский ввод
+        (минусы/плюсы/фразы) мог бы разово превысить ~4096-символьный лимит
+        VK, особенно при MAX_EXERCISE_ITEMS=20 разобранных пунктах сразу."""
+        text = text or ''
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "…"
+
+    def _format_analysis_summary(self, analysis, max_listed=5):
+        """Короткая сводка по каждому разобранному пункту — раньше финальное
+        сообщение вообще не показывало, ЧТО именно было разобрано (только
+        число «Разобрано пунктов: N»), и выглядело как обрезанный, неполный
+        ответ. Показываем не больше max_listed пунктов подробно — при 20
+        разобранных сразу сводка иначе стала бы слишком длинной."""
+        if not analysis:
+            return ""
+        lines = []
+        for i, item in enumerate(analysis[:max_listed], start=1):
+            must = item.get('must', '')
+            choice_analysis = self._truncate_for_display(item.get('choice_analysis', ''), 150)
+            alternatives = self._truncate_for_display(item.get('alternatives', ''), 150)
+            lines.append(f"{i}. 📌 «{must}»")
+            if choice_analysis:
+                lines.append(f"   {choice_analysis}")
+            if alternatives:
+                lines.append(f"   Альтернатива — {alternatives}")
+        text = "\n".join(lines)
+        if len(analysis) > max_listed:
+            text += f"\n…и ещё {len(analysis) - max_listed} пункт(ов) разобрано"
+        return text + "\n\n"
+
     def _finish(self, user_id, session):
         # analysis — по одной записи на КАЖДЫЙ пункт из must_items (см.
         # _complete_current_item). Раньше здесь брались current_answer/
@@ -655,10 +688,12 @@ class ConsciousChoiceExercise(BaseExercise):
         self.end_session(user_id)
 
         analyzed = len(result['analysis'])
+        summary = self._format_analysis_summary(result['analysis'])
         self.send_message(
             user_id,
             "✨ ПУТЬ ЗАВЕРШЁН\n\n"
             f"🔦 Разобрано пунктов: {analyzed}\n\n"
+            f"{summary}"
             "Осознанный выбор — это свобода.\n\n"
             "· Ты имеешь право выбирать\n"
             "· Ты имеешь право не хотеть\n"
