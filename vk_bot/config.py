@@ -12,6 +12,11 @@ GROUP_ID = int(os.getenv("VK_GROUP_ID", "232481197"))
 
 # Настройки Telegram (main_telegram.py, шаг 4 плана platform_bots/README.md)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Публичный @username Telegram-бота (без "@") — НЕ секрет, нужен ОБОИМ
+# ботам, чтобы построить диплинк для автоматической привязки аккаунтов
+# (03.09.2026, см. handlers.py::show_account_link_menu). Пусто — диплинк
+# из VK в Telegram просто не показывается, остальная привязка не страдает.
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 
 # Настройки API Django
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")

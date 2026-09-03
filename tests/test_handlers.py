@@ -18,14 +18,17 @@ import handlers as handlers_module
 UID = 222
 
 
-def make_handlers():
+def make_handlers(api_platform='vk'):
     # Подменяем реальный APIClient/NotificationSystem до создания BotHandlers,
     # чтобы конструктор не делал сетевых вызовов и не поднимал поток.
+    # api_platform='telegram' — для тестов диплинка привязки (см.
+    # handlers.py::_link_deep_link_hint), которому важно, с какой стороны
+    # генерируется код.
     handlers_module.APIClient = FakeAPIClient
     handlers_module.NotificationSystem = FakeNotificationSystem
 
     vk = FakeVK()
-    bh = handlers_module.BotHandlers(vk)
+    bh = handlers_module.BotHandlers(vk, api_platform=api_platform)
     return bh, vk, bh.api
 
 
@@ -849,6 +852,143 @@ def test_active_review_does_not_block_account_link_enter_code_state():
     bh.handle_message(UID, "123456", "Аня", "И")
     assert len(api.comments) == 0
     assert api.confirmed_link_codes == [(UID, "123456")]
+
+
+# ---------------------------------------------------------------------------
+# Диплинк для привязки — код доставляется ссылкой в один тап, без ручного
+# набора (пользователь попросил сделать привязку максимально автоматической;
+# см. handlers.py::_extract_deep_link_code / _link_deep_link_hint).
+# ---------------------------------------------------------------------------
+
+def test_extract_deep_link_code_recognizes_telegram_start_payload():
+    bh, vk, api = make_handlers()
+    assert bh._extract_deep_link_code("/start link123456") == "123456"
+
+
+def test_extract_deep_link_code_recognizes_bare_six_digits():
+    bh, vk, api = make_handlers()
+    assert bh._extract_deep_link_code("123456") == "123456"
+
+
+def test_extract_deep_link_code_ignores_unrelated_text():
+    bh, vk, api = make_handlers()
+    assert bh._extract_deep_link_code("Причина 8") is None
+    assert bh._extract_deep_link_code("12345") is None       # 5 цифр, не код
+    assert bh._extract_deep_link_code("1234567") is None     # 7 цифр, не код
+    assert bh._extract_deep_link_code("/start") is None      # без payload
+    assert bh._extract_deep_link_code("") is None
+    assert bh._extract_deep_link_code(None) is None
+
+
+def test_account_link_generate_code_includes_telegram_deep_link_when_configured():
+    """Код сгенерирован в VK — подсказка должна вести в Telegram, но
+    только если в конфиге реально задан публичный @username бота."""
+    bh, vk, api = make_handlers(api_platform='vk')
+    _greet(bh)
+    handlers_module.TELEGRAM_BOT_USERNAME = "PutNablyudatelya_bot"
+    try:
+        api.generate_link_code_result = {"ok": True, "code": "654321", "expires_in_minutes": 10}
+        bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+        bh.handle_message(UID, "Получить код", "Аня", "И")
+        assert "t.me/PutNablyudatelya_bot?start=link654321" in vk.last_message
+    finally:
+        handlers_module.TELEGRAM_BOT_USERNAME = ""
+
+
+def test_account_link_generate_code_omits_telegram_hint_when_username_not_configured():
+    bh, vk, api = make_handlers(api_platform='vk')
+    _greet(bh)
+    handlers_module.TELEGRAM_BOT_USERNAME = ""
+    api.generate_link_code_result = {"ok": True, "code": "654321", "expires_in_minutes": 10}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert "t.me/" not in vk.last_message
+
+
+def test_account_link_generate_code_includes_vk_deep_link_from_telegram():
+    """Код сгенерирован в Telegram — подсказка должна вести в VK (у VK нет
+    диплинков с payload, зато можно предзаполнить текст сообщения)."""
+    bh, vk, api = make_handlers(api_platform='telegram')
+    _greet(bh)
+    api.generate_link_code_result = {"ok": True, "code": "654321", "expires_in_minutes": 10}
+    bh.handle_message(UID, "Привязать аккаунт", "Аня", "И")
+    bh.handle_message(UID, "Получить код", "Аня", "И")
+    assert "vk.me/write-" in vk.last_message
+    assert "text=654321" in vk.last_message
+
+
+def test_deep_link_auto_confirms_for_known_user_via_telegram_start_payload():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": True, "status": "ok"}
+    bh.handle_message(UID, "/start link123456", "Аня", "И")
+    assert "Готово" in vk.last_message
+    assert api.confirmed_link_codes == [(UID, "123456")]
+    assert bh.user_states[UID] == "main"
+
+
+def test_deep_link_auto_confirms_for_known_user_via_bare_digits():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": True, "status": "ok"}
+    bh.handle_message(UID, "123456", "Аня", "И")
+    assert "Готово" in vk.last_message
+    assert api.confirmed_link_codes == [(UID, "123456")]
+
+
+def test_deep_link_auto_confirms_for_known_user_reports_failure_honestly():
+    """Для уже знакомого человека, живущего внутри диалога, ошибку
+    показываем как обычно — он определённо пытался привязать аккаунт."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    api.confirm_link_code_result = {"ok": False, "error": "invalid_or_expired"}
+    bh.handle_message(UID, "123456", "Аня", "И")
+    assert "устарел" in vk.last_message or "неверный" in vk.last_message
+
+
+def test_deep_link_auto_confirms_brand_new_user_on_first_message():
+    """Самый ценный случай — человек НИКОГДА не писал этому боту, первое
+    сообщение сразу диплинк (например из Telegram открыл VK-ссылку или
+    наоборот) — привязка должна пройти без единого лишнего действия."""
+    bh, vk, api = make_handlers()
+    api.confirm_link_code_result = {"ok": True, "status": "ok"}
+    bh.handle_message(UID, "/start link123456", "Аня", "И")
+    assert "Готово" in vk.last_message
+    assert "ПУТЬ НАБЛЮДАТЕЛЯ" not in vk.last_message, "Не нужно ещё и приветствие поверх успешной привязки"
+    assert api.created_users == [(UID, "Аня", "И")]
+    assert api.confirmed_link_codes == [(UID, "123456")]
+    assert bh.user_states[UID] == "main"
+
+
+def test_deep_link_brand_new_user_with_bad_code_falls_back_to_normal_greeting():
+    """Если код не подошёл, а человек совсем новый — скорее всего, это
+    было обычное первое сообщение, случайно состоявшее из 6 цифр, а не
+    попытка привязки. Не пугаем незнакомца сообщением "код устарел" —
+    просто показываем обычное приветствие, как для любого нового контакта."""
+    bh, vk, api = make_handlers()
+    api.confirm_link_code_result = {"ok": False, "error": "invalid_or_expired"}
+    bh.handle_message(UID, "123456", "Аня", "И")
+    assert "ПУТЬ НАБЛЮДАТЕЛЯ" in vk.last_message
+    assert "устарел" not in vk.last_message
+    assert "неверный" not in vk.last_message
+    assert bh.user_states[UID] == "main"
+
+
+def test_deep_link_does_not_hijack_reply_inside_active_exercise_session():
+    """Проверка размещения: распознавание диплинка стоит ПОСЛЕ проверки
+    активных сессий упражнений — если пользователь вдруг ответит внутри
+    упражнения ровно 6 цифрами, это должно уйти в упражнение, а не
+    перехватиться как код привязки (даже если само упражнение потом не
+    сможет разобрать такую строку как валидный пункт — важно, ЧТО её
+    обработал именно обработчик упражнения, а не подтверждение кода)."""
+    bh, vk, api = make_handlers()
+    bh.happiness_list.start(UID)  # сессия создана напрямую, минуя меню
+
+    bh.handle_message(UID, "123456", "Аня", "И")
+
+    assert api.confirmed_link_codes == [], "6 цифр внутри упражнения не должны уйти на подтверждение кода"
+    assert UID in bh.happiness_list.user_sessions, "Сессия упражнения не должна была закрыться"
+    assert "Готово" not in vk.last_message
 
 
 # ---------------------------------------------------------------------------

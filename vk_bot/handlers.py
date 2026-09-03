@@ -2,6 +2,7 @@ from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_key
 from api_client import APIClient
 from vk_adapter import VkAdapter
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard, account_link_menu_keyboard
+from config import GROUP_ID, TELEGRAM_BOT_USERNAME
 from exercises.stress_search import StressSearchExercise
 from exercises.happiness_list import HappinessListExercise
 from exercises.my_roles import MyRolesExercise
@@ -189,6 +190,23 @@ class BotHandlers:
             "]+", flags=re.UNICODE)
         return emoji_pattern.sub('', text).strip().lower()
 
+    def _extract_deep_link_code(self, text):
+        """Код привязки, доставленный диплинком (см. _link_deep_link_hint):
+        в Telegram это payload команды "/start link<код>", в VK — просто
+        предзаполненное сообщение из самих цифр (у VK нет диплинков с
+        произвольным payload, как у Telegram). Отдельно от ручного «Ввести
+        код» (см. _confirm_link_code_and_reply) — там текст ещё прощает
+        мусор вокруг цифр (пробелы, дефисы, слова), а тут наоборот — нужно
+        ТОЧНОЕ совпадение формата, чтобы случайно не перехватить обычный
+        ответ на упражнение как код привязки."""
+        text = (text or "").strip()
+        match = re.match(r'^/start\s+link(\d{6})$', text)
+        if match:
+            return match.group(1)
+        if text.isdigit() and len(text) == 6:
+            return text
+        return None
+
     def _exit_to_main_menu(self, user_id):
         """Глобальный выход в главное меню словом «меню»/«помощь».
         Если пользователь был посреди упражнения — сохраняет прогресс
@@ -252,6 +270,38 @@ class BotHandlers:
         if user_id in self.stop_technique.user_sessions:
             self.stop_technique.handle_message(user_id, text)
             return
+
+        # Автоматическая привязка по диплинку (см. _link_deep_link_hint) —
+        # проверяется здесь, ПОСЛЕ активных сессий упражнений (чтобы не
+        # перехватить случайный ответ внутри упражнения), но ДО Review и до
+        # экрана приветствия — иначе код потеряется в тексте комментария
+        # психологу или в тексте "Привет, {имя}!". Формат кода — ровно 6
+        # цифр (см. bot_api/models.py::AccountLinkCode) — реальные ответы
+        # упражнений в этот формат не попадают, коллизий не бывает.
+        link_code = self._extract_deep_link_code(text)
+        if link_code:
+            if user_id in self.user_states:
+                # Уже знакомый человек в живом диалоге — как и при ручном
+                # вводе кода, честно показываем и успех, и ошибку.
+                self._confirm_link_code_and_reply(user_id, link_code)
+                return
+            # Совсем новый контакт (первое сообщение — сразу диплинк) —
+            # сначала тихо проверяем код, ничего не отправляя: если он не
+            # подошёл, это, скорее всего, обычное первое сообщение, которое
+            # случайно состояло из 6 цифр, а не попытка привязки. Пугать
+            # незнакомца "кодом устарел" не нужно — просто идём по обычной
+            # ветке приветствия ниже, как будто распознавания не было.
+            self.api.get_or_create_user(user_id, first_name, last_name)
+            result = self.api.confirm_link_code(user_id, link_code)
+            if result.get('ok'):
+                self.user_states[user_id] = 'main'
+                self.send_message(
+                    user_id,
+                    "✅ Готово! Аккаунты объединены — прогресс, напоминания и "
+                    "проверки теперь общие, из какого мессенджера ни зайди.",
+                    main_menu()
+                )
+                return
 
         active_review = self.api.get_active_review(user_id)
         if active_review and active_review.get('status') == 'in_review':
@@ -494,9 +544,11 @@ class BotHandlers:
                 self.user_states[user_id] = 'main'
                 if result.get('ok'):
                     minutes = result.get('expires_in_minutes', 10)
+                    code = result.get('code')
                     self.send_message(
                         user_id,
-                        f"🔑 Твой код: {result.get('code')}\n\n"
+                        f"🔑 Твой код: {code}\n\n"
+                        f"{self._link_deep_link_hint(code)}"
                         f"Открой ДРУГОЙ мессенджер (тот, который хочешь объединить с "
                         f"этим) и пришли туда этот код обычным сообщением в течение "
                         f"{minutes} минут.",
@@ -543,39 +595,74 @@ class BotHandlers:
                         back_keyboard()
                     )
                 else:
-                    result = self.api.confirm_link_code(user_id, code)
-                    self.user_states[user_id] = 'main'
-                    if result.get('ok'):
-                        self.send_message(
-                            user_id,
-                            "✅ Готово! Аккаунты объединены — прогресс, напоминания и "
-                            "проверки теперь общие, из какого мессенджера ни зайди.",
-                            main_menu()
-                        )
-                    else:
-                        error_messages = {
-                            'invalid_or_expired': (
-                                "❌ Код неверный или уже устарел (коды живут 10 минут). "
-                                "Получи новый код в другом мессенджере и попробуй снова."
-                            ),
-                            'same_account': (
-                                "🔗 Это код из этого же аккаунта — привязывать не к чему. "
-                                "Получи код в ДРУГОМ мессенджере."
-                            ),
-                            'conflict': (
-                                "⚠️ Не получилось: второй мессенджер уже привязан к "
-                                "другому аккаунту."
-                            ),
-                        }
-                        self.send_message(
-                            user_id,
-                            error_messages.get(
-                                result.get('error'),
-                                "⚠️ Не получилось объединить аккаунты — сервис на секунду "
-                                "недоступен. Попробуй ещё раз через минуту."
-                            ),
-                            main_menu()
-                        )
+                    self._confirm_link_code_and_reply(user_id, code)
+
+    def _link_deep_link_hint(self, code):
+        """Ссылка-диплинк, чтобы код можно было доставить в другой
+        мессенджер одним тапом, а не перепечатывать цифры руками (запрошено
+        пользователем — «максимально удобно, просто и понятно»). VK и
+        Telegram сами делают такую ссылку кликабельной в обычном тексте
+        сообщения, отдельная кнопка не нужна.
+
+        - Из VK в Telegram — t.me/<username>?start=link<код>: Telegram сам
+          обрабатывает /start с параметром, подтверждение происходит без
+          единого лишнего нажатия (см. _extract_deep_link_code). Показывается,
+          только если в .env задан TELEGRAM_BOT_USERNAME (не секрет, просто
+          не настроен по умолчанию).
+        - Из Telegram в VK — vk.me/write-<GROUP_ID>?text=<код>: у VK нет
+          диплинков с payload как у Telegram, зато можно предзаполнить текст
+          сообщения — останется только нажать «Отправить».
+        """
+        if self.api.platform == 'vk':
+            if not TELEGRAM_BOT_USERNAME:
+                return ""
+            return (
+                f"👉 Или на телефоне: https://t.me/{TELEGRAM_BOT_USERNAME}?start=link{code} "
+                f"— Telegram сам всё поймёт, печатать код не нужно.\n\n"
+            )
+        return (
+            f"👉 Или на телефоне: https://vk.me/write-{GROUP_ID}?text={code} "
+            f"— останется только нажать «Отправить» в VK.\n\n"
+        )
+
+    def _confirm_link_code_and_reply(self, user_id, code):
+        """Общая часть подтверждения кода привязки — используется и ручным
+        вводом (state == 'account_link_enter_code'), и автоматическим
+        распознаванием диплинка (_extract_deep_link_code/handle_message)."""
+        result = self.api.confirm_link_code(user_id, code)
+        self.user_states[user_id] = 'main'
+        if result.get('ok'):
+            self.send_message(
+                user_id,
+                "✅ Готово! Аккаунты объединены — прогресс, напоминания и "
+                "проверки теперь общие, из какого мессенджера ни зайди.",
+                main_menu()
+            )
+        else:
+            error_messages = {
+                'invalid_or_expired': (
+                    "❌ Код неверный или уже устарел (коды живут 10 минут). "
+                    "Получи новый код в другом мессенджере и попробуй снова."
+                ),
+                'same_account': (
+                    "🔗 Это код из этого же аккаунта — привязывать не к чему. "
+                    "Получи код в ДРУГОМ мессенджере."
+                ),
+                'conflict': (
+                    "⚠️ Не получилось: второй мессенджер уже привязан к "
+                    "другому аккаунту."
+                ),
+            }
+            self.send_message(
+                user_id,
+                error_messages.get(
+                    result.get('error'),
+                    "⚠️ Не получилось объединить аккаунты — сервис на секунду "
+                    "недоступен. Попробуй ещё раз через минуту."
+                ),
+                main_menu()
+            )
+        return result
 
     def show_account_link_menu(self, user_id):
         self.user_states[user_id] = 'account_link'
