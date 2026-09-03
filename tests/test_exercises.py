@@ -1602,9 +1602,11 @@ def test_conscious_choice_step2_skip_own_affirmation_uses_example_as_is():
 def test_conscious_choice_full_flow_to_finish():
     """Шаг 4 ("Анализ выбора") показывает сразу и сам выбор, и просьбу
     написать минусы одним сообщением (раньше это были два отдельных экрана
-    с "Продолжить" между ними без какого-либо ввода) — текст минусов можно
-    вписать сразу. Шаг 7 ("Альтернативы") по-прежнему отдельным
-    подтверждающим экраном, за которым идут отдельные минусы/плюсы."""
+    с "Продолжить" между ними без какого-либо ввода). Шаг 5 ("Альтернативы")
+    объединён с "другими минусами" по тому же принципу. На всех четырёх
+    экранах "Не хочу"/"Хочу" (choice_minus/choice_plus/alt_minus/alt_plus)
+    можно писать сколько угодно раз — пункты копятся, а шаг двигает только
+    явное "Продолжить" (тот же приём, что и на шаге 1 — сбор must_items)."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     assert ex.user_sessions[UID]["step"] == 1
@@ -1627,22 +1629,37 @@ def test_conscious_choice_full_flow_to_finish():
     assert "Я выбираю" in vk.last_message
     assert "Не хочу" in vk.last_message
 
-    ex.handle_message(UID, "устану")                # choice_minus -> step 6 (плюсы), без отдельного "Продолжить"
+    ex.handle_message(UID, "устану")                # добавлен минус-пункт, шаг НЕ двигается сам
+    assert ex.user_sessions[UID]["step"] == 4
+    assert ex.user_sessions[UID]["choice_minus_items"] == ["устану"]
+    assert "Уже добавил(а)" in vk.last_message
+
+    ex.handle_message(UID, "расстроюсь")            # можно дописать ещё пункт тем же образом
+    assert ex.user_sessions[UID]["choice_minus_items"] == ["устану", "расстроюсь"]
+
+    ex.handle_message(UID, "➡️ Продолжить")        # только явным "Продолжить" -> step 6 (плюсы)
     assert ex.user_sessions[UID]["step"] == 6
     assert "Хочу" in vk.last_message
 
-    ex.handle_message(UID, "увижу улыбку")          # choice_plus -> step 7 (alt ack)
+    ex.handle_message(UID, "увижу улыбку")          # добавлен плюс-пункт, шаг НЕ двигается сам
+    assert ex.user_sessions[UID]["step"] == 6
+    assert ex.user_sessions[UID]["choice_plus_items"] == ["увижу улыбку"]
+
+    ex.handle_message(UID, "➡️ Продолжить")        # -> step 7 (Альтернативы + другие минусы одним сообщением)
     assert ex.user_sessions[UID]["step"] == 7
     assert "устану" in ex.user_sessions[UID]["choice_analysis"]
+    assert "расстроюсь" in ex.user_sessions[UID]["choice_analysis"]
     assert "увижу улыбку" in ex.user_sessions[UID]["choice_analysis"]
+    assert "Альтернативы" in vk.last_message
+    assert "Не хочу" in vk.last_message
 
-    ex.handle_message(UID, "➡️ Продолжить")        # -> step 8 (другие минусы)
-    assert ex.user_sessions[UID]["step"] == 8
-
-    ex.handle_message(UID, "➡️ Продолжить")        # пропускаем минусы -> step 9 (другие плюсы)
+    ex.handle_message(UID, "➡️ Продолжить")        # пропускаем другие минусы -> step 9 (другие плюсы)
     assert ex.user_sessions[UID]["step"] == 9
 
-    ex.handle_message(UID, "энергия")               # alt_plus -> единственный пункт разобран -> _finish()
+    ex.handle_message(UID, "энергия")               # добавлен плюс-пункт, шаг НЕ двигается сам
+    assert ex.user_sessions[UID]["step"] == 9
+    ex.handle_message(UID, "➡️ Продолжить")        # только явным "Продолжить" -> единственный пункт разобран -> _finish()
+
     assert UID not in ex.user_sessions, "Упражнение должно завершиться после шага 9"
     assert len(api.results) == 1
     result = api.results[0]["result_data"]
@@ -1658,11 +1675,47 @@ def test_conscious_choice_full_flow_to_finish():
     assert "—" in entry["alternatives"], "Пропущенные минусы должны отметиться прочерком"
 
 
+def test_conscious_choice_choice_minus_accepts_multiline_list_in_one_message():
+    """Экраны "Не хочу"/"Хочу" заявляют "по одному или сразу списком" — как
+    и на шаге 1 (сбор must_items), вставленный одним сообщением список
+    (каждый пункт с новой строки или через ";") должен разложиться на
+    отдельные пункты, а не превратиться в один длинный пункт целиком."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Имею право")
+    ex.handle_message(UID, "Никто не отнял")
+    ex.handle_message(UID, "Я сам")            # -> step 4
+
+    ex.handle_message(UID, "устану\nрасстроюсь; будет тяжело")
+    assert ex.user_sessions[UID]["step"] == 4, "Список пунктов не должен сам продвигать шаг"
+    assert ex.user_sessions[UID]["choice_minus_items"] == ["устану", "расстроюсь", "будет тяжело"]
+
+
+def test_conscious_choice_item_collection_reprompts_when_nothing_parsed():
+    """Если из сообщения не удалось выделить ни одного пункта (пустые
+    разделители/мусор) — переспрашиваем, а не молча добавляем пустой
+    пункт и не продвигаем шаг."""
+    ex, vk, api = make(ConsciousChoiceExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Кормить детей")
+    ex.handle_message(UID, "➡️ Продолжить")
+    ex.handle_message(UID, "Имею право")
+    ex.handle_message(UID, "Никто не отнял")
+    ex.handle_message(UID, "Я сам")            # -> step 4
+
+    ex.handle_message(UID, " ; ; ")
+    assert ex.user_sessions[UID]["step"] == 4
+    assert "choice_minus_items" not in ex.user_sessions[UID] or ex.user_sessions[UID]["choice_minus_items"] == []
+    assert "не нашёл" in vk.last_message.lower()
+
+
 def test_conscious_choice_skip_all_minus_plus_via_continue():
-    """Все экраны минусов/плюсов (шаги 4, 6, 8, 9 — бывший шаг 5 теперь
-    показывается вместе с 4, см. _show_choice_minus) можно пропустить одной
-    кнопкой «Продолжить», не отвечая ни разу — упражнение всё равно
-    доходит до конца."""
+    """Все экраны минусов/плюсов (шаги 4, 6, 7 — бывшие 5 и 8 теперь
+    показываются вместе с 4 и 7 соответственно, см. _show_choice_minus/
+    _show_alt_minus) можно пропустить одной кнопкой «Продолжить», не
+    отвечая ни разу — упражнение всё равно доходит до конца."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
@@ -1671,7 +1724,7 @@ def test_conscious_choice_skip_all_minus_plus_via_continue():
     ex.handle_message(UID, "Никто не отнял")   # -> step 3
     ex.handle_message(UID, "Я сам")            # -> step 4
 
-    for _ in range(5):  # шаги 4,6,7,8,9 — каждый пропускается "Продолжить"
+    for _ in range(4):  # шаги 4,6,7,9 — каждый пропускается "Продолжить"
         ex.handle_message(UID, "➡️ Продолжить")
 
     assert UID not in ex.user_sessions, "Упражнение должно завершиться, даже если все минусы/плюсы пропущены"
@@ -1703,14 +1756,16 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     ex.handle_message(UID, "Имею право 1")     # свой вариант фразы -> экран вопроса
     ex.handle_message(UID, "Никто не отнял")   # -> 3
     ex.handle_message(UID, "Я сам")            # -> 4 (выбор + минусы одним сообщением)
-    ex.handle_message(UID, "устану 1")         # choice_minus -> 6
-    ex.handle_message(UID, "улыбка 1")         # choice_plus -> 7
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 8
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 9
+    ex.handle_message(UID, "устану 1")         # добавлен минус-пункт, шаг остаётся 4
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 6 (плюсы)
+    ex.handle_message(UID, "улыбка 1")         # добавлен плюс-пункт, шаг остаётся 6
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (Альтернативы + другие минусы)
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 9 (другие плюсы)
 
     # ещё не должно было завершиться — есть второй пункт
     assert UID in ex.user_sessions
-    ex.handle_message(UID, "энергия 1")        # завершает пункт 1 -> должен начаться пункт 2
+    ex.handle_message(UID, "энергия 1")        # добавлен плюс-пункт, шаг остаётся 9
+    ex.handle_message(UID, "➡️ Продолжить")    # завершает пункт 1 -> должен начаться пункт 2
 
     session = ex.user_sessions[UID]
     assert UID in ex.user_sessions, "Упражнение не должно было завершиться — есть ещё пункт 2"
@@ -1729,10 +1784,10 @@ def test_conscious_choice_analyzes_every_collected_item_not_just_the_last():
     ex.handle_message(UID, "Родители")         # -> 3
     ex.handle_message(UID, "Никто")            # -> 4 (выбор + минусы одним сообщением)
     ex.handle_message(UID, "➡️ Продолжить")    # -> 6 (пропуск минусов)
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (пропуск плюсов)
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 8
-    ex.handle_message(UID, "➡️ Продолжить")    # -> 9
-    ex.handle_message(UID, "энергия 2")        # завершает пункт 2 -> оба разобраны -> _finish()
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (пропуск плюсов; Альтернативы + другие минусы)
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 9 (пропуск других минусов)
+    ex.handle_message(UID, "энергия 2")        # добавлен плюс-пункт, шаг остаётся 9
+    ex.handle_message(UID, "➡️ Продолжить")    # завершает пункт 2 -> оба разобраны -> _finish()
 
     assert UID not in ex.user_sessions, "После разбора ВСЕХ пунктов упражнение должно завершиться"
     assert len(api.results) == 1
@@ -1848,11 +1903,13 @@ def test_stress_search_save_and_restart_failure_keeps_items_instead_of_wiping_th
     assert ex.user_sessions[UID]["items"] == []
 
 
-def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
-    """Шаг 7 — экран-подтверждение без поля ввода: если пользователь вместо
-    «Продолжить» пришлёт текст, шаг не должен смениться. Шаг 4 больше не
-    такой (после слияния с бывшим шагом 5, см. _show_choice_minus) — любой
-    текст там теперь принимается как минусы."""
+def test_conscious_choice_typing_never_auto_advances_only_continue_does():
+    """После слияния 4+5 и 7+8 (см. _show_choice_minus/_show_alt_minus) в
+    упражнении больше нет "чистых" экранов-подтверждений без поля ввода —
+    но и обратного тоже нет: печатать текст на экранах "Не хочу"/"Хочу"
+    (choice_minus/choice_plus/alt_minus/alt_plus) добавляет пункт (см.
+    _collect_items) и ОСТАЁТСЯ на том же шаге — двигает шаг дальше только
+    явное «Продолжить», ровно как на шаге 1 со сбором must_items."""
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
@@ -1861,15 +1918,19 @@ def test_conscious_choice_ack_steps_reprompt_on_unexpected_text():
     ex.handle_message(UID, "Никто не отнял")
     ex.handle_message(UID, "Я сам")            # -> step 4 (выбор + минусы одним сообщением)
 
-    ex.handle_message(UID, "случайный текст")  # принимается как минус -> step 6
+    ex.handle_message(UID, "случайный текст")  # добавлен пункт, шаг НЕ меняется
+    assert ex.user_sessions[UID]["step"] == 4
+    assert ex.user_sessions[UID]["choice_minus_items"] == ["случайный текст"]
+
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 6
+    ex.handle_message(UID, "улыбка")           # добавлен пункт, шаг НЕ меняется
     assert ex.user_sessions[UID]["step"] == 6
-    assert ex.user_sessions[UID]["choice_minus"] == "случайный текст"
+    assert ex.user_sessions[UID]["choice_plus_items"] == ["улыбка"]
 
-    ex.handle_message(UID, "улыбка")           # -> 7
-
-    ex.handle_message(UID, "случайный текст")
+    ex.handle_message(UID, "➡️ Продолжить")    # -> 7 (Альтернативы + другие минусы)
+    ex.handle_message(UID, "случайный текст")  # добавлен пункт, шаг НЕ меняется
     assert ex.user_sessions[UID]["step"] == 7
-    assert "Жми «Продолжить»" in vk.last_message
+    assert ex.user_sessions[UID]["alt_minus_items"] == ["случайный текст"]
 
 
 def test_my_roles_preanalyze_confirm_shows_counts_with_empty_marker():

@@ -35,6 +35,15 @@ class ConsciousChoiceExercise(BaseExercise):
             return ""
         return f"📝 Текущий ответ: «{value}»\n(напиши новый, чтобы заменить)\n\n"
 
+    def _existing_items_note(self, items):
+        """Как _existing_answer_note, но для экранов "Не хочу"/"Хочу"
+        (choice_minus_items и т.п., см. _collect_items) — там ответ не один,
+        а список пунктов, накопленных за несколько сообщений."""
+        if not items:
+            return ""
+        listed = "\n".join(f"· {item}" for item in items)
+        return f"📝 Уже добавил(а):\n{listed}\n(можно дописать ещё)\n\n"
+
     def _handle_start_over(self, user_id):
         self.delete_progress(user_id)
         session = self._fresh_session()
@@ -90,9 +99,13 @@ class ConsciousChoiceExercise(BaseExercise):
         self.user_sessions[user_id] = session
         self._show_step(user_id, session)
 
-    def _format_pros_cons(self, minus_text, plus_text):
-        minus_text = minus_text.strip() if minus_text else '—'
-        plus_text = plus_text.strip() if plus_text else '—'
+    def _format_pros_cons(self, minus_items, plus_items):
+        """minus_items/plus_items — списки пунктов (см. _collect_items),
+        а не единая строка, как было раньше: экраны "Не хочу"/"Хочу"
+        теперь копят сколько угодно пунктов за несколько сообщений вместо
+        одного ответа, который просто перезаписывался при повторном вводе."""
+        minus_text = "; ".join(minus_items) if minus_items else '—'
+        plus_text = "; ".join(plus_items) if plus_items else '—'
         return f"Минусы: {minus_text}, Плюсы: {plus_text}"
 
     def _show_step(self, user_id, session, error=None):
@@ -187,21 +200,16 @@ class ConsciousChoiceExercise(BaseExercise):
                 f"Напиши свой ответ:",
                 conscious_choice_keyboard()
             )
-        elif step == 4:
-            self._show_choice_minus(user_id, session)
-        elif step == 5:
-            # Шаг 5 больше не показывается отдельным экраном (см.
-            # _show_choice_minus — шаг 4 теперь сразу просит минусы, без
-            # промежуточного «Жми Продолжить»), но номер шага сохранён ради
-            # арифметики _handle_back/_handle_to_end (step ± 1) — та же
-            # заглушка на случай, если сюда всё же попадут (например, старый
-            # сохранённый прогресс с этим шагом).
+        elif step in (4, 5):
+            # Оба номера ведут на один и тот же объединённый экран (см.
+            # _show_choice_minus) — номер 5 сохранён только ради
+            # back/forward-арифметики (_handle_back и т.п.) и старого
+            # сохранённого прогресса.
             self._show_choice_minus(user_id, session)
         elif step == 6:
             self._show_choice_plus(user_id, session)
-        elif step == 7:
-            self._show_alt_ack(user_id, session)
-        elif step == 8:
+        elif step in (7, 8):
+            # Та же логика, что и для (4, 5) — см. _show_alt_minus.
             self._show_alt_minus(user_id, session)
         elif step == 9:
             self._show_alt_plus(user_id, session)
@@ -262,11 +270,11 @@ class ConsciousChoiceExercise(BaseExercise):
         step = session.get('step', 1)
 
         # Стикер/фото/голосовое приходят из main.py как text="" — не
-        # записывать пустой ответ и не продвигать шаг молча. Шаг 7 —
-        # чисто подтверждающий (текст туда не пишется вообще), поэтому его
-        # не трогаем. Шаг 4 раньше тоже был таким, но после слияния с бывшим
-        # шагом 5 (см. _show_choice_minus) он тоже принимает текст.
-        if not text_lower and step in (1, 2, 3, 4, 5, 6, 8, 9):
+        # записывать пустой ответ и не продвигать шаг молча. Все шаги
+        # 1-9 теперь так или иначе принимают текст (после слияния 4+5 и
+        # 7+8, см. _show_choice_minus/_show_alt_minus) — только "Продолжить"
+        # двигает шаг дальше, обычным текстом тут дальше не пройти.
+        if not text_lower and step in (1, 2, 3, 4, 5, 6, 7, 8, 9):
             self.send_message(
                 user_id,
                 "Пожалуйста, напиши текстом — я не могу обработать стикер/фото здесь.",
@@ -275,7 +283,7 @@ class ConsciousChoiceExercise(BaseExercise):
             return
 
         if step == 1:
-            items = self._split_must_items(text)
+            items = self._split_items_text(text)
             session['must_items'].extend(items)
             self.save_progress(user_id, session)
             self._send_must_items_added(user_id, items, len(session['must_items']))
@@ -299,57 +307,26 @@ class ConsciousChoiceExercise(BaseExercise):
             self._show_step(user_id, session)
 
         elif step in (4, 5):
-            # Оба номера ведут в одно и то же место (см. _show_choice_minus)
-            # — раньше шаг 4 был отдельным подтверждающим экраном без ввода,
-            # теперь сразу принимает минусы, а шаг 5 оставлен для
-            # back/forward-арифметики (_handle_back и т.п.) и старого
-            # сохранённого прогресса.
-            session['choice_minus'] = text
-            session['step'] = 6
-            self._bump_max_step(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
+            self._collect_items(user_id, session, text, 'choice_minus_items')
 
         elif step == 6:
-            session['choice_plus'] = text
-            session['choice_analysis'] = self._format_pros_cons(
-                session.get('choice_minus', ''), text
-            )
-            session['step'] = 7
-            self._bump_max_step(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
+            self._collect_items(user_id, session, text, 'choice_plus_items')
 
-        elif step == 7:
-            self.send_message(
-                user_id,
-                "➡️ Жми «Продолжить», чтобы двигаться дальше",
-                conscious_choice_keyboard()
-            )
-
-        elif step == 8:
-            session['alt_minus'] = text
-            session['step'] = 9
-            self._bump_max_step(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
+        elif step in (7, 8):
+            self._collect_items(user_id, session, text, 'alt_minus_items')
 
         elif step == 9:
-            session['alt_plus'] = text
-            session['alternatives'] = self._format_pros_cons(
-                session.get('alt_minus', ''), text
-            )
-            self._complete_current_item(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
+            self._collect_items(user_id, session, text, 'alt_plus_items')
 
-    def _split_must_items(self, text):
+    def _split_items_text(self, text):
         """Разбивает вставленный текст на отдельные пункты — по переносам
         строк, а внутри каждой строки ещё и по ';' (частый случай: человек
         вставляет сразу целый список одним сообщением, каждый пункт на
         своей строке и/или через точку с запятой). Пустые куски и висящие
-        знаки препинания по краям убираются. См. _split_roles в my_roles.py
-        — тот же приём."""
+        знаки препинания по краям убираются. Используется и для сбора
+        must_items (шаг 1), и для "Не хочу"/"Хочу" (см. _collect_items) —
+        по просьбе пользователя те экраны теперь копят пункты точно так же,
+        как шаг 1. См. _split_roles в my_roles.py — тот же приём."""
         items = []
         for line in text.split('\n'):
             for part in line.split(';'):
@@ -357,6 +334,28 @@ class ConsciousChoiceExercise(BaseExercise):
                 if cleaned:
                     items.append(cleaned)
         return items
+
+    def _collect_items(self, user_id, session, text, items_key):
+        """Общий обработчик для экранов "Не хочу"/"Хочу" (choice_minus_items,
+        choice_plus_items, alt_minus_items, alt_plus_items) — по просьбе
+        пользователя они ведут себя как сбор пунктов на шаге 1: можно писать
+        сколько угодно раз, по одному пункту или сразу списком, а шаг НЕ
+        продвигается сам по себе — только когда человек явно нажимает
+        «Продолжить» (см. _handle_next). Раньше эти четыре экрана принимали
+        только один ответ и сразу переходили дальше, случайно перезаписывая
+        предыдущий ввод при повторном сообщении."""
+        items = self._split_items_text(text)
+        if not items:
+            self.send_message(
+                user_id,
+                "🤔 Не нашёл в этом сообщении ни одного пункта — попробуй ещё раз, "
+                "или жми «Продолжить», если пунктов больше нет.",
+                conscious_choice_keyboard()
+            )
+            return
+        session.setdefault(items_key, []).extend(items)
+        self.save_progress(user_id, session)
+        self._show_step(user_id, session)
 
     def _send_must_items_added(self, user_id, items, count, target=MAX_EXERCISE_ITEMS):
         if not items:
@@ -419,8 +418,8 @@ class ConsciousChoiceExercise(BaseExercise):
             'choice_analysis': session.get('choice_analysis', ''),
             'alternatives': session.get('alternatives', ''),
         })
-        for key in ('current_answer', 'who_greater', 'choice_minus', 'choice_plus',
-                    'choice_analysis', 'alt_minus', 'alt_plus', 'alternatives', 'right_phrase'):
+        for key in ('current_answer', 'who_greater', 'choice_minus_items', 'choice_plus_items',
+                    'choice_analysis', 'alt_minus_items', 'alt_plus_items', 'alternatives', 'right_phrase'):
             session.pop(key, None)
 
         session['analysis_index'] = session.get('analysis_index', 0) + 1
@@ -507,55 +506,46 @@ class ConsciousChoiceExercise(BaseExercise):
             self._show_step(user_id, session, error="Напиши свой ответ на вопрос")
 
         elif step in (4, 5):
-            # Раньше шаг 4 -> 5 был отдельным «пустым» переходом (просто
-            # показать следующий экран), а пропуск минусов случался только
-            # с шага 5. После слияния экранов (см. _show_choice_minus) оба
-            # номера пропускают минусы одинаково.
-            session.setdefault('choice_minus', '')
+            session.setdefault('choice_minus_items', [])
             session['step'] = 6
             self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 6:
-            session.setdefault('choice_plus', '')
+            session.setdefault('choice_plus_items', [])
             session['choice_analysis'] = self._format_pros_cons(
-                session.get('choice_minus', ''), session.get('choice_plus', '')
+                session.get('choice_minus_items', []), session.get('choice_plus_items', [])
             )
             session['step'] = 7
             self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
-        elif step == 7:
-            session['step'] = 8
-            self._bump_max_step(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
-
-        elif step == 8:
-            session.setdefault('alt_minus', '')
+        elif step in (7, 8):
+            session.setdefault('alt_minus_items', [])
             session['step'] = 9
             self._bump_max_step(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
         elif step == 9:
-            session.setdefault('alt_plus', '')
+            session.setdefault('alt_plus_items', [])
             session['alternatives'] = self._format_pros_cons(
-                session.get('alt_minus', ''), session.get('alt_plus', '')
+                session.get('alt_minus_items', []), session.get('alt_plus_items', [])
             )
             self._complete_current_item(session)
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
     def _show_choice_minus(self, user_id, session):
-        # Раньше это были два отдельных сообщения (_show_choice_ack + это) —
-        # человеку приходилось жать «Продолжить» между ними просто чтобы
-        # увидеть следующий текст, хотя вводить в _show_choice_ack всё равно
-        # было нечего. Слиты в одно сообщение по просьбе пользователя.
+        # Раньше это были два отдельных сообщения ("Я выбираю" с кнопкой
+        # "Продолжить", и только потом отдельно "Не хочу") — слиты в одно
+        # по просьбе пользователя. Экран копит пункты (choice_minus_items)
+        # за сколько угодно сообщений, шаг двигает только "Продолжить" —
+        # тот же приём, что и на шаге 1 (см. _collect_items).
         must = session.get('current_must')
-        note = self._existing_answer_note(session.get('choice_minus'))
+        note = self._existing_items_note(session.get('choice_minus_items', []))
         self.send_message(
             user_id,
             f"Шаг 4: Анализ выбора\n\n"
@@ -566,56 +556,58 @@ class ConsciousChoiceExercise(BaseExercise):
             f"· Будут жаловаться\n"
             f"· Будут ныть\n\n"
             f"{note}"
-            f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
+            f"✍️ Пиши свои минусы — по одному или сразу списком. Когда закончишь "
+            f"(или если минусов нет), жми «Продолжить».",
             conscious_choice_keyboard()
         )
 
     def _show_choice_plus(self, user_id, session):
-        note = self._existing_answer_note(session.get('choice_plus'))
+        note = self._existing_items_note(session.get('choice_plus_items', []))
         self.send_message(
             user_id,
             f"❓ Хочу (полезные плюсы):\n"
             f"· Увидеть улыбку на лице ребёнка\n"
             f"· Увидеть, как он радуется вкусной еде\n\n"
             f"{note}"
-            f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
-            conscious_choice_keyboard()
-        )
-
-    def _show_alt_ack(self, user_id, session):
-        must = session.get('current_must')
-        self.send_message(
-            user_id,
-            f"Шаг 5: Альтернативы\n\n"
-            f"Иногда «{must}» можно не делать.\n\n"
-            f"➡️ Жми «Продолжить», чтобы посмотреть на другие минусы и плюсы.",
+            f"✍️ Пиши свои плюсы — по одному или сразу списком. Когда закончишь "
+            f"(или если плюсов нет), жми «Продолжить».",
             conscious_choice_keyboard()
         )
 
     def _show_alt_minus(self, user_id, session):
-        note = self._existing_answer_note(session.get('alt_minus'))
+        # Та же логика слияния, что и в _show_choice_minus: раньше "Шаг 5:
+        # Альтернативы" (просто "Иногда можно не делать" + кнопка
+        # "Продолжить") и "Не хочу (другие минусы)" были двумя отдельными
+        # сообщениями без какого-либо ввода между ними.
+        must = session.get('current_must')
+        note = self._existing_items_note(session.get('alt_minus_items', []))
         self.send_message(
             user_id,
-            f"❓ Не хочу (другие минусы):\n"
+            f"Шаг 5: Альтернативы\n\n"
+            f"Иногда выбираю не делать это «{must}»\n\n"
+            f"❓ Не хочу\n"
+            f"Когда\n"
             f"· Устал сильно\n"
             f"· Не могу собраться с мыслями\n"
             f"· Мало времени\n"
             f"· Накопить стресс\n\n"
             f"{note}"
-            f"✍️ Напиши свои минусы или жми «Продолжить», чтобы пропустить.",
+            f"✍️ Пиши свои минусы — по одному или сразу списком. Когда закончишь "
+            f"(или если минусов нет), жми «Продолжить».",
             conscious_choice_keyboard()
         )
 
     def _show_alt_plus(self, user_id, session):
-        note = self._existing_answer_note(session.get('alt_plus'))
+        note = self._existing_items_note(session.get('alt_plus_items', []))
         self.send_message(
             user_id,
-            f"❓ Хочу (другие плюсы):\n"
+            f"❓ Каких плюсов хочу?\n"
             f"· Набрать энергии и с хорошим настроением\n"
             f"· Заказать что-то из доставки\n"
             f"· Попробовать что-то новое\n\n"
             f"{note}"
-            f"✍️ Напиши свои плюсы или жми «Продолжить», чтобы пропустить.",
+            f"✍️ Пиши свои плюсы — по одному или сразу списком. Когда закончишь "
+            f"(или если плюсов нет), жми «Продолжить».",
             conscious_choice_keyboard()
         )
 
