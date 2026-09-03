@@ -499,6 +499,29 @@ class BotHandlers:
                         "Попробуй ещё раз через минуту.",
                         get_reminder_keyboard()
                     )
+            elif "стоп-техника" in text_clean or "стоп техника" in text_clean:
+                # Раньше в тексте меню (show_reminders) это уже обещалось
+                # («🛑 Стоп-техника — в течение дня»), но ни кнопки, ни
+                # обработчика не было — setup_stop_technique_reminder в
+                # notifications.py существовал, но никто его не вызывал.
+                # Времена пока фиксированные — не спрашиваем у пользователя
+                # расписание, чтобы не усложнять меню; при необходимости
+                # можно будет сделать настраиваемым отдельно.
+                times = ["12:00", "15:00", "18:00"]
+                results = self.notifications.setup_stop_technique_reminder(user_id, times)
+                if results and all(results):
+                    self.send_message(
+                        user_id,
+                        f"✅ Буду напоминать про стоп-технику в {', '.join(times)}.",
+                        get_reminder_keyboard()
+                    )
+                else:
+                    self.send_message(
+                        user_id,
+                        "⚠️ Не получилось настроить напоминания — сервис на секунду недоступен. "
+                        "Попробуй ещё раз через минуту.",
+                        get_reminder_keyboard()
+                    )
             elif "отключить" in text_clean:
                 # get_notifications теперь возвращает None при сбое запроса и
                 # [] только когда напоминаний правда нет (см. api_client.py) —

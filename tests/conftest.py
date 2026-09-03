@@ -245,3 +245,13 @@ class FakeNotificationSystem:
         if self.fail_reminder_setup:
             return None
         return {"id": len(self.reminder_calls), "exercise_type": "diary"}
+
+    def setup_stop_technique_reminder(self, user_id, times):
+        # Реальный setup_stop_technique_reminder создаёт одно уведомление
+        # НА КАЖДОЕ время из times и возвращает список результатов — имитируем
+        # то же самое, чтобы handlers.py::"стоп-техника" в 'reminders' мог
+        # честно проверить all(results) перед тем, как подтвердить настройку.
+        self.reminder_calls.append(("stop_technique", user_id, tuple(times)))
+        if self.fail_reminder_setup:
+            return [None for _ in times]
+        return [{"id": len(self.reminder_calls) * 100 + i, "exercise_type": "stop_technique"} for i in range(len(times))]

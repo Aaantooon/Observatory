@@ -33,6 +33,16 @@ def make(cls):
     return ex, vk, api
 
 
+def _diary_resume(ex, uid=UID):
+    """Дневник теперь идёт тремя заходами в течение дня (Утро/День/Вечер,
+    см. DiaryExercise.PHASE_BLOCK) — ответ, закрывающий блок (сон; хочу),
+    завершает сессию (_show_block_boundary), а не сразу показывает
+    следующий вопрос. Этот хелпер имитирует «заглянул попозже»: заново
+    открывает «Дневник» и жмёт «Продолжить» на приглашении возобновить."""
+    ex.start(uid)
+    ex.handle_message(uid, "Продолжить")
+
+
 # ---------------------------------------------------------------------------
 # Общие проверки редизайна — прогоняются по всем 6 упражнениям
 # ---------------------------------------------------------------------------
@@ -134,6 +144,12 @@ def test_save_and_restart_all_exercises():
             ex.handle_message(UID, "Кофе утром — 8")
         elif name == "stress_search":
             ex.handle_message(UID, "Работа 8")
+        elif name == "diary":
+            # Первый же ответ ("Сон") сам закрывает сессию на границе блока
+            # Утро -> День (см. _show_block_boundary) — заглядываем снова,
+            # чтобы было что сохранять на активной сессии.
+            ex.handle_message(UID, "Тестовый ответ")
+            _diary_resume(ex)
         else:
             ex.handle_message(UID, "Тестовый ответ")
 
@@ -234,7 +250,8 @@ def test_diary_shows_step_progress_bar():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
     assert "▮" in vk.last_message and "%" in vk.last_message
-    ex.handle_message(UID, "Гулял по парку")
+    ex.handle_message(UID, "Гулял по парку")  # dream -> блок "День" ждёт
+    _diary_resume(ex)  # заглянули через час, показался шаг 2
     assert "▮" in vk.last_message and "%" in vk.last_message
 
 
@@ -611,7 +628,8 @@ def test_my_roles_intrapersonal_target_is_10_not_20():
 def test_diary_no_none_leak_on_partial_save_and_restart():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Гулял по парку")           # dream
+    ex.handle_message(UID, "Гулял по парку")           # dream -> блок "День" ждёт
+    _diary_resume(ex)                                   # заглянули через час
     ex.handle_message(UID, "Спокойное")                # mood -> phase стал 'body'
     # сохраняем и начинаем заново ДО того, как дошли до 'differences'
     ex.handle_message(UID, "💾 Сохранить и начать заново")
@@ -625,6 +643,58 @@ def test_diary_no_none_leak_on_partial_save_and_restart():
 
     last_message = vk.last_message
     assert "None" not in last_message, f"В сообщении не должно быть литерального None: {last_message!r}"
+
+
+# ---------------------------------------------------------------------------
+# diary — три блока в течение дня (Утро -> День -> Вечер), см. PHASE_BLOCK
+# ---------------------------------------------------------------------------
+
+def test_diary_morning_block_ends_session_and_schedules_hour_reminder():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")  # dream -> блок "День" ждёт
+    assert UID not in ex.user_sessions, "Между блоками сессия завершается, как при отмене"
+    assert "Утренняя часть готова" in vk.last_message
+    assert len(api.created_notifications) == 1, "Должно быть поставлено одноразовое напоминание через час"
+    notif = api.created_notifications[0]
+    assert notif["exercise_type"] == "diary_day"
+    assert notif["schedule_type"] == "once"
+    assert notif["schedule_data"]["delay_hours"] == 1
+
+
+def test_diary_day_block_ends_session_without_extra_reminder_for_evening():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")
+    _diary_resume(ex)
+    ex.handle_message(UID, "Спокойное")
+    ex.handle_message(UID, "Тело в норме")
+    ex.handle_message(UID, "Мысли о работе")
+    ex.handle_message(UID, "Хочу кофе")  # wants -> блок "Вечер" ждёт
+    assert UID not in ex.user_sessions
+    assert "Дневная часть готова" in vk.last_message
+    # На переход День -> Вечер отдельное авто-напоминание не ставим — только
+    # то одно, что уже было поставлено на переходе Утро -> День.
+    assert len(api.created_notifications) == 1
+
+
+def test_diary_resume_prompt_names_the_next_block():
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")
+    ex.start(UID)
+    assert "День" in vk.last_message
+
+
+def test_diary_pressing_continue_right_away_does_not_wait_for_the_hour():
+    """«Не блокировать» — можно продолжить сразу же, не дожидаясь реального
+    часа; ожидание — просто рекомендация в тексте, а не проверка времени."""
+    ex, vk, api = make(DiaryExercise)
+    ex.start(UID)
+    ex.handle_message(UID, "Гулял по парку")
+    _diary_resume(ex)
+    assert ex.user_sessions[UID]["phase"] == "mood"
+    assert "Напиши своё настроение" in vk.last_message or "Шаг 2: Настроение" in vk.last_message
 
 
 # ---------------------------------------------------------------------------
@@ -1444,9 +1514,16 @@ def test_cancel_saves_progress_and_shows_resume_prompt_on_next_start():
             ex.handle_message(UID, "Тестовый ответ")
 
         results_before = len(api.results)
-        ex.handle_message(UID, "💾 Сохранить и выйти")
 
-        assert UID not in ex.user_sessions, f"{name}: после 'Сохранить и выйти' сессия должна закрыться"
+        if name == "diary":
+            # Первый же ответ ("Сон") уже сам закрыл сессию на границе блока
+            # Утро -> День (см. _show_block_boundary) — вести себя как
+            # обычное "Сохранить и выйти" не нужно, сессия и так закрыта, а
+            # прогресс уже сохранён.
+            assert UID not in ex.user_sessions, f"{name}: после ответа на 'Сон' сессия уже должна быть закрыта"
+        else:
+            ex.handle_message(UID, "💾 Сохранить и выйти")
+            assert UID not in ex.user_sessions, f"{name}: после 'Сохранить и выйти' сессия должна закрыться"
         assert len(api.results) == results_before, f"{name}: 'Сохранить и выйти' не должен создавать результат"
 
         # повторный вход в то же упражнение (тот же api => тот же прогресс)
@@ -1465,11 +1542,13 @@ def test_cancel_saves_progress_and_shows_resume_prompt_on_next_start():
 def test_diary_full_flow_to_finish():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Гулял по парку")     # dream
+    ex.handle_message(UID, "Гулял по парку")     # dream -> блок "День" ждёт
+    _diary_resume(ex)                             # заглянули через час
     ex.handle_message(UID, "Спокойное")           # mood
     ex.handle_message(UID, "Лёгкость в теле")     # body
     ex.handle_message(UID, "Мысли о работе")      # thoughts
-    ex.handle_message(UID, "Хочу кофе")           # wants
+    ex.handle_message(UID, "Хочу кофе")           # wants -> блок "Вечер" ждёт
+    _diary_resume(ex)                             # заглянули вечером
     ex.handle_message(UID, "Солнечный день")      # differences -> _finish()
 
     assert UID not in ex.user_sessions, "После 6 шага упражнение должно завершиться"
@@ -1495,11 +1574,13 @@ def test_diary_finish_with_very_long_answers_does_not_crash_and_truncates():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
     long_text = "А" * 5000
-    ex.handle_message(UID, long_text)       # dream
+    ex.handle_message(UID, long_text)       # dream -> блок "День" ждёт
+    _diary_resume(ex)                        # заглянули через час
     ex.handle_message(UID, "Спокойное")     # mood
     ex.handle_message(UID, "Лёгкость")      # body
     ex.handle_message(UID, "Мысли")         # thoughts
-    ex.handle_message(UID, "Хочу кофе")     # wants
+    ex.handle_message(UID, "Хочу кофе")     # wants -> блок "Вечер" ждёт
+    _diary_resume(ex)                        # заглянули вечером
     ex.handle_message(UID, long_text)       # differences -> _finish()
 
     assert UID not in ex.user_sessions, "Упражнение должно было завершиться, а не упасть"
@@ -2541,7 +2622,9 @@ def test_diary_advance_without_answer_shows_error_and_does_not_advance():
     assert ex.user_sessions[UID]["phase"] == "dream", "Фаза не должна была смениться без ответа"
     assert "Напиши свой сон" in vk.last_message
 
-    ex.handle_message(UID, "Гулял по парку")  # ответ сразу переводит на фазу 'mood'
+    ex.handle_message(UID, "Гулял по парку")  # dream -> блок "День" ждёт
+    assert UID not in ex.user_sessions, "Между блоками (Утро -> День) сессия завершается"
+    _diary_resume(ex)  # заглянули через час, теперь фаза 'mood'
     assert ex.user_sessions[UID]["phase"] == "mood"
 
     # на новой фазе тот же guard снова срабатывает, пока нет ответа
@@ -2566,7 +2649,7 @@ def test_diary_blank_text_from_sticker_does_not_advance():
     assert ex.user_sessions[UID]["phase"] == "dream"
 
     ex.handle_message(UID, "Гулял по парку")  # настоящий ответ работает как обычно
-    assert ex.user_sessions[UID]["phase"] == "mood"
+    assert UID not in ex.user_sessions, "После сна блок 'Утро' завершён — сессия закрыта до 'Дня'"
 
 
 def test_stop_technique_advance_without_answer_shows_error_and_does_not_advance():
@@ -2613,7 +2696,8 @@ def test_diary_save_and_restart_failure_keeps_answers_instead_of_wiping_them():
     сказали "ничего не потеряно"."""
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Гулял по парку")  # dream -> mood, есть хоть что-то
+    ex.handle_message(UID, "Гулял по парку")  # dream -> блок "День" ждёт, есть хоть что-то
+    _diary_resume(ex)                          # заглянули через час, сессия снова активна
 
     api.fail_save_result = True
     ex.handle_message(UID, "💾 Сохранить и начать заново")
@@ -3129,7 +3213,8 @@ def test_happiness_list_finish_survives_send_message_failure():
 def test_diary_back_to_start_and_end_navigation():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
-    ex.handle_message(UID, "Гулял по парку")   # dream -> mood
+    ex.handle_message(UID, "Гулял по парку")   # dream -> блок "День" ждёт
+    _diary_resume(ex)                           # заглянули через час
     ex.handle_message(UID, "Спокойное")        # mood -> body
 
     session = ex.user_sessions[UID]

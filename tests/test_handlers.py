@@ -572,6 +572,29 @@ def test_reminders_setup_tomorrow_morning():
     assert bh.notifications.reminder_calls[-1] == ("diary", UID, "08:00")
 
 
+def test_reminders_setup_stop_technique_during_day():
+    """Раньше show_reminders() уже обещал в тексте «🛑 Стоп-техника — в
+    течение дня», но ни кнопки, ни обработчика не было —
+    setup_stop_technique_reminder существовал только в notifications.py и
+    никто его не вызывал."""
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Стоп-техника в течение дня", "Аня", "И")
+    assert "12:00" in vk.last_message and "15:00" in vk.last_message and "18:00" in vk.last_message
+    assert bh.notifications.reminder_calls[-1] == ("stop_technique", UID, ("12:00", "15:00", "18:00"))
+
+
+def test_reminders_setup_stop_technique_reports_failure_honestly():
+    bh, vk, api = make_handlers()
+    _greet(bh)
+    bh.notifications.fail_reminder_setup = True
+    bh.handle_message(UID, "Напоминания", "Аня", "И")
+    bh.handle_message(UID, "Стоп-техника в течение дня", "Аня", "И")
+    assert "Не получилось" in vk.last_message
+    assert "12:00" not in vk.last_message
+
+
 def test_reminders_disable():
     """Правка 31.08.2026: раньше кнопка «Отключить» только показывала
     текст, но не отменяла ни одного реального напоминания — теперь
@@ -1002,7 +1025,12 @@ def test_dispatch_routes_follow_up_message_into_each_active_exercise():
     cases = [
         ("2", "happiness_list", "Кофе — 8", lambda ex: len(ex.user_sessions[UID]["items"]) == 1),
         ("4", "conscious_choice", "Кормить детей", lambda ex: ex.user_sessions[UID]["must_items"] == ["Кормить детей"]),
-        ("5", "diary", "Гулял по парку", lambda ex: ex.user_sessions[UID]["dream"] == "Гулял по парку"),
+        # dream — единственный шаг блока "Утро": ответ на него сразу
+        # закрывает сессию (граница блока Утро -> День, см.
+        # DiaryExercise._show_block_boundary), поэтому проверяем не
+        # содержимое сессии (её уже нет), а что follow-up реально дошёл до
+        # diary.handle_message, а не был проглочен как команда меню.
+        ("5", "diary", "Гулял по парку", lambda ex: "Утренняя часть готова" in vk.last_message),
         ("6", "stop_technique", "Думаю о работе", lambda ex: ex.user_sessions[UID]["thoughts"] == "Думаю о работе"),
     ]
     for number, attr_name, follow_up, check in cases:

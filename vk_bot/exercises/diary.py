@@ -80,10 +80,13 @@ class DiaryExercise(BaseExercise):
             session['_resume_prompt'] = True
             self.user_sessions[user_id] = session
 
+            block = self.PHASE_BLOCK.get(session.get('phase'))
+            next_block_line = f"· Дальше: {self.BLOCK_TITLES[block]}\n" if block in self.BLOCK_TITLES else ""
             self.send_message(
                 user_id,
                 "📖 ДНЕВНИК\n\n"
-                "· У тебя есть незаконченная запись\n\n"
+                "· У тебя есть незаконченная запись\n"
+                f"{next_block_line}\n"
                 "🕯️ Продолжим с того места, где остановился?",
                 continue_keyboard()
             )
@@ -94,6 +97,26 @@ class DiaryExercise(BaseExercise):
         self._show_phase(user_id, session)
 
     PHASES_ORDER = ['dream', 'mood', 'body', 'thoughts', 'wants', 'differences']
+
+    # Дневник идёт тремя заходами в течение дня, а не одним линейным
+    # разговором: сон — сразу после пробуждения; настроение/тело/мысли/хочу —
+    # примерно через час, когда человек уже осмотрелся в дне; отличия дня —
+    # вечером. См. _next_phase_forced/_show_block_boundary — между блоками
+    # сессия завершается (как при отмене), а не просто показывает следующий
+    # вопрос сразу же.
+    PHASE_BLOCK = {
+        'dream': 'morning',
+        'mood': 'day',
+        'body': 'day',
+        'thoughts': 'day',
+        'wants': 'day',
+        'differences': 'evening',
+    }
+    BLOCK_TITLES = {
+        'morning': '🌅 Утро',
+        'day': '☀️ День',
+        'evening': '🌙 Вечер',
+    }
 
     def _phase_index(self, phase):
         return self.PHASES_ORDER.index(phase) if phase in self.PHASES_ORDER else len(self.PHASES_ORDER) - 1
@@ -107,6 +130,26 @@ class DiaryExercise(BaseExercise):
         if not value:
             return ""
         return f"📝 Текущий ответ: «{value}»\n(напиши новый, чтобы заменить)\n\n"
+
+    def _format_day_recap(self, session):
+        """Короткая сводка настроения/тела/мыслей прямо перед вопросом
+        «Чего я хочу?» — по просьбе пользователя ответ здесь должен
+        опираться на то, что уже написано выше (например, если болит
+        спина — решить посидеть на работе, а не рваться делать всё как
+        обычно), а не сочиняться с чистого листа без взгляда назад."""
+        mood = session.get('mood')
+        body = session.get('body')
+        thoughts = session.get('thoughts')
+        if not (mood or body or thoughts):
+            return ""
+        lines = ["📝 Коротко о сегодняшнем дне:"]
+        if mood:
+            lines.append(f"· Настроение: {self._truncate_for_display(mood, 150)}")
+        if body:
+            lines.append(f"· Тело: {self._truncate_for_display(body, 150)}")
+        if thoughts:
+            lines.append(f"· Мысли: {self._truncate_for_display(thoughts, 150)}")
+        return "\n".join(lines) + "\n\n"
 
     def _show_phase(self, user_id, session):
         phase = session.get('phase')
@@ -150,11 +193,11 @@ class DiaryExercise(BaseExercise):
                 "Шаг 3: Общее ощущение в теле\n"
                 f"{progress}\n\n"
                 f"{note}"
-                "Что чувствуешь?\n\n"
+                "Что напряжено, а что расслаблено? Болит ли голова — и если да, то как?\n\n"
                 "Примеры:\n"
-                "· Ноги ноют\n"
-                "· Голова как кисель\n"
-                "· В теле лёгкость\n\n"
+                "· Плечи зажаты, ноги лёгкие, голова не болит\n"
+                "· Голова тяжёлая, будто сдавило — остальное расслаблено\n"
+                "· В теле лёгкость, ничего не болит и не напряжено\n\n"
                 "✏️ Напиши свои ощущения:",
                 step_nav_keyboard()
             )
@@ -173,12 +216,15 @@ class DiaryExercise(BaseExercise):
             )
 
         elif phase == 'wants':
+            recap = self._format_day_recap(session)
             self.send_message(
                 user_id,
                 "Шаг 5: Чего я хочу?\n"
                 f"{progress}\n\n"
+                f"{recap}"
                 f"{note}"
-                "Сейчас. Без ограничений. Всё, что приходит в голову.\n\n"
+                "Сейчас. Без ограничений. Всё, что приходит в голову — с опорой на то, "
+                "что уже написал(а) выше.\n\n"
                 "Пример:\n"
                 "«Сон неприятный и ноги ноют — сейчас разминку сделаю\n"
                 "и кофе выпью. Потом посмотрим.»\n\n"
@@ -262,39 +308,23 @@ class DiaryExercise(BaseExercise):
 
         if phase == 'dream':
             session['dream'] = text
-            session['phase'] = 'mood'
-            self._bump_max_phase(session)
-            self.save_progress(user_id, session)
-            self._show_phase(user_id, session)
+            self._advance_to(user_id, session, 'mood')
 
         elif phase == 'mood':
             session['mood'] = text
-            session['phase'] = 'body'
-         
-            self._bump_max_phase(session)
-            self.save_progress(user_id, session)
-            self._show_phase(user_id, session)
+            self._advance_to(user_id, session, 'body')
 
         elif phase == 'body':
             session['body'] = text
-            session['phase'] = 'thoughts'
-            self._bump_max_phase(session)
-            self.save_progress(user_id, session)
-            self._show_phase(user_id, session)
+            self._advance_to(user_id, session, 'thoughts')
 
         elif phase == 'thoughts':
             session['thoughts'] = text
-            session['phase'] = 'wants'
-            self._bump_max_phase(session)
-            self.save_progress(user_id, session)
-            self._show_phase(user_id, session)
+            self._advance_to(user_id, session, 'wants')
 
         elif phase == 'wants':
             session['wants'] = text
-            session['phase'] = 'differences'
-            self._bump_max_phase(session)
-            self.save_progress(user_id, session)
-            self._show_phase(user_id, session)
+            self._advance_to(user_id, session, 'differences')
 
         elif phase == 'differences':
             session['differences'] = text
@@ -375,29 +405,73 @@ class DiaryExercise(BaseExercise):
 
         self._next_phase_forced(user_id, session)
 
+    def _advance_to(self, user_id, session, next_phase):
+        """Общий переход между шагами дневника, ПОСЛЕ того как ответ уже
+        записан в session — общее место и для прямого ввода ответа текстом
+        (сразу переходит дальше), и для «Продолжить» на необязательном шаге
+        (см. _next_phase_forced). Если новый шаг попадает в другой блок дня
+        (Утро/День/Вечер, см. PHASE_BLOCK) — показывает не сам вопрос, а
+        прощание до нужного времени суток (_show_block_boundary), а не
+        следующий вопрос сразу же."""
+        prev_block = self.PHASE_BLOCK.get(session.get('phase'))
+        session['phase'] = next_phase
+        self._bump_max_phase(session)
+        self.save_progress(user_id, session)
+
+        next_block = self.PHASE_BLOCK.get(next_phase)
+        if next_block != prev_block:
+            self._show_block_boundary(user_id, session, next_block)
+        else:
+            self._show_phase(user_id, session)
+
     def _next_phase_forced(self, user_id, session):
         phase = session.get('phase')
 
         if phase == 'dream':
-            session['phase'] = 'mood'
+            self._advance_to(user_id, session, 'mood')
         elif phase == 'mood':
-            session['phase'] = 'body'
+            self._advance_to(user_id, session, 'body')
         elif phase == 'body':
-            session['phase'] = 'thoughts'
+            self._advance_to(user_id, session, 'thoughts')
         elif phase == 'thoughts':
-            session['phase'] = 'wants'
+            self._advance_to(user_id, session, 'wants')
         elif phase == 'wants':
-            session['phase'] = 'differences'
+            self._advance_to(user_id, session, 'differences')
         elif phase == 'differences':
             session['phase'] = 'complete'
             session['completed'] = True
             self.save_progress(user_id, session)
             self._finish(user_id, session)
-            return
 
-        self._bump_max_phase(session)
-        self.save_progress(user_id, session)
-        self._show_phase(user_id, session)
+    def _show_block_boundary(self, user_id, session, next_block):
+        """Экран между блоками дневника — сессия завершается (как при
+        отмене), а не ждёт на месте: пользователь свободен заняться другими
+        делами (например, стоп-техникой), прогресс уже сохранён и
+        подхватится сам, когда он вернётся в «Дневник» — см. start()."""
+        self.end_session(user_id)
+        if next_block == 'day':
+            # Одноразовое напоминание через час — не нужно ждать на месте
+            # и не нужно ничего нажимать; best-effort — если API недоступен,
+            # человек всё равно ничего не теряет (сон уже сохранён), просто
+            # не получит пинг и вернётся сам.
+            self.api.create_notification(
+                user_id, 'diary_day', 'once', {"delay_hours": 1, "exercise_type": "diary_day"}
+            )
+            self.send_message(
+                user_id,
+                "🌅 Утренняя часть готова — сон записан.\n\n"
+                "☀️ Дальше — дневная часть: настроение, тело, мысли, чего хочешь. "
+                "Загляни сюда примерно через час, когда осмотришься в дне — я напомню.",
+                main_menu()
+            )
+        elif next_block == 'evening':
+            self.send_message(
+                user_id,
+                "☀️ Дневная часть готова.\n\n"
+                "🌙 Вечером — последний вопрос: чем этот день отличается от других. "
+                "Загляни сюда в конце дня.",
+                main_menu()
+            )
 
     def _truncate_for_display(self, text, limit):
         """Обрезает текст для сообщения-эхо, чтобы неограниченный ввод
