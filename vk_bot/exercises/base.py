@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from vk_api.utils import get_random_id
-from keyboards import to_vk_keyboard
+from vk_adapter import VkAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +8,14 @@ logger = logging.getLogger(__name__)
 class BaseExercise(ABC):
     def __init__(self, vk_session, api_client):
         self.vk = vk_session
+        # self.platform — общий интерфейс отправки сообщений (см.
+        # platform_bots/README.md, шаг 3): send_message ниже вызывает его,
+        # а не self.vk напрямую, чтобы упражнение не было завязано на VK
+        # конкретно. lambda, а не просто VkAdapter(vk_session) — потому что
+        # self.vk можно подменить уже после создания экземпляра (см.
+        # vk_adapter.py, docstring VkAdapter.__init__), и адаптер должен
+        # видеть актуальное значение, а не то, что было на момент создания.
+        self.platform = VkAdapter(lambda: self.vk)
         self.api = api_client
         self.user_sessions = {}
 
@@ -30,12 +37,7 @@ class BaseExercise(ABC):
 
     def send_message(self, user_id, message, keyboard=None):
         try:
-            self.vk.method('messages.send', {
-                'user_id': user_id,
-                'message': message,
-                'random_id': get_random_id(),
-                'keyboard': to_vk_keyboard(keyboard)
-            })
+            self.platform.send_message(user_id, message, keyboard)
         except Exception as e:
             # Отправка не должна ронять вызывающий код (например, _finish()
             # после того, как save_result()/delete_progress() уже отработали)

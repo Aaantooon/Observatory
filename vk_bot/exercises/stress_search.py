@@ -1,10 +1,10 @@
 # vk_bot/exercises/stress_search.py
 import random
 import logging
-from vk_api.utils import get_random_id
+from vk_adapter import VkAdapter
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    simple_continue_keyboard, question1_keyboard, to_vk_keyboard,
+    simple_continue_keyboard, question1_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     FINISH_AND_SEND_TEXTS, EDIT_ITEM_TEXTS,
 )
@@ -29,17 +29,15 @@ logger = logging.getLogger(__name__)
 class StressSearchExercise:
     def __init__(self, vk_session, api_client):
         self.vk = vk_session
+        # См. exercises/base.py — тот же self.platform/VkAdapter, здесь
+        # продублировано, потому что этот класс не наследует BaseExercise.
+        self.platform = VkAdapter(lambda: self.vk)
         self.api = api_client
         self.user_sessions = {}
 
     def send_message(self, user_id, message, keyboard=None):
         try:
-            self.vk.method('messages.send', {
-                'user_id': user_id,
-                'message': message,
-                'random_id': get_random_id(),
-                'keyboard': to_vk_keyboard(keyboard)
-            })
+            self.platform.send_message(user_id, message, keyboard)
         except Exception as e:
             logger.error(f"Send message error to {user_id}: {e}")
 
