@@ -213,9 +213,14 @@ def conscious_choice_keyboard():
     return _kb(rows)
 
 def step_nav_keyboard():
+    # Раньше здесь ещё был ряд «⬅️ Назад / 🏠 В начало / 🏁 В конец» — по
+    # просьбе пользователя убран (лишние кнопки на экране). Сама навигация
+    # (_handle_back/_handle_to_start/_handle_to_end в stop_technique.py и
+    # diary.py) никуда не делась — доступна как и раньше, если написать
+    # текстом «назад»/«в начало»/«в конец» (BACK_TEXTS/TO_START_TEXTS/
+    # TO_END_TEXTS в этом же файле), просто без кнопок в клавиатуре.
     rows = [
         [("➡️ Продолжить", "positive")],
-        [("⬅️ Назад", "primary"), ("🏠 В начало", "secondary"), ("🏁 В конец", "secondary")],
         [("💾 Сохранить и начать заново", "negative")],
         [("💾 Сохранить и выйти", "secondary")],
     ]

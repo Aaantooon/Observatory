@@ -100,12 +100,19 @@ class BaseExercise(ABC):
         return "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
     def _get_progress_bar(self, count, target):
+        """Луч фонарика, пробивающий туман: ▮ — уже освещённый участок
+        пути, · — ещё скрытый в тумане. Та же тема и та же формула, что и
+        в stress_search.py (единственное упражнение, где раньше её не
+        было) — единый прогресс-бар по всему боту вместо отдельного
+        нейтрального ▰▱-варианта здесь."""
         if not target:
             return ""
         percent = min(100, int((count / target) * 100))
-        filled = "▰" * (percent // 5)
-        empty = "▱" * (20 - len(filled))
-        return f"▰{filled}{empty}▱ {percent}%"
+        segments = 20
+        filled_n = percent * segments // 100
+        filled = "▮" * filled_n
+        empty = "·" * (segments - filled_n)
+        return f"🔦{filled}{empty} {percent}%"
 
     def _score_emoji(self, score):
         """Цветовой индикатор оценки 1-10: 🔴 низкая, 🟡 средняя, 🟢 высокая."""

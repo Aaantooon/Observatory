@@ -48,16 +48,16 @@ ALL_EXERCISES = [
 
 
 EXERCISE_KEYBOARD_BUTTONS = ["➡️ Продолжить", "💾 Сохранить и начать заново", "💾 Сохранить и выйти"]
-# diary / stop_technique — фиксированные линейные упражнения, у них есть
-# навигация по шагам (Назад / В начало / В конец), см. step_nav_keyboard().
-STEP_NAV_KEYBOARD_BUTTONS = [
-    "➡️ Продолжить", "⬅️ Назад", "🏠 В начало", "🏁 В конец",
-    "💾 Сохранить и начать заново", "💾 Сохранить и выйти",
-]
-# conscious_choice — линейное упражнение, но без кнопок навигации по шагам
-# (Назад/В начало/В конец скрыты как визуальный шум — команды по-прежнему
-# работают, если их напечатать текстом); подписи "начать заново"/"выйти" —
-# в обратном порядке слов, см. conscious_choice_keyboard().
+# diary / stop_technique — фиксированные линейные упражнения. Раньше их
+# клавиатура (step_nav_keyboard()) ещё показывала кнопки навигации по шагам
+# (Назад / В начало / В конец) — по просьбе пользователя убраны как
+# визуальный шум; команды по-прежнему работают, если их напечатать текстом
+# (см. BACK_TEXTS/TO_START_TEXTS/TO_END_TEXTS в keyboards.py и тесты
+# навигации ниже). Клавиатура сейчас совпадает с обычной EXERCISE_KEYBOARD_BUTTONS.
+STEP_NAV_KEYBOARD_BUTTONS = EXERCISE_KEYBOARD_BUTTONS
+# conscious_choice — линейное упражнение, у него те же три кнопки, но
+# подписи "начать заново"/"выйти" — в обратном порядке слов, см.
+# conscious_choice_keyboard().
 CONSCIOUS_CHOICE_KEYBOARD_BUTTONS = [
     "➡️ Продолжить", "🔄 Начать заново и сохранить", "💾 Выйти и сохранить",
 ]
@@ -213,35 +213,35 @@ def test_happiness_list_shows_progress_bar_when_adding_item():
     ex, vk, api = make(HappinessListExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кофе утром — 8")
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
 
 
 def test_my_roles_shows_progress_bar_when_adding_role():
     ex, vk, api = make(MyRolesExercise)
     ex.start(UID)
     ex.handle_message(UID, "Продавец")
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
 
 
 def test_conscious_choice_shows_progress_bar_when_adding_item():
     ex, vk, api = make(ConsciousChoiceExercise)
     ex.start(UID)
     ex.handle_message(UID, "Кормить детей")
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
 
 
 def test_diary_shows_step_progress_bar():
     ex, vk, api = make(DiaryExercise)
     ex.start(UID)
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
     ex.handle_message(UID, "Гулял по парку")
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
 
 
 def test_stop_technique_shows_step_progress_bar():
     ex, vk, api = make(StopTechniqueExercise)
     ex.start(UID)
-    assert "▰" in vk.last_message and "%" in vk.last_message
+    assert "▮" in vk.last_message and "%" in vk.last_message
 
 
 def test_happiness_list_shows_score_emoji():
