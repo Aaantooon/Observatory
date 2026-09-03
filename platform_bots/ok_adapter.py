@@ -1,18 +1,44 @@
-"""Черновой адаптер Одноклассников (OK) — реализует MessagingAdapter.
+"""Адаптер Одноклассников (OK) — реализует MessagingAdapter поверх
+официального Bot API OK, построенного на базе Graph API
+(https://apiok.ru/en/dev/graph_api/bot_api).
 
-⚠️ ВАЖНО, честно, как и в max_adapter.py: подтверждённо я знаю только
-общую схему авторизации классического OK API (application_key +
-application_secret, подпись запроса — MD5 от отсортированных
-параметров + секретный ключ, схема описана в официальной документации
-OK API для разработчиков, apiok.ru). Названия конкретных методов для
-бота-мессенджера OK (отправка сообщения, приём новых сообщений) НЕ
-подтверждены — нужно свериться с актуальной документацией бот-платформы
-OK (искать раздел «Боты» в документации для разработчиков OK), прежде
-чем этим адаптером реально пользоваться. Все места с пометкой
-"TODO: сверить с докой OK" — предположения по аналогии с остальными
-адаптерами, не факт.
+Сверено с официальной докой 03.09.2026 (см. СВОДКА_ПРОЕКТА.md, журнал
+изменений — конкретные цитаты и ссылки на источники):
+  - у OK ДЕЙСТВИТЕЛЬНО есть официальный Bot API для личных/чат-сообщений
+    (не только классические group-приложения) — построен поверх Graph
+    API, это НЕ классический REST API OK со старой MD5-подписью
+    (apiok.ru/dev/graph_api/, apiok.ru/en/dev/graph_api/bot_api).
+  - авторизация: БЕЗ подписи (sig) — просто access_token параметром
+    («no session token, no sig required, use Graph API token instead»).
+    Токен для бота выдаётся в настройках группы («Management → Generate
+    access key»), живёт 30 дней и продлевается при каждом вызове.
+  - базовый URL: https://api.ok.ru/graph, запросы строятся по схеме
+    /graph/{alias}/{edge}[/{subresource}] (Facebook-Graph-подобная схема,
+    НЕ /graph/{имя.метода} и НЕ classic fb.do?method=...). Подтверждено
+    примером из доки:
+      POST https://api.ok.ru/graph/me/messages/chat:{chat_id}?access_token=...
+      POST https://api.ok.ru/graph/me/subscribe?access_token=...
+  - подписка на входящие (обязательна ПЕРЕД первым вызовом updates) —
+    POST .../me/subscribe, тело {"types": [...], "longPolling": true}
+    для long polling или {"url": "https://..."} для webhook.
+
+⚠️ НЕ подтверждено докой, ОСТАЁТСЯ TODO — проверить перед продакшеном:
+  1. Форма адресации 1:1-сообщения пользователю. Подтверждённый пример
+     из доки — только для ЧАТА (.../messages/chat:{id}); отдельно (на
+     странице метода graph.user.messages) упоминается вариант с телом
+     {"recipient": {"user_ids": ["user:<id>"]}, "message": {"text": ...}}.
+     Эти два варианта НЕ удалось свести воедино по документации — возможно
+     это два разных способа адресации одного и того же метода, а не
+     противоречие. Ниже — вариант по аналогии с подтверждённым chat:
+     примером (.../messages/user:{id}), это ПРЕДПОЛОЖЕНИЕ.
+  2. Точные поля одной кнопки клавиатуры (INLINE_KEYBOARD) — подтверждён
+     только факт двумерного массива и типы кнопок (CALLBACK, LINK), сама
+     структура полей кнопки — нет.
+  3. Точный URL-путь GET .../updates — на странице метода нет текстового
+     примера запроса (только таблица параметров marker/types/count/
+     timeout/commit), путь ниже достроен по аналогии с двумя другими
+     подтверждёнными методами.
 """
-import hashlib
 import logging
 import time
 
@@ -22,87 +48,113 @@ from .base_adapter import MessagingAdapter
 
 logger = logging.getLogger(__name__)
 
-# TODO: сверить с докой OK — актуальный базовый URL API ботов.
-API_BASE = "https://api.ok.ru/fb.do"
+API_BASE = "https://api.ok.ru/graph"
 
 
 class OkAdapter(MessagingAdapter):
-    def __init__(self, application_key: str, application_secret: str, access_token: str):
-        self.application_key = application_key
-        self.application_secret = application_secret
+    def __init__(self, access_token: str):
         self.access_token = access_token
-        self._offset = None
+        self._marker = None
 
-    def _sign(self, params: dict) -> str:
-        """Классическая подпись OK API: MD5 от отсортированных
-        "key=value" (без access_token) + секретный ключ приложения.
-        Схема сама по себе стабильна и задокументирована годами — но
-        то, какие именно параметры нужны для отправки сообщения ботом,
-        не проверено (TODO: сверить с докой OK)."""
-        base = "".join(f"{k}={v}" for k, v in sorted(params.items()) if k != "access_token")
-        return hashlib.md5((base + self.application_secret).encode("utf-8")).hexdigest()
-
-    def _call(self, method: str, **params):
-        params = {
-            "method": method,
-            "application_key": self.application_key,
-            "access_token": self.access_token,
-            "format": "json",
-            **params,
-        }
-        params["sig"] = self._sign(params)
-        response = requests.post(API_BASE, data=params, timeout=35)
+    def _call(self, path: str, http_method="POST", params=None, json_body=None):
+        url = f"{API_BASE}/{path}"
+        query = {"access_token": self.access_token}
+        if params:
+            query.update(params)
+        response = requests.request(http_method, url, params=query, json=json_body, timeout=35)
         response.raise_for_status()
-        data = response.json()
-        if isinstance(data, dict) and data.get("error_code"):
-            raise RuntimeError(f"OK API error on {method}: {data}")
-        return data
+        return response.json() if response.content else {}
 
     @staticmethod
     def _to_native_keyboard(keyboard):
-        """TODO: сверить с докой OK — формат кнопок бот-платформы OK не
-        проверен, ниже нейтральная структура на всякий случай (текст
-        рядов кнопок), а не подтверждённый формат API."""
-        if not keyboard:
+        """Нейтральный формат ({"rows": [[(текст, цвет), ...], ...],
+        "one_time": bool} — см. vk_bot/keyboards.py::_kb) -> attachment
+        INLINE_KEYBOARD. ⚠️ TODO: точные поля кнопки не подтверждены (см.
+        шапку файла, п.2) — CALLBACK взят по аналогии с остальными
+        адаптерами."""
+        if not keyboard or not keyboard.get("rows"):
             return None
-        return [[{"text": label} for label in row] for row in keyboard]
+        return [{
+            "type": "INLINE_KEYBOARD",
+            "buttons": [
+                [{"type": "CALLBACK", "text": text} for text, _color in row]
+                for row in keyboard["rows"]
+            ],
+        }]
 
     def send_message(self, user_id, text: str, keyboard=None) -> None:
         try:
-            # TODO: сверить с докой OK — реальное имя метода отправки
-            # сообщения ботом (message.send? bot.sendMessage? другое).
-            self._call(
-                "bot.sendMessage",
-                user_id=user_id,
-                text=text,
-                keyboard=self._to_native_keyboard(keyboard),
-            )
+            # TODO: сверить с докой OK — путь ".../messages/user:{id}"
+            # это предположение по аналогии, см. п.1 в шапке файла.
+            body = {"text": text}
+            attachments = self._to_native_keyboard(keyboard)
+            if attachments:
+                body["attachments"] = attachments
+            self._call(f"me/messages/user:{user_id}", json_body=body)
         except Exception as e:
             logger.error(f"[ok] Send message error to {user_id}: {e}")
 
     def run(self, on_message) -> None:
-        """Черновой polling-цикл по аналогии с остальными адаптерами.
-        TODO: сверить с докой OK — реальный способ получения новых
-        сообщений (polling своим методом или webhook)."""
-        logger.info("[ok] Starting polling (черновик — сверить с докой OK)")
+        """Long polling. Подписка обязательна ПЕРЕД первым вызовом
+        updates (см. шапку файла) — доке дословно: "For this method to
+        work you need to create a long polling subscription with
+        POST graph.user.subscribe method"."""
+        try:
+            self._call("me/subscribe", json_body={
+                "types": ["MESSAGE_CREATED", "MESSAGE_CALLBACK"],
+                "longPolling": True,
+            })
+        except Exception as e:
+            logger.error(f"[ok] Не удалось оформить long-polling подписку: {e}")
+            return
+
+        logger.info("[ok] Starting long polling")
         while True:
             try:
-                # TODO: сверить с докой OK — реальное имя метода/параметров.
-                data = self._call("bot.getUpdates", offset=self._offset, timeout=30)
-                updates = data.get("updates", []) if isinstance(data, dict) else []
+                # TODO: сверить с докой OK — точный путь не подтверждён
+                # (см. п.3 в шапке файла), взят по аналогии.
+                data = self._call(
+                    "me/updates", http_method="GET",
+                    params={
+                        "marker": self._marker, "timeout": 30, "count": 100,
+                        "types": "MESSAGE_CREATED,MESSAGE_CALLBACK",
+                    },
+                )
             except Exception as e:
                 logger.error(f"[ok] updates poll error: {e}")
                 time.sleep(5)
                 continue
 
+            updates = data.get("updates", []) if isinstance(data, dict) else []
             for update in updates:
-                self._offset = update.get("id", self._offset)
-                message = update.get("message")
-                if not message:
+                if update.get("type") != "MESSAGE_CREATED":
                     continue
-                user_id = message.get("user_id")
+                message = update.get("message") or {}
+                sender = message.get("sender") or {}
+                user_id = sender.get("user_id")
                 text = message.get("text", "")
                 try:
                     on_message(user_id, text)
                 except Exception:
                     logger.exception(f"[ok] on_message crashed for user_id={user_id}")
+
+            if isinstance(data, dict):
+                self._marker = data.get("marker", self._marker)
+
+
+if __name__ == "__main__":
+    # Ручной запуск для проверки адаптера отдельно от остального бота:
+    #   OK_BOT_ACCESS_TOKEN=... python -m platform_bots.ok_adapter
+    import os
+
+    logging.basicConfig(level=logging.INFO)
+    token = os.environ.get("OK_BOT_ACCESS_TOKEN")
+    if not token:
+        raise SystemExit("Задайте OK_BOT_ACCESS_TOKEN в окружении для проверки адаптера")
+
+    adapter = OkAdapter(token)
+
+    def echo(user_id, text):
+        adapter.send_message(user_id, f"Эхо: {text}")
+
+    adapter.run(echo)

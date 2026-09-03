@@ -12,26 +12,35 @@ VK-бота. См. platform_bots/README.md — там план, как реал�
 пора.
 
 Идея в двух словах: сейчас vk_bot/exercises/base.py::BaseExercise.send_message
-напрямую дёргает self.vk.method('messages.send', ...) — упражнения
-завязаны на VK. MessagingAdapter ниже — это тот же send_message, но
-описанный как интерфейс, который может по-разному реализовать каждая
-платформа (VK/Telegram/MAX/OK). Клавиатура — не JSON конкретной
-платформы, а НЕЙТРАЛЬНЫЙ формат: список рядов кнопок, каждая кнопка —
-просто текст:
+зовёт self.platform.send_message(...) (шаг 3 плана миграции, см. README.md)
+— упражнения больше не завязаны на VK напрямую. MessagingAdapter ниже —
+описание того же send_message как интерфейса, который может по-разному
+реализовать каждая платформа (VK/Telegram/MAX/OK). Клавиатура — не JSON
+конкретной платформы, а НЕЙТРАЛЬНЫЙ формат (актуальный, см.
+vk_bot/keyboards.py::_kb — этим форматом реально пользуются VkAdapter и
+TelegramAdapter):
 
-    [["➡️ Продолжить"], ["🔄 Начать заново и сохранить"], ["💾 Выйти и сохранить"]]
+    {"rows": [[("➡️ Продолжить", "primary")],
+              [("🔄 Начать заново и сохранить", "secondary")],
+              [("💾 Выйти и сохранить", "negative")]],
+     "one_time": True}
 
-Такой ряд кнопок один в один соответствует тому, что сейчас строит
-keyboards.py через VkKeyboard.add_button()/add_line() — просто без
-привязки к VK-формату. Каждый адаптер сам превращает нейтральные ряды
-в свой нативный формат клавиатуры.
+"rows" — ряды кнопок, каждая кнопка — пара (текст, цвет); цвет из набора
+{"positive", "negative", "primary", "secondary"} — платформы без понятия
+цвета кнопки (Telegram, и, судя по всему, MAX/OK) его просто
+игнорируют. "one_time" — прятать ли клавиатуру после нажатия (VK
+one_time behaviour) — не все платформы такое умеют, тоже можно
+игнорировать. Такой формат один в один соответствует тому, что строит
+keyboards.py — просто без привязки к VK JSON. Каждый адаптер сам
+превращает нейтральный формат в свой нативный (см. VkAdapter.send_message
+в vk_bot/vk_adapter.py, TelegramAdapter._to_reply_markup в
+telegram_adapter.py — оба уже это делают на практике).
 """
 from abc import ABC, abstractmethod
 
 
-# Тип для читаемости — ряды кнопок, каждая кнопка это подпись (str).
-# Пример: [["Да"], ["Нет"]] — две кнопки, каждая на своей строке.
-Keyboard = list  # list[list[str]]
+# Тип для читаемости — нейтральный формат клавиатуры, см. докстринг файла.
+Keyboard = dict  # {"rows": list[list[tuple[str, str]]], "one_time": bool}
 
 
 class MessagingAdapter(ABC):
@@ -71,9 +80,9 @@ def rows_to_plain_text_hint(keyboard: "Keyboard | None") -> str:
     без нативных кнопок (или на время, пока адаптер ещё черновой): текст
     вида "[Да] [Нет]" в конце сообщения, чтобы кнопки хотя бы были видны
     как подсказка, а не терялись совсем."""
-    if not keyboard:
+    if not keyboard or not keyboard.get("rows"):
         return ""
     lines = []
-    for row in keyboard:
-        lines.append(" ".join(f"[{label}]" for label in row))
+    for row in keyboard["rows"]:
+        lines.append(" ".join(f"[{text}]" for text, _color in row))
     return "\n" + "\n".join(lines)
