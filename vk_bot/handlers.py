@@ -1,4 +1,4 @@
-from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard, to_vk_keyboard
 from vk_api.utils import get_random_id
 from api_client import APIClient
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard
@@ -152,7 +152,7 @@ class BotHandlers:
                 'user_id': user_id,
                 'message': message,
                 'random_id': get_random_id(),
-                'keyboard': keyboard
+                'keyboard': to_vk_keyboard(keyboard)
             })
         except Exception as e:
             logger.error(f"Send message error to {user_id}: {e}")

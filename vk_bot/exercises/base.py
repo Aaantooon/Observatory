@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from vk_api.utils import get_random_id
+from keyboards import to_vk_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class BaseExercise(ABC):
                 'user_id': user_id,
                 'message': message,
                 'random_id': get_random_id(),
-                'keyboard': keyboard
+                'keyboard': to_vk_keyboard(keyboard)
             })
         except Exception as e:
             # Отправка не должна ронять вызывающий код (например, _finish()

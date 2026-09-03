@@ -4,7 +4,7 @@ import logging
 from vk_api.utils import get_random_id
 from keyboards import (
     main_menu, exercise_keyboard, analysis_keyboard, cancel_keyboard, continue_keyboard,
-    simple_continue_keyboard, question1_keyboard,
+    simple_continue_keyboard, question1_keyboard, to_vk_keyboard,
     CONTINUE_TEXTS, RESTART_TEXTS, SAVE_AND_RESTART_TEXTS, CANCEL_TEXTS, ADVANCE_TEXTS,
     FINISH_AND_SEND_TEXTS, EDIT_ITEM_TEXTS,
 )
@@ -38,7 +38,7 @@ class StressSearchExercise:
                 'user_id': user_id,
                 'message': message,
                 'random_id': get_random_id(),
-                'keyboard': keyboard
+                'keyboard': to_vk_keyboard(keyboard)
             })
         except Exception as e:
             logger.error(f"Send message error to {user_id}: {e}")

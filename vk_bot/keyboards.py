@@ -39,29 +39,72 @@ TO_START_TEXTS = {"в начало", "🏠 в начало"}
 TO_END_TEXTS = {"в конец", "🏁 в конец"}
 
 
+# ---------------------------------------------------------------------------
+# Нейтральное представление клавиатуры + конвертер в формат VK.
+#
+# Каждая функция ниже (exercise_keyboard, main_menu и т.д.) возвращает не
+# VK-специфичный объект, а нейтральную структуру — список рядов, каждый ряд
+# список кнопок (текст, цвет). Цвет — платформонезависимая строка
+# ('positive'/'negative'/'primary'/'secondary'); платформы без цветных
+# кнопок (Telegram и т.п.) её просто игнорируют. Так эти же функции годятся
+# для любого MessagingAdapter (см. platform_bots/README.md) — VK остаётся
+# лишь ОДНИМ из потребителей, а не единственным, для кого они написаны.
+#
+# to_vk_keyboard() — единственное место, которое превращает нейтральную
+# структуру в JSON, ожидаемый vk.method('messages.send', {'keyboard': ...}).
+# Вызывается из send_message() в exercises/base.py, exercises/stress_search.py
+# и handlers.py — это единственные 3 места, которые реально отправляют
+# сообщение в VK. Раньше каждая функция ниже сама строила VkKeyboard и
+# отдавала готовый VK JSON — поведение (сами кнопки, их цвета, разбивка на
+# ряды, one_time) не изменилось ни на бит, изменилось только КТО и КОГДА
+# знает про VkKeyboard.
+# ---------------------------------------------------------------------------
+
+_VK_COLORS = {
+    "positive": VkKeyboardColor.POSITIVE,
+    "negative": VkKeyboardColor.NEGATIVE,
+    "primary": VkKeyboardColor.PRIMARY,
+    "secondary": VkKeyboardColor.SECONDARY,
+}
+
+
+def _kb(rows, one_time=True):
+    """Собирает нейтральную клавиатуру: rows — список рядов, каждый ряд —
+    список кортежей (текст, цвет)."""
+    return {"rows": rows, "one_time": one_time}
+
+
+def to_vk_keyboard(keyboard):
+    """Конвертирует нейтральную клавиатуру (см. _kb выше) в VK JSON-строку.
+    keyboard=None -> None (сообщение без клавиатуры, VK это понимает)."""
+    if keyboard is None:
+        return None
+    vk_keyboard = VkKeyboard(one_time=keyboard.get("one_time", True))
+    for i, row in enumerate(keyboard.get("rows", [])):
+        if i > 0:
+            vk_keyboard.add_line()
+        for text, color in row:
+            vk_keyboard.add_button(text, color=_VK_COLORS.get(color, VkKeyboardColor.PRIMARY))
+    return vk_keyboard.get_keyboard()
+
+
 def exercises_menu():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("1. Поиск стресса 🎯", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("2. Список счастья ✨", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("3. Мои роли 🎭", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("4. Осознанный выбор 🧘", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("5. Дневник 📖", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("6. Стоп-техника 🛑", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("1. Поиск стресса 🎯", "positive")],
+        [("2. Список счастья ✨", "primary"), ("3. Мои роли 🎭", "primary")],
+        [("4. Осознанный выбор 🧘", "primary"), ("5. Дневник 📖", "primary")],
+        [("6. Стоп-техника 🛑", "primary")],
+        [("🔙 Назад", "secondary")],
+    ]
+    return _kb(rows)
 
 def stress_search_parts_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("🌫️ Часть 1: Собрать стресс", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("🧠 Часть 2: Разобрать стресс", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("🌫️ Часть 1: Собрать стресс", "positive")],
+        [("🧠 Часть 2: Разобрать стресс", "primary")],
+        [("🔙 Назад", "secondary")],
+    ]
+    return _kb(rows)
 
 def exercise_keyboard(can_finish=False):
     """Основная клавиатура «Поиска стресса» — и в части 1 (сбор образов),
@@ -73,141 +116,124 @@ def exercise_keyboard(can_finish=False):
     MIN_ANALYZED_TO_FINISH_EARLY в части 2), чтобы не звать отправлять на
     проверку то, что ещё рано смотреть — и стоит сразу под «Продолжить»,
     а не в самом низу."""
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
+    first_row = [("➡️ Продолжить", "positive")]
     if can_finish:
-        keyboard.add_button("✅ Завершить и отправить", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+        first_row.append(("✅ Завершить и отправить", "positive"))
+    rows = [
+        first_row,
+        [("💾 Сохранить и начать заново", "negative"), ("💾 Сохранить и выйти", "secondary")],
+    ]
+    return _kb(rows)
 
 def analysis_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Далее", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
-    return keyboard.get_keyboard()
+    rows = [
+        [("➡️ Далее", "primary")],
+        [("✅ Завершить", "positive")],
+    ]
+    return _kb(rows)
 
 def daily_limit_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("⚠️ Всё равно продолжить", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("⚠️ Всё равно продолжить", "negative")],
+        [("💾 Сохранить и выйти", "secondary")],
+    ]
+    return _kb(rows)
 
 def confirm_skip_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("✅ Да, дальше", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("✏️ Нет, буду писать", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("✅ Да, дальше", "positive")],
+        [("✏️ Нет, буду писать", "secondary")],
+    ]
+    return _kb(rows)
 
 def role_phase_choice_keyboard():
     """Клавиатура выбора части «Мои роли», в которую человек хочет
     вернуться и дописать роли — на экране перед стартом разбора (см.
     _show_preanalyze_confirm в my_roles.py)."""
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("1. Социальные", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("2. Межличностные", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("3. Внутриличностные", color=VkKeyboardColor.PRIMARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("1. Социальные", "primary")],
+        [("2. Межличностные", "primary")],
+        [("3. Внутриличностные", "primary")],
+    ]
+    return _kb(rows)
 
 def simple_continue_keyboard():
     """Клавиатура с единственной кнопкой «Продолжить» — для экранов, где не
     нужен выбор да/нет, а просто подтверждение «готов, двигаюсь дальше»."""
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
-    return keyboard.get_keyboard()
+    rows = [[("➡️ Продолжить", "positive")]]
+    return _kb(rows)
 
 def cancel_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
-    return keyboard.get_keyboard()
+    rows = [[("💾 Сохранить и выйти", "negative")]]
+    return _kb(rows)
 
 def question1_keyboard():
     """Клавиатура экрана Вопроса 1/4 («какая противоположность?») — с
     кнопкой «Изменить пункт», чтобы поправить текст/оценку образа прямо
     здесь, если он неточно сформулирован, не выходя из разбора."""
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("✏️ Изменить пункт", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
-    return keyboard.get_keyboard()
+    rows = [
+        [("✏️ Изменить пункт", "primary")],
+        [("💾 Сохранить и выйти", "negative")],
+    ]
+    return _kb(rows)
 
 def continue_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("Продолжить ✅", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("Начать заново 🔄", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("Продолжить ✅", "positive")],
+        [("Начать заново 🔄", "secondary")],
+    ]
+    return _kb(rows)
 
 def get_reminder_keyboard():
-    keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("⏰ Напомнить через 1 час", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("⏰ Напомнить через 3 часа", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_line()
-    keyboard.add_button("⏰ Напомнить завтра утром", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_line()
-    keyboard.add_button("❌ Отключить напоминания", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_line()
-    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("⏰ Напомнить через 1 час", "primary"), ("⏰ Напомнить через 3 часа", "secondary")],
+        [("⏰ Напомнить завтра утром", "primary")],
+        [("❌ Отключить напоминания", "negative")],
+        [("🔙 Назад", "secondary")],
+    ]
+    return _kb(rows, one_time=False)
 
 def back_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("🔙 Назад", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [[("🔙 Назад", "secondary")]]
+    return _kb(rows)
 
 def finish_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("✅ Завершить", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.NEGATIVE)
-    return keyboard.get_keyboard()
+    rows = [
+        [("✅ Завершить", "positive")],
+        [("💾 Сохранить и выйти", "negative")],
+    ]
+    return _kb(rows)
 
 def conscious_choice_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("🔄 Начать заново и сохранить", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_line()
-    keyboard.add_button("💾 Выйти и сохранить", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("➡️ Продолжить", "positive")],
+        [("🔄 Начать заново и сохранить", "negative")],
+        [("💾 Выйти и сохранить", "secondary")],
+    ]
+    return _kb(rows)
 
 def step_nav_keyboard():
-    keyboard = VkKeyboard(one_time=True)
-    keyboard.add_button("➡️ Продолжить", color=VkKeyboardColor.POSITIVE)
-    keyboard.add_line()
-    keyboard.add_button("⬅️ Назад", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("🏠 В начало", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_button("🏁 В конец", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и начать заново", color=VkKeyboardColor.NEGATIVE)
-    keyboard.add_line()
-    keyboard.add_button("💾 Сохранить и выйти", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("➡️ Продолжить", "positive")],
+        [("⬅️ Назад", "primary"), ("🏠 В начало", "secondary"), ("🏁 В конец", "secondary")],
+        [("💾 Сохранить и начать заново", "negative")],
+        [("💾 Сохранить и выйти", "secondary")],
+    ]
+    return _kb(rows)
 
 def main_menu():
-    keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("📊 Мои результаты", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_line()
-    keyboard.add_button("⏰ Напоминания", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("📨 Проверка", color=VkKeyboardColor.SECONDARY)
-    keyboard.add_line()
-    keyboard.add_button("📅 Мой план на день", color=VkKeyboardColor.PRIMARY)
-    return keyboard.get_keyboard()
+    rows = [
+        [("🔦 Упражнения", "primary"), ("📊 Мои результаты", "secondary")],
+        [("⏰ Напоминания", "primary"), ("📨 Проверка", "secondary")],
+        [("📅 Мой план на день", "primary")],
+    ]
+    return _kb(rows, one_time=False)
 
 def results_keyboard(has_more=False):
     """Клавиатура экрана «Мои результаты» — с кнопкой «Вся история»,
     если записей больше, чем показано в кратком списке."""
-    keyboard = VkKeyboard(one_time=False)
+    rows = []
     if has_more:
-        keyboard.add_button("📜 Вся история", color=VkKeyboardColor.SECONDARY)
-        keyboard.add_line()
-    keyboard.add_button("🔦 Упражнения", color=VkKeyboardColor.PRIMARY)
-    keyboard.add_button("🔙 Меню", color=VkKeyboardColor.SECONDARY)
-    return keyboard.get_keyboard()
+        rows.append([("📜 Вся история", "secondary")])
+    rows.append([("🔦 Упражнения", "primary"), ("🔙 Меню", "secondary")])
+    return _kb(rows, one_time=False)
