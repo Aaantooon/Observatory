@@ -1,0 +1,178 @@
+{
+ "cards": [
+  {
+   "id": 1,
+   "type": "formula",
+   "core": true,
+   "title": "Опасно / Полезно",
+   "sub": "основной инстинкт",
+   "schema": "<svg viewBox=\"0 0 460 96\" aria-label=\"Ось от опасного к полезному\">\n      <line x1=\"60\" y1=\"46\" x2=\"400\" y2=\"46\" stroke=\"var(--line)\" stroke-width=\"1.5\"/>\n      <polygon points=\"400,46 390,41 390,51\" fill=\"var(--line)\"/>\n      <circle cx=\"230\" cy=\"46\" r=\"6\" fill=\"var(--accent)\"/>\n      <text x=\"230\" y=\"30\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"20\" fill=\"var(--accent)\">я</text>\n      <text x=\"60\" y=\"40\" text-anchor=\"start\" font-family=\"var(--font-chalk)\" font-size=\"24\" fill=\"var(--warn)\">опасно</text>\n      <text x=\"400\" y=\"40\" text-anchor=\"end\" font-family=\"var(--font-chalk)\" font-size=\"24\" fill=\"var(--t-image)\">полезно</text>\n      <text x=\"60\" y=\"76\" text-anchor=\"start\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">потеря, нехватка</text>\n      <text x=\"400\" y=\"76\" text-anchor=\"end\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">запас</text>\n    </svg>",
+   "text": "Ось, на которой стоит всё остальное: живое движется от опасного к полезному. Опасное — это потеря и нехватка, полезное — запас. Курс с этой схемы начинается и ею же заканчивается: на последнем занятии автор возвращает её, чтобы объяснить, из чего на самом деле состоят «плюсы» и «минусы» выбора.",
+   "quote": "Помните, у нас опасна потеря или нехватка? А полезна — запас?",
+   "line": "стр. 39272",
+   "also": "Возвращается в темах 03, 15 и в финале"
+  },
+  {
+   "id": 2,
+   "type": "formula",
+   "title": "Хороший / Плохой",
+   "sub": "единица измерения",
+   "schema": "<svg viewBox=\"0 0 460 96\" aria-label=\"Цепочка: плохой, отвергнут, не выживу\">\n      <g font-family=\"var(--font-chalk)\" font-size=\"23\" fill=\"var(--ink)\">\n        <text x=\"16\" y=\"52\">плохой</text><text x=\"170\" y=\"52\">отвергнут</text><text x=\"358\" y=\"52\">не выживу</text>\n      </g>\n      <line x1=\"96\" y1=\"46\" x2=\"160\" y2=\"46\" stroke=\"var(--warn)\" stroke-width=\"1.5\"/>\n      <polygon points=\"163,46 154,42 154,50\" fill=\"var(--warn)\"/>\n      <line x1=\"282\" y1=\"46\" x2=\"348\" y2=\"46\" stroke=\"var(--warn)\" stroke-width=\"1.5\"/>\n      <polygon points=\"351,46 342,42 342,50\" fill=\"var(--warn)\"/>\n      <text x=\"230\" y=\"80\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">та же ось, переведённая на язык оценки</text>\n    </svg>",
+   "text": "Ребёнку ось «опасно / полезно» переводят в «плохой / хороший». Дальше запускается цепочка: плохой — значит отвергнут, отвергнут — значит не выживу. И всю оставшуюся жизнь человек доказывает, что он хороший.",
+   "quote": "Если я плохой, я буду отвергнут, если я отвергнут — я не выживу.",
+   "line": "стр. 35302"
+  },
+  {
+   "id": 3,
+   "type": "formula",
+   "title": "Вина: 50% и 100%",
+   "sub": "включается на желании, а не на действии",
+   "schema": "<svg viewBox=\"0 0 460 130\" aria-label=\"Формула вины: 50 и 100 процентов\">\n      <rect x=\"20\" y=\"18\" width=\"200\" height=\"66\" rx=\"8\" fill=\"none\" stroke=\"var(--line)\"/>\n      <rect x=\"240\" y=\"18\" width=\"200\" height=\"66\" rx=\"8\" fill=\"none\" stroke=\"var(--line)\"/>\n      <text x=\"120\" y=\"44\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"13\" fill=\"var(--ink-dim)\">не хочу того, что положено</text>\n      <text x=\"340\" y=\"44\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"13\" fill=\"var(--ink-dim)\">хочу того, что нельзя</text>\n      <text x=\"120\" y=\"74\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"27\" fill=\"var(--accent)\">50% вины</text>\n      <text x=\"340\" y=\"74\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"27\" fill=\"var(--warn)\">100% вины</text>\n      <text x=\"230\" y=\"114\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"22\" fill=\"var(--ink)\">вывод подсознания: дешевле не хотеть</text>\n    </svg>",
+   "text": "Вина включается не на поступке, а на желании. Не хотеть положенного — половина вины, хотеть неположенного — вина полная. Подсознание считает быстрее интеллекта и выбирает единственный безопасный вариант: не хотеть вообще ничего.",
+   "quote": "Чувство вины врубается не тогда, когда мы что-то делаем, а затронута мотивационная сфера.",
+   "line": "стр. 36765"
+  },
+  {
+   "id": 4,
+   "type": "concept",
+   "title": "Свобода воли",
+   "sub": "хотеть или не хотеть",
+   "schema": "<svg viewBox=\"0 0 460 110\" aria-label=\"Свобода воли: не делать или не делать, а хотеть или не хотеть\">\n      <text x=\"120\" y=\"44\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"25\" fill=\"var(--ink-faint)\">делать / не делать</text>\n      <line x1=\"46\" y1=\"52\" x2=\"194\" y2=\"26\" stroke=\"var(--ink-faint)\" stroke-width=\"1.5\"/>\n      <text x=\"120\" y=\"72\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-faint)\">это можно вынудить</text>\n      <text x=\"340\" y=\"44\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"25\" fill=\"var(--cool)\">хотеть / не хотеть</text>\n      <text x=\"340\" y=\"72\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">это не отнимается ни у кого</text>\n      <text x=\"230\" y=\"100\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12.5\" fill=\"var(--ink-dim)\">свобода воли живёт справа</text>\n    </svg>",
+   "text": "Ключевое различение всей темы: свобода воли — не про «делать или не делать», а про «хотеть или не хотеть». Действие можно вынудить обстоятельствами. Желание — нельзя. Поэтому запрет хотеть отнимает то, что в принципе не отнимается — и именно на этом месте вырастает вина.",
+   "quote": "Хотеть или не хотеть называется свобода воли. Это не делать или не делать, а хотеть или не хотеть.",
+   "line": "стр. 37651"
+  },
+  {
+   "id": 5,
+   "type": "formula",
+   "title": "Должен = скрытый запрет",
+   "sub": "узел-перекрёсток четырёх лекций",
+   "schema": "<svg viewBox=\"0 0 460 100\" aria-label=\"Должен равно скрытый запрет, чем сильнее запрет тем сильнее изврат\">\n      <text x=\"34\" y=\"50\" font-family=\"var(--font-chalk)\" font-size=\"27\" fill=\"var(--ink)\">«должен»</text>\n      <line x1=\"150\" y1=\"43\" x2=\"196\" y2=\"43\" stroke=\"var(--accent)\" stroke-width=\"1.5\"/>\n      <polygon points=\"200,43 190,39 190,47\" fill=\"var(--accent)\"/>\n      <text x=\"208\" y=\"50\" font-family=\"var(--font-chalk)\" font-size=\"27\" fill=\"var(--accent)\">скрытый запрет</text>\n      <line x1=\"230\" y1=\"62\" x2=\"230\" y2=\"76\" stroke=\"var(--warn)\" stroke-width=\"1.5\"/>\n      <polygon points=\"230,80 226,70 234,70\" fill=\"var(--warn)\"/>\n      <text x=\"230\" y=\"94\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"13\" fill=\"var(--warn)\">чем сильнее запрет, тем сильнее изврат</text>\n    </svg>",
+   "text": "За каждым «должен» спрятан запрет не хотеть. А с запретом работает закон, который автор вводит ещё в теме табу: чем он сильнее, тем сильнее срыв. Эта формула входит сразу в четыре лекции — про табу, про прощение, про мужчин и женщин, про роли. На карте это один узел с четырьмя маршрутами.",
+   "quote": "Слово «должен» — получается скрытый запрет… Чем сильнее запрет, тем сильнее изврат.",
+   "line": "стр. 36821",
+   "also": "Тот же узел в темах 03, 08, 11, 15"
+  },
+  {
+   "id": 6,
+   "type": "image",
+   "title": "Огонь под ретортой",
+   "sub": "что происходит, когда гасишь желания",
+   "schema": "<svg viewBox=\"0 0 460 120\" aria-label=\"Реторта с гаснущим огнём\">\n      <path d=\"M196 26 L196 62 Q196 92 226 92 Q256 92 256 62 L256 26\" fill=\"none\" stroke=\"var(--line)\" stroke-width=\"2\"/>\n      <line x1=\"188\" y1=\"26\" x2=\"264\" y2=\"26\" stroke=\"var(--line)\" stroke-width=\"2\"/>\n      <path d=\"M256 44 Q300 44 306 66\" fill=\"none\" stroke=\"var(--line)\" stroke-width=\"2\"/>\n      <path d=\"M226 100 q-9 8 0 16 q9-8 0-16\" fill=\"var(--accent)\" opacity=\".85\"/>\n      <path d=\"M212 104 q-6 6 0 11 q6-6 0-11\" fill=\"var(--accent)\" opacity=\".35\"/>\n      <text x=\"330\" y=\"72\" font-family=\"var(--font-chalk)\" font-size=\"23\" fill=\"var(--ink-dim)\">процесс идёт,</text>\n      <text x=\"330\" y=\"96\" font-family=\"var(--font-chalk)\" font-size=\"23\" fill=\"var(--ink-dim)\">пока горит</text>\n    </svg>",
+   "text": "Образ, которым автор объясняет цену отказа от желаний. Реторта — колба с отводной трубкой: пока под ней горит огонь, идёт процесс. Каждое желание — это энергия, поэтому «не хотеть, чтобы не быть виноватым» означает погасить огонь под собственной жизнью.",
+   "quote": "Борьба с желаниями — то же самое, что погасить огонь под ретортой жизни.",
+   "line": "стр. 36801"
+  },
+  {
+   "id": 7,
+   "type": "formula",
+   "title": "Воронка вины",
+   "sub": "виноват → должен → не может",
+   "schema": "<svg viewBox=\"0 0 460 150\" aria-label=\"Воронка: виноват, должен, не может, ещё больше виноват\">\n      <text x=\"230\" y=\"26\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"25\" fill=\"var(--ink)\">виноват</text>\n      <text x=\"392\" y=\"88\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"25\" fill=\"var(--ink)\">должен</text>\n      <text x=\"68\" y=\"88\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"25\" fill=\"var(--ink)\">не может</text>\n      <path d=\"M268 24 Q352 34 384 66\" fill=\"none\" stroke=\"var(--warn)\" stroke-width=\"1.6\"/>\n      <polygon points=\"386,72 378,62 388,60\" fill=\"var(--warn)\"/>\n      <path d=\"M356 100 Q230 138 104 100\" fill=\"none\" stroke=\"var(--warn)\" stroke-width=\"1.6\"/>\n      <polygon points=\"98,97 110,94 108,104\" fill=\"var(--warn)\"/>\n      <path d=\"M74 68 Q104 34 192 24\" fill=\"none\" stroke=\"var(--warn)\" stroke-width=\"1.6\"/>\n      <polygon points=\"198,23 187,28 188,18\" fill=\"var(--warn)\"/>\n      <text x=\"230\" y=\"86\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12.5\" fill=\"var(--ink-dim)\">каждый оборот —</text>\n      <text x=\"230\" y=\"104\" text-anchor=\"middle\" font-family=\"var(--font-ui)\" font-size=\"12.5\" fill=\"var(--ink-dim)\">глубже прежнего</text>\n      <text x=\"230\" y=\"140\" text-anchor=\"middle\" font-family=\"var(--font-chalk)\" font-size=\"22\" fill=\"var(--warn)\">это не круг, это воронка</text>\n    </svg>",
+   "text": "Виноват — значит должен. Должен — значит не может: на чужую волю организм энергию не выдаёт. Не может — значит виноват ещё сильнее. Автор специально поправляет себя у доски: это не круг, потому что у круга радиус постоянный, а здесь каждый оборот уже предыдущего. Когда сумма штрафов превышает доход, человек уходит в энергосберегающий режим — со стороны это выглядит как лень.",
+   "quote": "Если виноват — должен. А если должен — то не может.",
+   "line": "стр. 28894"
+  },
+  {
+   "id": 8,
+   "type": "story",
+   "title": "Тест на пальцах",
+   "sub": "проверка у доски",
+   "schema": "<svg viewBox=\"0 0 460 130\" aria-label=\"Сила хвата на словах хочу, должен, выбираю\">\n      <g font-family=\"var(--font-chalk)\" font-size=\"24\" fill=\"var(--ink)\">\n        <text x=\"20\" y=\"36\">хочу</text><text x=\"20\" y=\"76\">должен</text><text x=\"20\" y=\"116\">выбираю</text>\n      </g>\n      <rect x=\"140\" y=\"20\" width=\"180\" height=\"14\" rx=\"7\" fill=\"var(--t-image)\" opacity=\".75\"/>\n      <rect x=\"140\" y=\"60\" width=\"58\" height=\"14\" rx=\"7\" fill=\"var(--warn)\" opacity=\".75\"/>\n      <rect x=\"140\" y=\"100\" width=\"252\" height=\"14\" rx=\"7\" fill=\"var(--accent)\" opacity=\".85\"/>\n      <text x=\"330\" y=\"32\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">держит</text>\n      <text x=\"208\" y=\"72\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">рвётся, хотя держишь вдвое крепче</text>\n      <text x=\"402\" y=\"112\" font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\">держит</text>\n    </svg>",
+   "text": "Автор вызывает человека к доске: сцепи пальцы и держи. Скажи «хочу» — держит. Скажи «должен» и держи вдвое крепче — рвётся легко. Скажи «выбираю» — держит снова, даже если делать по-прежнему не хочется. Тело отвечает раньше, чем интеллект успевает согласиться, — поэтому это показывают, а не рассказывают.",
+   "quote": "Вот теперь скажи слово «должен» и держи в два раза крепче.",
+   "line": "стр. 39054"
+  },
+  {
+   "id": 9,
+   "type": "formula",
+   "core": true,
+   "title": "Хочу / Должен / Выбираю",
+   "sub": "выход из воронки",
+   "schema": "<svg viewBox=\"0 0 460 118\" aria-label=\"Три слова и энергия, которая на них даётся\">\n      <g font-family=\"var(--font-chalk)\" font-size=\"26\">\n        <text x=\"66\" y=\"42\" text-anchor=\"middle\" fill=\"var(--t-image)\">хочу</text>\n        <text x=\"230\" y=\"42\" text-anchor=\"middle\" fill=\"var(--warn)\">должен</text>\n        <text x=\"394\" y=\"42\" text-anchor=\"middle\" fill=\"var(--accent)\">выбираю</text>\n      </g>\n      <g font-family=\"var(--font-ui)\" font-size=\"12\" fill=\"var(--ink-dim)\" text-anchor=\"middle\">\n        <text x=\"66\" y=\"72\">энергия есть,</text><text x=\"66\" y=\"88\">пока хочется</text>\n        <text x=\"230\" y=\"72\">чужая воля —</text><text x=\"230\" y=\"88\">энергии нет</text>\n        <text x=\"394\" y=\"72\">энергия есть даже</text><text x=\"394\" y=\"88\">на нежеланное</text>\n      </g>\n      <line x1=\"20\" y1=\"104\" x2=\"440\" y2=\"104\" stroke=\"var(--line)\" stroke-width=\"1\"/>\n      <circle cx=\"66\" cy=\"104\" r=\"5\" fill=\"var(--t-image)\"/><circle cx=\"230\" cy=\"104\" r=\"5\" fill=\"var(--warn)\"/><circle cx=\"394\" cy=\"104\" r=\"7\" fill=\"var(--accent)\"/>\n    </svg>",
+   "text": "Три слова — три разных состояния энергетики. «Должен» — чужая воля, сил не даётся. «Хочу» — силы есть ровно пока хочется. «Выбираю» — силы даются даже на то, чего не хочешь, потому что решение принял ты. Это и есть точка, где воронка размыкается.",
+   "quote": "Я не хочу мыть пол, но я выбираю его вымыть. И у вас будут силы это сделать.",
+   "line": "стр. 39074",
+   "also": "Ядро курса — сюда сходятся почти все темы"
+  },
+  {
+   "id": 10,
+   "type": "practice",
+   "title": "Я имею право не хотеть",
+   "sub": "упражнение, три шага",
+   "schema": "<svg viewBox=\"0 0 460 152\" aria-label=\"Три шага упражнения\">\n      <g font-family=\"var(--font-chalk)\" font-size=\"24\" fill=\"var(--accent)\">\n        <text x=\"20\" y=\"34\">1</text><text x=\"20\" y=\"80\">2</text><text x=\"20\" y=\"126\">3</text>\n      </g>\n      <g font-family=\"var(--font-ui)\" font-size=\"13.5\" fill=\"var(--ink)\">\n        <text x=\"46\" y=\"32\">Я имею право не хотеть это.</text>\n        <text x=\"46\" y=\"70\">Я выбираю делать это, так как хочу таких-то плюсов</text>\n        <text x=\"46\" y=\"88\">и не хочу таких-то минусов.</text>\n        <text x=\"46\" y=\"116\">Иногда я выбираю не делать это — потому что хочу</text>\n        <text x=\"46\" y=\"134\">других плюсов и не хочу других минусов.</text>\n      </g>\n      <line x1=\"26\" y1=\"42\" x2=\"26\" y2=\"60\" stroke=\"var(--line)\"/>\n      <line x1=\"26\" y1=\"96\" x2=\"26\" y2=\"108\" stroke=\"var(--line)\"/>\n    </svg>",
+   "text": "Берётся одна роль за раз, и начинать нужно с пустяковой — на тяжёлых ролях вроде «мать» или «сын» человек срывается. Три шага переводят пункт из «хорошо-плохо» в логику целесообразности. И здесь круг замыкается: плюсы и минусы, которые человек выписывает на втором шаге, — это ровно то самое «полезно» и «опасно» с первой карточки.",
+   "quote": "И мы перестраиваем из хорошо-плохо в логику целесообразности.",
+   "line": "стр. 38280",
+   "bot": "Упражнение «Осознанный выбор» — уже работает в боте",
+   "also": "Замыкает круг на карточку 1"
+  }
+ ],
+ "links": [
+  {
+   "a": 1,
+   "b": 2,
+   "kind": "переводится в"
+  },
+  {
+   "a": 2,
+   "b": 3,
+   "kind": "ведёт к"
+  },
+  {
+   "a": 6,
+   "b": 3,
+   "kind": "иллюстрирует"
+  },
+  {
+   "a": 3,
+   "b": 5,
+   "kind": "то же с другой стороны"
+  },
+  {
+   "a": 4,
+   "b": 3,
+   "kind": "спорит с"
+  },
+  {
+   "a": 5,
+   "b": 7,
+   "kind": "ведёт к"
+  },
+  {
+   "a": 8,
+   "b": 5,
+   "kind": "доказывает"
+  },
+  {
+   "a": 8,
+   "b": 9,
+   "kind": "доказывает"
+  },
+  {
+   "a": 7,
+   "b": 9,
+   "kind": "размыкается через"
+  },
+  {
+   "a": 9,
+   "b": 10,
+   "kind": "ведёт к практике"
+  },
+  {
+   "a": 4,
+   "b": 10,
+   "kind": "опора для"
+  },
+  {
+   "a": 10,
+   "b": 1,
+   "kind": "замыкает круг на"
+  }
+ ],
+ "meta": {
+  "source": "расшифровка лекций, 39419 строк",
+  "lecture": "15 · Роли и маски III — «Должен → выбираю»",
+  "route": "Должен → Выбираю"
+ }
+}

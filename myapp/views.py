@@ -10,6 +10,7 @@ from .models import Module, UserCourseProgress, GameAssociation, UserStreak, Mod
 from . import achievements as achievements_module
 import json
 import csv
+import os
 from datetime import date
 from PIL import Image, UnidentifiedImageError
 
@@ -687,3 +688,161 @@ def mindmap_save_position(request):
     except Exception:
         logger.exception("Ошибка при сохранении позиции узла карты (user=%s)", request.user.id)
         return JsonResponse({'error': 'Не удалось сохранить позицию'}, status=400)
+
+
+# ===== МЕНТАЛЬНАЯ КАРТА: ВИТКИ =====
+
+@login_required
+def mindmap_rings(request):
+    """Данные для карты-витков.
+
+    Один модуль курса = одно кольцо («виток»). Внутри кольца — его смыслы:
+    ключевые понятия (key_concepts), ассоциации (associations) и сама
+    практика (ссылка на страницу модуля).
+
+    Связи между кольцами считаются двумя способами:
+      * последовательность курса (модуль N → N+1) — «дальше по курсу»;
+      * общие понятия — если одно и то же слово встречается в двух модулях,
+        значит автор к нему возвращается. Именно это делает карту картой,
+        а не списком: повторяющаяся формула связывает разные темы.
+    """
+    progress, _ = UserCourseProgress.objects.get_or_create(
+        user=request.user,
+        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
+    )
+    modules = list(Module.objects.filter(is_published=True).order_by('number'))
+    completed_ids = set(progress.completed_modules.values_list('id', flat=True))
+    current_id = progress.current_module_id
+
+    rings = []
+    # нормализованное слово -> номера колец, где оно встречается
+    word_index = {}
+
+    def add_word(word, ring_i):
+        key = word.strip().lower()
+        if len(key) < 3:
+            return
+        word_index.setdefault(key, set()).add(ring_i)
+
+    for ring_i, module in enumerate(modules):
+        items = []
+        for j, concept in enumerate(module.key_concepts or []):
+            if not isinstance(concept, str) or not concept.strip():
+                continue
+            items.append({'id': f'c{module.id}_{j}', 'title': concept.strip(), 'type': 'concept'})
+            add_word(concept, ring_i)
+        for j, assoc in enumerate(module.associations or []):
+            if not isinstance(assoc, str) or not assoc.strip():
+                continue
+            items.append({'id': f'a{module.id}_{j}', 'title': assoc.strip(), 'type': 'assoc'})
+            add_word(assoc, ring_i)
+        items.append({
+            'id': f'p{module.id}',
+            'title': 'Пройти модуль',
+            'type': 'practice',
+            'url': f'/course/module/{module.number}/',
+        })
+
+        if module.id in completed_ids:
+            status = 'completed'
+        elif current_id and module.id == current_id:
+            status = 'current'
+        else:
+            status = 'open'
+
+        rings.append({
+            'i': ring_i,
+            'id': module.id,
+            'number': module.number,
+            'title': module.title,
+            'subtitle': module.subtitle,
+            'duration': module.duration,
+            'url': f'/course/module/{module.number}/',
+            'status': status,
+            'items': items,
+        })
+
+    links = {}
+    for i in range(len(rings) - 1):
+        links[(i, i + 1)] = {'seq': 1, 'shared': []}
+    for word, ring_set in word_index.items():
+        if len(ring_set) < 2:
+            continue
+        ordered = sorted(ring_set)
+        for x in range(len(ordered)):
+            for y in range(x + 1, len(ordered)):
+                key = (ordered[x], ordered[y])
+                links.setdefault(key, {'seq': 0, 'shared': []})['shared'].append(word)
+
+    out_links = [
+        {
+            'a': a, 'b': b,
+            'seq': data['seq'],
+            'shared': sorted(data['shared'])[:6],
+            'weight': data['seq'] + len(data['shared']),
+        }
+        for (a, b), data in sorted(links.items())
+    ]
+
+    return JsonResponse({
+        'rings': rings,
+        'links': out_links,
+        'progress_percent': progress.get_progress_percent(),
+    })
+
+
+# ===== КАРТОЧКИ КУРСА =====
+
+CARDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cards.json')
+
+CARD_TYPES = {
+    'formula': {'label': 'формула', 'color': '#e2c044'},
+    'concept': {'label': 'понятие', 'color': '#5aa9e6'},
+    'image': {'label': 'образ', 'color': '#6fbf73'},
+    'story': {'label': 'история', 'color': '#b98ac9'},
+    'practice': {'label': 'практика', 'color': '#e0785a'},
+}
+
+
+def _load_cards():
+    """Читает карточки курса из myapp/data/cards.json.
+
+    Карточки — авторский материал (как модули в seed_modules), а не данные
+    пользователя, поэтому лежат файлом в репозитории: правятся правкой файла,
+    деплоятся обычным git pull, миграций не требуют.
+    """
+    try:
+        with open(CARDS_FILE, encoding='utf-8') as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        logger.exception("Не удалось прочитать карточки курса (%s)", CARDS_FILE)
+        return {'cards': [], 'links': [], 'meta': {}}
+
+
+def cards_view(request):
+    """Страница «Карточки курса»: формулы автора с их схемами и связями."""
+    data = _load_cards()
+    cards = data.get('cards', [])
+    links = data.get('links', [])
+    by_id = {c['id']: c for c in cards}
+
+    for card in cards:
+        card['type_label'] = CARD_TYPES.get(card.get('type'), {}).get('label', card.get('type', ''))
+        card['type_color'] = CARD_TYPES.get(card.get('type'), {}).get('color', '#8a9aaa')
+        related = []
+        for link in links:
+            if link['a'] == card['id']:
+                other, kind = link['b'], link['kind']
+            elif link['b'] == card['id']:
+                other, kind = link['a'], '← ' + link['kind']
+            else:
+                continue
+            if other in by_id:
+                related.append({'id': other, 'kind': kind, 'title': by_id[other]['title']})
+        card['related'] = related
+
+    return render(request, 'myapp/cards.html', {
+        'cards': cards,
+        'meta': data.get('meta', {}),
+        'types': CARD_TYPES,
+    })

@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}Карточки курса — Путь наблюдателя{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap">
+<style>
+    .cards-page { max-width: 820px; margin: 0 auto; padding: 24px 16px 60px; }
+    .cards-head h1 {
+        color: #e2c044; font-weight: 300; letter-spacing: 2px;
+        font-size: 1.5rem; margin: 0 0 10px;
+    }
+    .cards-head p { color: #8a9aaa; font-size: 0.9rem; line-height: 1.6; margin: 0 0 6px; max-width: 62ch; }
+    .cards-head .src { color: #5c6b7a; font-size: 0.78rem; letter-spacing: 1px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
+    .legend span {
+        font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;
+        border: 1px solid currentColor; border-radius: 50px; padding: 4px 10px; opacity: 0.85;
+    }
+
+    .card-list { display: flex; flex-direction: column; gap: 16px; }
+    .kcard {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(226,192,68,0.08);
+        border-left: 3px solid var(--tc);
+        border-radius: 14px; padding: 18px 18px 16px;
+        scroll-margin-top: 16px;
+    }
+    .kcard-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .kcard-num { font-family: 'Caveat', cursive; font-size: 1.5rem; color: #5c6b7a; line-height: 1; }
+    .kcard-head h2 { margin: 0; font-size: 1.1rem; color: #d6dde4; font-weight: 500; flex: 1; min-width: 180px; }
+    .kcard .chip {
+        font-size: 0.65rem; letter-spacing: 1.5px; text-transform: uppercase;
+        border: 1px solid currentColor; border-radius: 50px; padding: 3px 9px; color: var(--tc);
+    }
+    .kcard .chip.core { color: #e2c044; background: rgba(226,192,68,0.08); border-color: transparent; }
+
+    .schema {
+        margin: 15px 0 13px; padding: 8px;
+        background: rgba(0,0,0,0.28); border: 1px solid rgba(226,192,68,0.06);
+        border-radius: 10px; overflow-x: auto;
+    }
+    .schema svg { display: block; width: 100%; height: auto; min-width: 300px; }
+
+    .kcard .body { color: #a8b4c0; font-size: 0.92rem; line-height: 1.65; margin: 0; }
+    .kcard .quote {
+        margin: 13px 0 0; padding-top: 10px; border-top: 1px dashed rgba(226,192,68,0.1);
+        color: #8a9aaa; font-size: 0.85rem; line-height: 1.6;
+    }
+    .kcard .quote i { color: #c9d2da; }
+    .kcard .quote .src { color: #5c6b7a; font-size: 0.78rem; white-space: nowrap; }
+
+    .rel { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
+    .rel a {
+        font-size: 0.75rem; color: #8a9aaa; text-decoration: none;
+        background: rgba(255,255,255,0.03); border: 1px solid transparent;
+        border-radius: 8px; padding: 5px 10px; transition: all .2s;
+    }
+    .rel a:hover { color: #e2c044; border-color: rgba(226,192,68,0.15); }
+    .rel a b { color: #c9d2da; font-weight: 500; }
+
+    .bot-link {
+        display: inline-block; margin-top: 13px; font-size: 0.82rem; color: #e0785a;
+        border: 1px solid currentColor; border-radius: 10px; padding: 9px 14px; text-decoration: none;
+    }
+    .bot-link:hover { background: rgba(224,120,90,0.08); color: #e0785a; }
+
+    .mastery { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(226,192,68,0.07); }
+    .mastery .lbl { width: 100%; font-size: 0.65rem; letter-spacing: 1.5px; text-transform: uppercase; color: #5c6b7a; }
+    .mastery button {
+        font-size: 0.75rem; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+        border: 1px solid rgba(226,192,68,0.12); background: transparent; color: #8a9aaa; transition: all .2s;
+    }
+    .mastery button[aria-pressed="true"] { background: rgba(226,192,68,0.85); border-color: transparent; color: #12181d; }
+    .mastery .cnt { font-size: 0.78rem; color: #8a9aaa; }
+    .mastery .cnt b { color: #e2c044; font-size: 0.95rem; }
+
+    .empty-note { color: #8a9aaa; font-size: 0.9rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cards-page">
+
+    <div class="cards-head">
+        <h1>🔦 Карточки курса</h1>
+        <p>Формулы, которые автор рисовал на доске, вместе с их схемами, дословными цитатами и связями между собой. Каждая карточка — один смысл; связи показывают, через что проходит объяснение.</p>
+        {% if meta.route %}<p class="src">Маршрут: {{ meta.route }} · {{ meta.lecture }}</p>{% endif %}
+    </div>
+
+    <div class="legend">
+        {% for key, t in types.items %}<span style="color: {{ t.color }}">{{ t.label }}</span>{% endfor %}
+    </div>
+
+    <div class="card-list">
+        {% for card in cards %}
+        <article class="kcard" id="card-{{ card.id }}" style="--tc: {{ card.type_color }}">
+            <div class="kcard-head">
+                <span class="kcard-num">{{ card.id }}</span>
+                <h2>{{ card.title }}</h2>
+                <span class="chip">{{ card.type_label }}</span>
+                {% if card.core %}<span class="chip core">ядро</span>{% endif %}
+            </div>
+
+            {% if card.schema %}<div class="schema">{{ card.schema|safe }}</div>{% endif %}
+
+            <p class="body">{{ card.text }}</p>
+
+            {% if card.quote %}
+            <p class="quote">«<i>{{ card.quote }}</i>» <span class="src">{{ card.line }}</span>{% if card.also %} · <span class="src">{{ card.also }}</span>{% endif %}</p>
+            {% endif %}
+
+            {% if card.bot %}<a class="bot-link" href="{% url 'course_index' %}">🛑 {{ card.bot }}</a>{% endif %}
+
+            <div class="rel">
+                {% for r in card.related %}<a href="#card-{{ r.id }}">{{ r.kind }} <b>{{ r.title }}</b></a>{% endfor %}
+            </div>
+
+            <div class="mastery" data-card="{{ card.id }}">
+                <span class="lbl">Освоение — три пути автора</span>
+                <button type="button" data-lvl="0">услышал</button>
+                <button type="button" data-lvl="1">заметил в жизни</button>
+                <button type="button" data-lvl="2">применил</button>
+                <span class="cnt"></span>
+            </div>
+        </article>
+        {% empty %}
+        <p class="empty-note">Карточки пока не добавлены.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+(function () {
+    // Уровень освоения хранится только в браузере: это личная пометка,
+    // серверу она пока не нужна (и не требует ни модели, ни миграции).
+    var store = {};
+    try { store = JSON.parse(localStorage.getItem('cards-mastery') || '{}'); } catch (e) { store = {}; }
+    function save() { try { localStorage.setItem('cards-mastery', JSON.stringify(store)); } catch (e) {} }
+
+    document.querySelectorAll('.mastery').forEach(function (box) {
+        var id = box.dataset.card;
+        var state = store[id] || { lvl: -1, applied: 0 };
+        var buttons = box.querySelectorAll('button');
+        var counter = box.querySelector('.cnt');
+
+        function paint() {
+            buttons.forEach(function (b) {
+                b.setAttribute('aria-pressed', state.lvl >= parseInt(b.dataset.lvl, 10));
+            });
+            counter.innerHTML = state.applied ? 'применил <b>' + state.applied + '</b> раз' : '';
+        }
+
+        buttons.forEach(function (b) {
+            b.addEventListener('click', function () {
+                var lvl = parseInt(b.dataset.lvl, 10);
+                if (lvl === 2 && state.lvl === 2) {
+                    state.applied = (state.applied || 0) + 1;
+                } else {
+                    state.lvl = (state.lvl === lvl) ? lvl - 1 : lvl;
+                    if (lvl === 2 && state.lvl === 2 && !state.applied) { state.applied = 1; }
+                }
+                store[id] = state; save(); paint();
+            });
+        });
+        paint();
+    });
+})();
+</script>
+{% endblock %}
