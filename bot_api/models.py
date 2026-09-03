@@ -1,7 +1,16 @@
 from django.db import models
 
 class User(models.Model):
-    vk_id = models.CharField(max_length=50, unique=True, db_index=True)
+    # null=True на обоих полях — намеренно (шаг 4 плана миграции ботов на
+    # несколько платформ, platform_bots/README.md): один и тот же человек
+    # пока не может быть привязан сразу к VK и Telegram (см. README, раздел
+    # «Модель пользователя»), у каждой записи заполнено ровно одно из двух
+    # полей. unique=True на CharField с null=True допускает СКОЛЬКО УГОДНО
+    # NULL-значений (в отличие от пустых строк, которых допускается только
+    # одна) — то есть много VK-пользователей с telegram_id=NULL и много
+    # Telegram-пользователей с vk_id=NULL сосуществуют без конфликта.
+    vk_id = models.CharField(max_length=50, unique=True, null=True, blank=True, db_index=True)
+    telegram_id = models.CharField(max_length=50, unique=True, null=True, blank=True, db_index=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100, blank=True)
     registered_at = models.DateTimeField(auto_now_add=True)
@@ -12,7 +21,8 @@ class User(models.Model):
         ordering = ['-registered_at']
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} (ID: {self.vk_id})"
+        platform_id = self.vk_id or self.telegram_id or '—'
+        return f"{self.first_name} {self.last_name} (ID: {platform_id})"
 
 
 class Exercise(models.Model):

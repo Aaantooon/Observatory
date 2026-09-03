@@ -44,7 +44,13 @@ class FakeVK:
 class FakeAPIClient:
     """Заменяет APIClient — хранит прогресс/результаты в памяти вместо Django API."""
 
-    def __init__(self):
+    def __init__(self, platform='vk'):
+        # platform принимается для совместимости с реальным APIClient
+        # (см. vk_bot/api_client.py — шаг 4 плана platform_bots/README.md,
+        # BotHandlers теперь зовёт APIClient(platform=...)) — сама заглушка
+        # ничего платформозависимого не делает, ей и не нужно: она просто
+        # хранит всё в памяти без разделения по vk_id/telegram_id.
+        self.platform = platform
         self.progress_store = {}  # (uid, exercise_type) -> data
         self.results = []  # list of dict(user_vk_id, exercise_type, result_data)
         self.deleted_progress_calls = []

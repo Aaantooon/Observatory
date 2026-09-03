@@ -29,9 +29,14 @@ logger = logging.getLogger(__name__)
 class StressSearchExercise:
     def __init__(self, vk_session, api_client):
         self.vk = vk_session
-        # См. exercises/base.py — тот же self.platform/VkAdapter, здесь
-        # продублировано, потому что этот класс не наследует BaseExercise.
-        self.platform = VkAdapter(lambda: self.vk)
+        # См. exercises/base.py — та же логика self.platform (VkAdapter
+        # для сырой VK-сессии, готовый адаптер напрямую — если он уже
+        # реализует send_message), здесь продублирована, потому что этот
+        # класс не наследует BaseExercise.
+        if hasattr(vk_session, 'send_message'):
+            self.platform = vk_session
+        else:
+            self.platform = VkAdapter(lambda: self.vk)
         self.api = api_client
         self.user_sessions = {}
 

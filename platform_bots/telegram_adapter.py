@@ -42,16 +42,27 @@ class TelegramAdapter(MessagingAdapter):
 
     @staticmethod
     def _to_reply_markup(keyboard):
-        """Нейтральный [[label, ...], ...] -> ReplyKeyboardMarkup Telegram.
-        one_time_keyboard=True — по аналогии с VkKeyboard(one_time=True),
-        которым уже пользуется весь vk_bot (клавиатура скрывается сама
-        после нажатия кнопки, не висит поверх следующего сообщения)."""
-        if not keyboard:
+        """Нейтральная клавиатура (см. vk_bot/keyboards.py::_kb —
+        {"rows": [[(текст, цвет), ...], ...], "one_time": bool}, тот же
+        формат, что вернул бы to_vk_keyboard() до конвертации в VK JSON) ->
+        ReplyKeyboardMarkup Telegram. До шага 2 плана
+        platform_bots/README.md здесь ожидался черновой плоский формат
+        [[label, ...], ...] — переведено на реальный формат, который
+        сейчас экспортируют функции keyboards.py. Telegram не поддерживает
+        цвет кнопки — второй элемент кортежа просто игнорируется.
+        one_time_keyboard берём из keyboard['one_time'] (по умолчанию True),
+        а не жёстко — некоторые клавиатуры (например главное меню)
+        постоянные (one_time=False в VK-версии), это же должно сохраняться
+        и в Telegram."""
+        if not keyboard or not keyboard.get("rows"):
             return {"remove_keyboard": True}
         return {
-            "keyboard": [[{"text": label} for label in row] for row in keyboard],
+            "keyboard": [
+                [{"text": text} for text, _color in row]
+                for row in keyboard["rows"]
+            ],
             "resize_keyboard": True,
-            "one_time_keyboard": True,
+            "one_time_keyboard": keyboard.get("one_time", True),
         }
 
     def send_message(self, user_id, text: str, keyboard=None) -> None:
@@ -72,7 +83,15 @@ class TelegramAdapter(MessagingAdapter):
         webhook-сервера (не нужен домен/HTTPS-эндпоинт для старта).
         Цикл пишется по образцу vk_bot/main.py (там свой longpoll-цикл
         поверх VK LongPoll API — эта функция решает ту же задачу для
-        Telegram)."""
+        Telegram).
+
+        on_message вызывается как on_message(chat_id, text, first_name,
+        last_name) — Telegram, в отличие от VK, отдаёт имя/фамилию прямо в
+        самом апдейте (message['from']), отдельный запрос вроде VK-шного
+        users.get (см. vk_bot/main.py::_handle_event) не нужен. Это важно
+        для main_telegram.py — BotHandlers.handle_message ждёт ровно эти
+        4 аргумента (используются при первом обращении, для
+        get_or_create_user)."""
         logger.info("[telegram] Starting long polling")
         while True:
             try:
@@ -94,8 +113,11 @@ class TelegramAdapter(MessagingAdapter):
                     continue
                 chat_id = message["chat"]["id"]
                 text = message.get("text", "")
+                sender = message.get("from") or {}
+                first_name = sender.get("first_name", "")
+                last_name = sender.get("last_name", "")
                 try:
-                    on_message(chat_id, text)
+                    on_message(chat_id, text, first_name, last_name)
                 except Exception:
                     logger.exception(f"[telegram] on_message crashed for chat_id={chat_id}")
 
@@ -112,7 +134,10 @@ if __name__ == "__main__":
 
     adapter = TelegramAdapter(token)
 
-    def echo(user_id, text):
-        adapter.send_message(user_id, f"Эхо: {text}", keyboard=[["Привет"], ["Пока"]])
+    def echo(user_id, text, first_name, last_name):
+        adapter.send_message(
+            user_id, f"Эхо: {text}",
+            keyboard={"rows": [[("Привет", "primary")], [("Пока", "secondary")]], "one_time": True},
+        )
 
     adapter.run(echo)

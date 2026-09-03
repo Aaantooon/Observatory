@@ -1,6 +1,6 @@
-from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard, to_vk_keyboard
-from vk_api.utils import get_random_id
+from keyboards import main_menu, exercises_menu, get_reminder_keyboard, back_keyboard
 from api_client import APIClient
+from vk_adapter import VkAdapter
 from keyboards import main_menu, exercises_menu, get_reminder_keyboard, stress_search_parts_keyboard, results_keyboard
 from exercises.stress_search import StressSearchExercise
 from exercises.happiness_list import HappinessListExercise
@@ -131,29 +131,48 @@ class BotHandlers:
                 main_menu()
             )
         
-    def __init__(self, vk_session):
+    def __init__(self, vk_session, api_platform='vk', start_notifications=True):
+        """vk_session — как и раньше, обычно настоящий VkApi (для VK-бота,
+        vk_bot/main.py). Может быть и любым объектом с интерфейсом
+        MessagingAdapter (см. platform_bots/base_adapter.py) — например
+        TelegramAdapter из main_telegram.py, шаг 4 плана
+        platform_bots/README.md; в этом случае send_message ниже отправляет
+        через него напрямую, без обёртки VkAdapter (см. exercises/base.py —
+        тот же приём).
+        api_platform — 'vk' (по умолчанию) или 'telegram', передаётся в
+        APIClient, чтобы сервер искал/создавал пользователя по правильному
+        полю (vk_id или telegram_id, см. bot_api/models.py::User).
+        start_notifications — фоновый поток NotificationSystem (шлёт
+        напоминания и комментарии психолога САМ, не дожидаясь сообщения от
+        пользователя) сейчас умеет отправлять только через VK
+        (self.vk.method напрямую, см. notifications.py) — для Telegram его
+        пока не запускаем (main_telegram.py передаёт False), это отдельный
+        шаг на будущее. Настройка напоминаний из меню («Напоминания») при
+        этом всё равно работает и для Telegram — сама запись в БД
+        платформонезависима, не отправляется мгновенно, только на самом
+        деле их отправка сейчас произойдёт только для VK-пользователей."""
         self.vk = vk_session
-        self.api = APIClient()
+        if hasattr(vk_session, 'send_message'):
+            self.platform = vk_session
+        else:
+            self.platform = VkAdapter(lambda: self.vk)
+        self.api = APIClient(platform=api_platform)
         self.user_states = {}
-        
+
         self.stress_search = StressSearchExercise(vk_session, self.api)
         self.happiness_list = HappinessListExercise(vk_session, self.api)
         self.my_roles = MyRolesExercise(vk_session, self.api)
         self.conscious_choice = ConsciousChoiceExercise(vk_session, self.api)
         self.diary = DiaryExercise(vk_session, self.api)
         self.stop_technique = StopTechniqueExercise(vk_session, self.api)
-        
+
         self.notifications = NotificationSystem(vk_session, self.api)
-        self.notifications.start()
+        if start_notifications:
+            self.notifications.start()
 
     def send_message(self, user_id, message, keyboard=None):
         try:
-            self.vk.method('messages.send', {
-                'user_id': user_id,
-                'message': message,
-                'random_id': get_random_id(),
-                'keyboard': to_vk_keyboard(keyboard)
-            })
+            self.platform.send_message(user_id, message, keyboard)
         except Exception as e:
             logger.error(f"Send message error to {user_id}: {e}")
 

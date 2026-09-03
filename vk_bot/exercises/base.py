@@ -11,11 +11,20 @@ class BaseExercise(ABC):
         # self.platform — общий интерфейс отправки сообщений (см.
         # platform_bots/README.md, шаг 3): send_message ниже вызывает его,
         # а не self.vk напрямую, чтобы упражнение не было завязано на VK
-        # конкретно. lambda, а не просто VkAdapter(vk_session) — потому что
-        # self.vk можно подменить уже после создания экземпляра (см.
-        # vk_adapter.py, docstring VkAdapter.__init__), и адаптер должен
-        # видеть актуальное значение, а не то, что было на момент создания.
-        self.platform = VkAdapter(lambda: self.vk)
+        # конкретно. Два случая: (1) vk_session — настоящий VkApi (как
+        # всегда было для VK) — оборачиваем в VkAdapter; lambda, а не
+        # просто VkAdapter(vk_session), потому что self.vk можно подменить
+        # уже после создания экземпляра (см. vk_adapter.py, docstring
+        # VkAdapter.__init__), и адаптер должен видеть актуальное значение.
+        # (2) vk_session уже сам реализует интерфейс отправки (например
+        # TelegramAdapter из main_telegram.py, шаг 4) — используем его
+        # напрямую, ничего не оборачивая: hasattr-проверка отличает готовый
+        # адаптер (есть свой send_message) от сырой VK-сессии (метод
+        # называется method, не send_message).
+        if hasattr(vk_session, 'send_message'):
+            self.platform = vk_session
+        else:
+            self.platform = VkAdapter(lambda: self.vk)
         self.api = api_client
         self.user_sessions = {}
 

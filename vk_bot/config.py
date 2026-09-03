@@ -10,6 +10,9 @@ load_dotenv(dotenv_path=env_path)
 VK_TOKEN = os.getenv("VK_GROUP_TOKEN")
 GROUP_ID = int(os.getenv("VK_GROUP_ID", "232481197"))
 
+# Настройки Telegram (main_telegram.py, шаг 4 плана platform_bots/README.md)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 # Настройки API Django
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000/api")
 API_TOKEN = os.getenv("API_TOKEN")
@@ -27,4 +30,5 @@ print("📁 .env файл:", env_path)
 print("🔑 VK_TOKEN:", "✅" if VK_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
 print("🆔 GROUP_ID:", GROUP_ID)
 print("🔑 API_TOKEN:", "✅" if API_TOKEN else "❌ НЕ ЗАГРУЖЕН!")
+print("🔑 TELEGRAM_BOT_TOKEN:", "✅" if TELEGRAM_BOT_TOKEN else "❌ НЕ ЗАГРУЖЕН (нужен только main_telegram.py)")
 print("=" * 50)

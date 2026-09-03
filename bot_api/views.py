@@ -13,6 +13,20 @@ from .serializers import ReviewSerializer
 from django.utils import timezone
 
 
+def _platform_id_kwargs(vk_id=None, telegram_id=None, prefix=''):
+    """Kwargs для User.objects.get/filter (или queryset.filter(user__...))
+    по ID пользователя ЛЮБОЙ платформы — VK (vk_id, как было всегда) или
+    Telegram (telegram_id, добавлено на шаге 4 плана platform_bots/README.md).
+    telegram_id в приоритете, если передан — так исторически ходит
+    api_client.py (vk_bot/api_client.py::APIClient сам решает, какое из
+    двух полей слать, в зависимости от self.platform); существующие
+    VK-запросы шлют только vk_id и telegram_id никогда не передают, так что
+    их поведение не меняется ни на бит. prefix — для фильтрации через
+    related-поле, например 'user__' в queryset.filter(**kwargs)."""
+    if telegram_id:
+        return {f'{prefix}telegram_id': str(telegram_id)}
+    return {f'{prefix}vk_id': str(vk_id)}
+
 
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
@@ -20,8 +34,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         vk_id = request.data.get('vk_id')
+        telegram_id = request.data.get('telegram_id')
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             review = Review.objects.create(
                 user=user,
                 exercise_type=request.data.get('exercise_type'),
@@ -35,9 +50,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def status(self, request):
         vk_id = request.query_params.get('vk_id')
+        telegram_id = request.query_params.get('telegram_id')
         exercise_type = request.query_params.get('exercise_type')
         review = Review.objects.filter(
-            user__vk_id=str(vk_id), exercise_type=exercise_type
+            exercise_type=exercise_type,
+            **_platform_id_kwargs(vk_id, telegram_id, prefix='user__')
         ).exclude(status='closed').order_by('-created_at').first()
         if review:
             return Response(self.get_serializer(review).data)
@@ -92,8 +109,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def active_for_user(self, request):
         """Активная проверка пользователя (для ответа)"""
         vk_id = request.query_params.get('vk_id')
+        telegram_id = request.query_params.get('telegram_id')
         review = Review.objects.filter(
-            user__vk_id=str(vk_id)
+            **_platform_id_kwargs(vk_id, telegram_id, prefix='user__')
         ).exclude(status='closed').order_by('-created_at').first()
         if review:
             return Response(self.get_serializer(review).data)
@@ -106,14 +124,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         vk_id = self.request.query_params.get('vk_id')
-        if vk_id:
-            queryset = queryset.filter(user__vk_id=str(vk_id))
+        telegram_id = self.request.query_params.get('telegram_id')
+        if vk_id or telegram_id:
+            queryset = queryset.filter(**_platform_id_kwargs(vk_id, telegram_id, prefix='user__'))
         return queryset
 
     def create(self, request, *args, **kwargs):
         vk_id = request.data.get('vk_id')
+        telegram_id = request.data.get('telegram_id')
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             notif = Notification.objects.create(
                 user=user,
                 exercise_type=request.data.get('exercise_type'),
@@ -170,14 +190,16 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         vk_id = self.request.query_params.get('vk_id')
-        if vk_id:
-            queryset = queryset.filter(vk_id=str(vk_id))
+        telegram_id = self.request.query_params.get('telegram_id')
+        if vk_id or telegram_id:
+            queryset = queryset.filter(**_platform_id_kwargs(vk_id, telegram_id))
         return queryset
 
     def create(self, request, *args, **kwargs):
         vk_id = request.data.get('vk_id')
-        if vk_id:
-            user = User.objects.filter(vk_id=str(vk_id)).first()
+        telegram_id = request.data.get('telegram_id')
+        if vk_id or telegram_id:
+            user = User.objects.filter(**_platform_id_kwargs(vk_id, telegram_id)).first()
             if user:
                 serializer = self.get_serializer(user)
                 return Response(serializer.data)
@@ -186,8 +208,9 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def update_streak(self, request):
         vk_id = request.data.get('vk_id')
+        telegram_id = request.data.get('telegram_id')
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             today = date.today()
             
             if user.last_activity_date == today:
@@ -217,16 +240,18 @@ class ResultViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         vk_id = self.request.query_params.get('vk_id')
-        if vk_id:
-            queryset = queryset.filter(user__vk_id=str(vk_id))
+        telegram_id = self.request.query_params.get('telegram_id')
+        if vk_id or telegram_id:
+            queryset = queryset.filter(**_platform_id_kwargs(vk_id, telegram_id, prefix='user__'))
         return queryset
 
     def create(self, request, *args, **kwargs):
         user_vk_id = request.data.get('user_vk_id')
+        user_telegram_id = request.data.get('user_telegram_id')
         exercise_type = request.data.get('exercise_type')  # Изменено с exercise_id
-        
+
         try:
-            user = User.objects.get(vk_id=str(user_vk_id))
+            user = User.objects.get(**_platform_id_kwargs(user_vk_id, user_telegram_id))
 
             # Ищем упражнение по типу. get_or_create вместо filter().first()
             # + create() — при filter+create два параллельных запроса на ещё
@@ -259,11 +284,12 @@ class ProgressViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def save(self, request):
         vk_id = request.data.get('vk_id')
+        telegram_id = request.data.get('telegram_id')
         exercise_type = request.data.get('exercise_type', 'besilki')
         data = request.data.get('data', {})
 
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             progress, created = ExerciseProgress.objects.update_or_create(
                 user=user,
                 exercise_type=exercise_type,
@@ -276,10 +302,11 @@ class ProgressViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def get(self, request):
         vk_id = request.query_params.get('vk_id')
+        telegram_id = request.query_params.get('telegram_id')
         exercise_type = request.query_params.get('exercise_type', 'besilki')
 
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             progress = ExerciseProgress.objects.filter(
                 user=user,
                 exercise_type=exercise_type
@@ -294,10 +321,11 @@ class ProgressViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['delete'])
     def delete(self, request):
         vk_id = request.data.get('vk_id')
+        telegram_id = request.data.get('telegram_id')
         exercise_type = request.data.get('exercise_type', 'besilki')
 
         try:
-            user = User.objects.get(vk_id=str(vk_id))
+            user = User.objects.get(**_platform_id_kwargs(vk_id, telegram_id))
             ExerciseProgress.objects.filter(
                 user=user,
                 exercise_type=exercise_type

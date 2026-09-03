@@ -5,21 +5,36 @@ from config import API_BASE_URL, API_TOKEN
 logger = logging.getLogger(__name__)
 
 class APIClient:
-    def __init__(self):
+    def __init__(self, platform='vk'):
+        """platform — 'vk' (по умолчанию, как было всегда) или 'telegram'
+        (см. bot_api/models.py::User.telegram_id, шаг 4 плана
+        platform_bots/README.md). Определяет, какое поле сервер использует,
+        чтобы найти пользователя — 'vk_id'/'user_vk_id' или
+        'telegram_id'/'user_telegram_id'. Существующий код (APIClient() без
+        аргумента, как в vk_bot/handlers.py) продолжает слать vk_id, как и
+        раньше, ни один VK-запрос не меняется."""
+        self.platform = platform
         self.base_url = API_BASE_URL
         self.headers = {
             "Authorization": f"Token {API_TOKEN}",
             "Content-Type": "application/json"
         }
 
-    def get_or_create_user(self, vk_id, first_name, last_name):
+    def _id_field(self, prefix=''):
+        """Имя параметра с ID пользователя для текущей платформы — 'vk_id'
+        (или 'user_vk_id' для эндпоинтов вроде /results/, где сервер
+        исторически называет поле с префиксом user_) для VK, 'telegram_id'/
+        'user_telegram_id' для Telegram."""
+        return f"{prefix}{'telegram_id' if self.platform == 'telegram' else 'vk_id'}"
+
+    def get_or_create_user(self, user_id, first_name, last_name):
         try:
             response = requests.get(
-                f"{self.base_url}/users/?vk_id={vk_id}",
+                f"{self.base_url}/users/?{self._id_field()}={user_id}",
                 headers=self.headers,
                 timeout=5
             )
-            
+
             if response.status_code == 200:
                 users = response.json()
                 if users and len(users) > 0:
@@ -29,27 +44,27 @@ class APIClient:
                     # (handlers.py) не читал возврат — но любой будущий
                     # caller словил бы код, работающий только "иногда".
                     return users[0]
-            
+
             response = requests.post(
                 f"{self.base_url}/users/",
                 json={
-                    "vk_id": str(vk_id),
+                    self._id_field(): str(user_id),
                     "first_name": first_name,
                     "last_name": last_name
                 },
                 headers=self.headers,
                 timeout=5
             )
-            
+
             if response.status_code in [200, 201]:
                 return response.json()
             else:
                 logger.warning(f"API Error creating user: {response.status_code}")
-                return {"id": vk_id, "vk_id": vk_id, "first_name": first_name, "last_name": last_name}
-                
+                return {"id": user_id, self._id_field(): user_id, "first_name": first_name, "last_name": last_name}
+
         except Exception as e:
             logger.error(f"Network error: {e}")
-            return {"id": vk_id, "vk_id": vk_id, "first_name": first_name, "last_name": last_name}
+            return {"id": user_id, self._id_field(): user_id, "first_name": first_name, "last_name": last_name}
 
     def get_exercises(self):
         try:
@@ -65,7 +80,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/results/",
                 json={
-                    "user_vk_id": str(user_vk_id),
+                    self._id_field('user_'): str(user_vk_id),
                     "exercise_type": exercise_type,
                     "result_data": result_data
                 },
@@ -87,7 +102,7 @@ class APIClient:
         # сбое сети/сервера, хотя история на самом деле могла быть непустой
         # (см. get_notifications — тот же исправленный паттерн).
         try:
-            response = requests.get(f"{self.base_url}/results/?vk_id={vk_id}", headers=self.headers, timeout=5)
+            response = requests.get(f"{self.base_url}/results/?{self._id_field()}={vk_id}", headers=self.headers, timeout=5)
             if response.status_code == 200:
                 return response.json()
             logger.warning(f"API Error getting user results: {response.status_code}")
@@ -99,7 +114,7 @@ class APIClient:
         try:
             response = requests.post(
                 f"{self.base_url}/users/update_streak/",
-                json={"vk_id": str(user_vk_id)},
+                json={self._id_field(): str(user_vk_id)},
                 headers=self.headers,
                 timeout=5
             )
@@ -115,7 +130,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/progress/save/",
                 json={
-                    "vk_id": str(user_vk_id),
+                    self._id_field(): str(user_vk_id),
                     "exercise_type": exercise_type,
                     "data": data
                 },
@@ -132,7 +147,7 @@ class APIClient:
     def get_progress(self, user_vk_id, exercise_type):
         try:
             response = requests.get(
-                f"{self.base_url}/progress/get/?vk_id={user_vk_id}&exercise_type={exercise_type}",
+                f"{self.base_url}/progress/get/?{self._id_field()}={user_vk_id}&exercise_type={exercise_type}",
                 headers=self.headers,
                 timeout=5
             )
@@ -147,7 +162,7 @@ class APIClient:
             response = requests.delete(
                 f"{self.base_url}/progress/delete/",
                 json={
-                    "vk_id": str(user_vk_id),
+                    self._id_field(): str(user_vk_id),
                     "exercise_type": exercise_type
                 },
                 headers=self.headers,
@@ -164,7 +179,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/admin/review/",
                 json={
-                    "vk_id": str(user_vk_id),
+                    self._id_field(): str(user_vk_id),
                     "exercise_type": exercise_type,
                     "data": data
                 },
@@ -199,7 +214,7 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/notifications/",
                 json={
-                    "vk_id": str(user_vk_id),
+                    self._id_field(): str(user_vk_id),
                     "exercise_type": exercise_type,
                     "schedule_type": schedule_type,
                     "schedule_data": schedule_data
@@ -220,7 +235,7 @@ class APIClient:
         # отличить "нечего отключать" от "не смогли узнать".
         try:
             response = requests.get(
-                f"{self.base_url}/notifications/?vk_id={user_vk_id}",
+                f"{self.base_url}/notifications/?{self._id_field()}={user_vk_id}",
                 headers=self.headers,
                 timeout=5
             )
@@ -295,7 +310,7 @@ class APIClient:
 
     def get_active_review(self, vk_id):
         try:
-            response = requests.get(f"{self.base_url}/admin/review/active_for_user/?vk_id={vk_id}", headers=self.headers, timeout=5)
+            response = requests.get(f"{self.base_url}/admin/review/active_for_user/?{self._id_field()}={vk_id}", headers=self.headers, timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 if data.get('exists') is False:

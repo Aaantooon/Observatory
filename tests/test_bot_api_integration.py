@@ -325,3 +325,94 @@ def test_once_notification_due_after_delay_elapsed(api):
 
     notif.refresh_from_db()
     assert notif.is_active is False
+
+
+# ---------------------------------------------------------------------------
+# Telegram — шаг 4 плана platform_bots/README.md: User.telegram_id рядом с
+# vk_id, эндпоинты принимают ЛЮБОЙ из двух id пользователя.
+# ---------------------------------------------------------------------------
+
+def test_create_then_find_user_by_telegram_id(api):
+    """Тот же сценарий, что test_create_then_find_user_by_vk_id, но по
+    telegram_id — regular vk_id-запросы (тест выше) не должны сломаться от
+    появления этого поля, а telegram_id-запросы должны работать так же."""
+    resp = api.post("/api/users/", {
+        "telegram_id": "555000111", "first_name": "Игорь", "last_name": "П",
+    }, format="json")
+    assert resp.status_code == status.HTTP_201_CREATED, resp.data
+    assert resp.data["vk_id"] is None
+
+    resp2 = api.post("/api/users/", {
+        "telegram_id": "555000111", "first_name": "Игорь", "last_name": "П",
+    }, format="json")
+    assert resp2.status_code == 200
+    assert User.objects.filter(telegram_id="555000111").count() == 1
+
+
+def test_vk_and_telegram_users_with_overlapping_numeric_ids_do_not_collide(api):
+    """Критично: VK user_id и Telegram chat_id — независимые пространства
+    чисел (см. platform_bots/README.md, «Модель пользователя»). Один и тот
+    же числовой ID у VK-пользователя (vk_id) и Telegram-пользователя
+    (telegram_id) должен адресовать ДВЕ РАЗНЫЕ записи, не одну."""
+    User.objects.create(vk_id="42", first_name="ВК", last_name="Юзер")
+    User.objects.create(telegram_id="42", first_name="ТГ", last_name="Юзер")
+
+    resp_vk = api.get("/api/users/?vk_id=42")
+    resp_tg = api.get("/api/users/?telegram_id=42")
+    assert len(resp_vk.data) == 1 and resp_vk.data[0]["first_name"] == "ВК"
+    assert len(resp_tg.data) == 1 and resp_tg.data[0]["first_name"] == "ТГ"
+
+
+def test_save_get_delete_progress_roundtrip_by_telegram_id(api):
+    """Тот же сценарий, что test_save_get_delete_progress_roundtrip (vk_id),
+    но для Telegram-пользователя — эмулирует то, что будет делать
+    main_telegram.py через те же exercises/base.py::save_progress и т.д."""
+    User.objects.create(telegram_id="909", first_name="Т", last_name="Т")
+
+    resp = api.post("/api/progress/save/", {
+        "telegram_id": "909", "exercise_type": "my_roles",
+        "data": {"phase": "social", "social_roles": ["Продавец"]},
+    }, format="json")
+    assert resp.status_code == 200, resp.data
+
+    resp = api.get("/api/progress/get/?telegram_id=909&exercise_type=my_roles")
+    assert resp.status_code == 200
+    assert resp.data["exists"] is True
+    assert resp.data["data"]["social_roles"] == ["Продавец"]
+
+    resp = api.delete("/api/progress/delete/", {
+        "telegram_id": "909", "exercise_type": "my_roles",
+    }, format="json")
+    assert resp.status_code == 200
+
+    resp = api.get("/api/progress/get/?telegram_id=909&exercise_type=my_roles")
+    assert resp.data["exists"] is False
+
+
+def test_save_result_and_full_review_lifecycle_by_telegram_id(api):
+    """Результат + полный цикл проверки психологом (аналог
+    test_save_result_creates_exercise_by_type_string и
+    test_full_review_lifecycle), но для Telegram-пользователя — покрывает
+    именно то, что нужно шагу «упражнения + проверка» для Telegram."""
+    User.objects.create(telegram_id="303", first_name="Т", last_name="Т")
+
+    resp = api.post("/api/results/", {
+        "user_telegram_id": "303",
+        "exercise_type": "stress_search",
+        "result_data": {"items": [{"text": "Работа", "rate": 8}]},
+    }, format="json")
+    assert resp.status_code == 201, resp.data
+
+    resp = api.post("/api/admin/review/", {
+        "telegram_id": "303", "exercise_type": "stress_search", "data": {},
+    }, format="json")
+    assert resp.status_code == 201, resp.data
+    review_id = resp.data["id"]
+
+    resp = api.get("/api/admin/review/active_for_user/?telegram_id=303")
+    assert resp.data["id"] == review_id
+
+    resp = api.post(f"/api/admin/review/{review_id}/comment/", {
+        "comment": "Хорошо", "is_admin": False,
+    }, format="json")
+    assert resp.status_code == 200

@@ -1,0 +1,78 @@
+# vk_bot/main_telegram.py — Telegram-версия бота, шаг 4/4 плана миграции на
+# несколько платформ (platform_bots/README.md). Отдельный процесс, отдельный
+# systemd-сервис (см. СВОДКА_ПРОЕКТА.md) — НЕ трогает и не перезапускает
+# VK-бота (main.py). Оба процесса работают параллельно и независимо, через
+# общий Django-бэкенд (bot_api), но с разными пространствами ID
+# пользователей (vk_id / telegram_id, см. bot_api/models.py::User и
+# platform_bots/README.md, раздел «Модель пользователя»).
+#
+# ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ этой первой версии (см. СВОДКА_ПРОЕКТА.md): фоновые
+# напоминания и проактивная доставка комментариев психолога
+# (notifications.py::NotificationSystem._check_loop) пока умеют слать
+# только через VK. Настройка напоминания через меню «Напоминания» всё равно
+# работает и для Telegram (запись сохраняется в БД), но реально отправлено
+# оно будет только когда для Telegram появится свой запуск этого фонового
+# цикла — отдельный шаг на будущее, сознательно отложенный.
+import os
+import sys
+import time
+import logging
+
+# platform_bots/ — сосед vk_bot/ в корне репозитория, а не часть самого
+# vk_bot/ (там же лежит base_adapter.py/telegram_adapter.py — общая
+# заготовка адаптеров, см. platform_bots/README.md). vk_bot/main.py и все
+# остальные модули vk_bot используют плоские импорты (from keyboards import
+# ..., from api_client import ...) — это работает, только когда сама папка
+# vk_bot/ лежит в sys.path (так её запускает systemd — WorkingDirectory
+# видит только vk_bot/, а не корень репозитория). Поэтому для импорта
+# соседнего platform_bots/ добавляем корень репозитория в sys.path явно —
+# не полагаемся на то, откуда именно запущен этот скрипт.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from platform_bots.telegram_adapter import TelegramAdapter  # noqa: E402
+
+from config import TELEGRAM_BOT_TOKEN  # noqa: E402
+from handlers import BotHandlers  # noqa: E402
+
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def main():
+    if not TELEGRAM_BOT_TOKEN:
+        raise SystemExit("Задайте TELEGRAM_BOT_TOKEN в .env, чтобы запустить Telegram-бота")
+
+    print("🤖 Telegram-бот запущен!")
+    print("📨 Ожидаю сообщения...")
+    logger.info("Telegram-бот запущен")
+
+    adapter = TelegramAdapter(TELEGRAM_BOT_TOKEN)
+    # api_platform='telegram' — сервер ищет/создаёт пользователя по
+    # telegram_id, а не по vk_id (см. bot_api/models.py::User).
+    # start_notifications=False — см. предупреждение в шапке файла.
+    handlers = BotHandlers(adapter, api_platform='telegram', start_notifications=False)
+
+    def on_message(user_id, text, first_name, last_name):
+        # TelegramAdapter.run() ниже уже оборачивает каждый вызов on_message
+        # в свой try/except (см. platform_bots/telegram_adapter.py) — по
+        # тому же принципу, что vk_bot/main.py оборачивает _handle_event на
+        # каждое событие: одно упавшее сообщение не должно останавливать
+        # бота для всех остальных пользователей.
+        handlers.handle_message(user_id, text, first_name, last_name)
+
+    # Внешний цикл — переживает даже обрыв самого long polling (по образцу
+    # vk_bot/main.py — там то же самое вокруг VkBotLongPoll). run() сам по
+    # себе уже бесконечный цикл с собственным ретраем getUpdates, так что
+    # сюда мы попадаем только при непредвиденном исключении внутри него.
+    while True:
+        try:
+            adapter.run(on_message)
+        except Exception as e:
+            logger.error(f"Telegram long polling оборвался: {e}", exc_info=True)
+            time.sleep(5)
+
+
+if __name__ == "__main__":
+    main()

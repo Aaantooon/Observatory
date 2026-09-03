@@ -25,7 +25,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'vk_id', 'first_name', 'last_name', 'registered_at', 'streak', 'last_activity_date']
+        fields = ['id', 'vk_id', 'telegram_id', 'first_name', 'last_name', 'registered_at', 'streak', 'last_activity_date']
 
 
 class ExerciseSerializer(serializers.ModelSerializer):
