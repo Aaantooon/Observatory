@@ -188,8 +188,14 @@ class ConsciousChoiceExercise(BaseExercise):
                 conscious_choice_keyboard()
             )
         elif step == 4:
-            self._show_choice_ack(user_id, session)
+            self._show_choice_minus(user_id, session)
         elif step == 5:
+            # Шаг 5 больше не показывается отдельным экраном (см.
+            # _show_choice_minus — шаг 4 теперь сразу просит минусы, без
+            # промежуточного «Жми Продолжить»), но номер шага сохранён ради
+            # арифметики _handle_back/_handle_to_end (step ± 1) — та же
+            # заглушка на случай, если сюда всё же попадут (например, старый
+            # сохранённый прогресс с этим шагом).
             self._show_choice_minus(user_id, session)
         elif step == 6:
             self._show_choice_plus(user_id, session)
@@ -256,10 +262,11 @@ class ConsciousChoiceExercise(BaseExercise):
         step = session.get('step', 1)
 
         # Стикер/фото/голосовое приходят из main.py как text="" — не
-        # записывать пустой ответ и не продвигать шаг молча. Шаги 4 и 7 —
-        # чисто подтверждающие (текст туда не пишется вообще), поэтому их
-        # не трогаем.
-        if not text_lower and step in (1, 2, 3, 5, 6, 8, 9):
+        # записывать пустой ответ и не продвигать шаг молча. Шаг 7 —
+        # чисто подтверждающий (текст туда не пишется вообще), поэтому его
+        # не трогаем. Шаг 4 раньше тоже был таким, но после слияния с бывшим
+        # шагом 5 (см. _show_choice_minus) он тоже принимает текст.
+        if not text_lower and step in (1, 2, 3, 4, 5, 6, 8, 9):
             self.send_message(
                 user_id,
                 "Пожалуйста, напиши текстом — я не могу обработать стикер/фото здесь.",
@@ -291,15 +298,12 @@ class ConsciousChoiceExercise(BaseExercise):
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
-        elif step == 4:
-            # Шаг-подтверждение — тут нечего вводить, ждём «Продолжить»
-            self.send_message(
-                user_id,
-                "➡️ Жми «Продолжить», чтобы двигаться дальше",
-                conscious_choice_keyboard()
-            )
-
-        elif step == 5:
+        elif step in (4, 5):
+            # Оба номера ведут в одно и то же место (см. _show_choice_minus)
+            # — раньше шаг 4 был отдельным подтверждающим экраном без ввода,
+            # теперь сразу принимает минусы, а шаг 5 оставлен для
+            # back/forward-арифметики (_handle_back и т.п.) и старого
+            # сохранённого прогресса.
             session['choice_minus'] = text
             session['step'] = 6
             self._bump_max_step(session)
@@ -502,13 +506,11 @@ class ConsciousChoiceExercise(BaseExercise):
         elif step == 3:
             self._show_step(user_id, session, error="Напиши свой ответ на вопрос")
 
-        elif step == 4:
-            session['step'] = 5
-            self._bump_max_step(session)
-            self.save_progress(user_id, session)
-            self._show_step(user_id, session)
-
-        elif step == 5:
+        elif step in (4, 5):
+            # Раньше шаг 4 -> 5 был отдельным «пустым» переходом (просто
+            # показать следующий экран), а пропуск минусов случался только
+            # с шага 5. После слияния экранов (см. _show_choice_minus) оба
+            # номера пропускают минусы одинаково.
             session.setdefault('choice_minus', '')
             session['step'] = 6
             self._bump_max_step(session)
@@ -547,21 +549,19 @@ class ConsciousChoiceExercise(BaseExercise):
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
-    def _show_choice_ack(self, user_id, session):
+    def _show_choice_minus(self, user_id, session):
+        # Раньше это были два отдельных сообщения (_show_choice_ack + это) —
+        # человеку приходилось жать «Продолжить» между ними просто чтобы
+        # увидеть следующий текст, хотя вводить в _show_choice_ack всё равно
+        # было нечего. Слиты в одно сообщение по просьбе пользователя.
         must = session.get('current_must')
+        note = self._existing_answer_note(session.get('choice_minus'))
         self.send_message(
             user_id,
             f"Шаг 4: Анализ выбора\n\n"
             f"📌 Я выбираю: «{must}»\n\n"
-            f"➡️ Жми «Продолжить», чтобы посмотреть на минусы и плюсы этого выбора.",
-            conscious_choice_keyboard()
-        )
-
-    def _show_choice_minus(self, user_id, session):
-        note = self._existing_answer_note(session.get('choice_minus'))
-        self.send_message(
-            user_id,
-            f"❓ Не хочу (опасные минусы):\n"
+            f"❓ Не хочу\n"
+            f"Каждый раз разные примеры\n"
             f"· Дети будут голодными\n"
             f"· Будут жаловаться\n"
             f"· Будут ныть\n\n"
