@@ -27,7 +27,20 @@ import logging
 # видит только vk_bot/, а не корень репозитория). Поэтому для импорта
 # соседнего platform_bots/ добавляем корень репозитория в sys.path явно —
 # не полагаемся на то, откуда именно запущен этот скрипт.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#
+# ВАЖНО: append(), а не insert(0, ...) — в репозитории ЕСТЬ ещё один
+# модуль/пакет с именем "config": сам vk_bot/config.py (настройки бота,
+# см. import ниже) и config/ в корне репозитория (пакет Django-настроек,
+# config/settings.py и т.п. — см. предупреждение в самом начале
+# tests/test_bot_api_integration.py про этот же конфликт имён). При
+# insert(0, ...) корень репозитория оказывался ПЕРЕД папкой vk_bot/ в
+# sys.path, и "from config import TELEGRAM_BOT_TOKEN" находил ПУСТОЙ
+# Django-пакет config/ вместо vk_bot/config.py — ImportError на сервере
+# (поймано и исправлено в этом же деплое). append() кладёт корень
+# репозитория В КОНЕЦ — vk_bot/ (уже добавленная Python'ом первой, как
+# папка самого запускаемого скрипта) остаётся в приоритете для "config",
+# "keyboards", "handlers" и т.д., а platform_bots всё равно находится.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from platform_bots.telegram_adapter import TelegramAdapter  # noqa: E402
 
 from config import TELEGRAM_BOT_TOKEN  # noqa: E402
