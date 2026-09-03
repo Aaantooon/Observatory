@@ -5,6 +5,7 @@ from keyboards import (
     BACK_TEXTS, TO_START_TEXTS, TO_END_TEXTS,
 )
 from config import MAX_EXERCISE_ITEMS
+import random
 
 
 class ConsciousChoiceExercise(BaseExercise):
@@ -540,6 +541,20 @@ class ConsciousChoiceExercise(BaseExercise):
             self.save_progress(user_id, session)
             self._show_step(user_id, session)
 
+    # Экран "Не хочу чтобы..." (см. _show_choice_minus) обещает "Каждый раз
+    # разные примеры" — раньше это было неправдой: пример был один и тот же
+    # ("Кормить детей" → Голодали/Жаловались/Ныть) при ЛЮБОМ "Я выбираю",
+    # даже если пункт был совсем не про детей. Теперь на каждый показ
+    # экрана случайно берётся один из нескольких наборов, не привязанных к
+    # конкретному сценарию, чтобы не резало глаз при непохожих пунктах.
+    _CHOICE_MINUS_EXAMPLE_SETS = [
+        ["Голодали", "Жаловались", "Ныли"],
+        ["Подумали, что я плохой человек", "Расстроились", "Обиделись"],
+        ["Не справились без меня", "Запаниковали", "Растерялись"],
+        ["Осудили", "Отвернулись", "Перестали общаться"],
+        ["Забыли обо мне", "Разочаровались", "Перестали ценить"],
+    ]
+
     def _show_choice_minus(self, user_id, session):
         # Раньше это были два отдельных сообщения ("Я выбираю" с кнопкой
         # "Продолжить", и только потом отдельно "Не хочу") — слиты в одно
@@ -548,15 +563,14 @@ class ConsciousChoiceExercise(BaseExercise):
         # тот же приём, что и на шаге 1 (см. _collect_items).
         must = session.get('current_must')
         note = self._existing_items_note(session.get('choice_minus_items', []))
+        examples = "\n".join(f"· {item}" for item in random.choice(self._CHOICE_MINUS_EXAMPLE_SETS))
         self.send_message(
             user_id,
             f"Шаг 4: Анализ выбора\n\n"
             f"📌 Я выбираю: «{must}»\n\n"
             f"❓ Не хочу чтобы...\n"
             f"Каждый раз разные примеры\n"
-            f"· Голодали\n"
-            f"· Жаловались\n"
-            f"· Ныть\n\n"
+            f"{examples}\n\n"
             f"{note}"
             f"✍️ Пиши свои минусы — по одному или сразу списком. Когда закончишь "
             f"(или если минусов нет), жми «Продолжить».",
@@ -593,9 +607,8 @@ class ConsciousChoiceExercise(BaseExercise):
             user_id,
             f"Шаг 5: Альтернативы\n\n"
             f"Иногда выбираю не делать это «{must}»\n"
-            f"Иногда выбираю «{must}»\n\n"
-            f"❓ Не хочу\n"
-            f"Когда\n"
+            f"Иногда выбираю не «{must}»\n\n"
+            f"❓ Не хочу или Не хочу когда...\n"
             f"· Устал сильно\n"
             f"· Не могу собраться с мыслями\n"
             f"· Мало времени\n"
