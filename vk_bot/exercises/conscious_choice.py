@@ -562,9 +562,15 @@ class ConsciousChoiceExercise(BaseExercise):
         )
 
     def _show_choice_plus(self, user_id, session):
+        # Пункт, который сейчас разбирается, нужно показывать на КАЖДОМ
+        # экране анализа, а не только на первом (шаг 4) — иначе после
+        # нескольких сообщений с минусами/плюсами легко потерять, о каком
+        # именно "должен" идёт речь, особенно если пунктов несколько.
+        must = session.get('current_must')
         note = self._existing_items_note(session.get('choice_plus_items', []))
         self.send_message(
             user_id,
+            f"📌 Я выбираю: «{must}»\n\n"
             f"❓ Хочу (полезные плюсы):\n"
             f"· Увидеть улыбку на лице ребёнка\n"
             f"· Увидеть, как он радуется вкусной еде\n\n"
@@ -598,9 +604,13 @@ class ConsciousChoiceExercise(BaseExercise):
         )
 
     def _show_alt_plus(self, user_id, session):
+        # Та же причина, что и в _show_choice_plus — показывать разбираемый
+        # пункт на каждом экране, включая последний.
+        must = session.get('current_must')
         note = self._existing_items_note(session.get('alt_plus_items', []))
         self.send_message(
             user_id,
+            f"Иногда выбираю не делать это «{must}»\n\n"
             f"❓ Каких плюсов хочу?\n"
             f"· Набрать энергии и с хорошим настроением\n"
             f"· Заказать что-то из доставки\n"
