@@ -29,16 +29,19 @@ set -euo pipefail
 
 YANDEX_REMOTE="yandex:Observatory-backups"
 
+# rclone установлен и remote "yandex:" настроен? Общая проверка для
+# _copy_to_yandex и очистки старых бэкапов на Диске ниже.
+_yandex_configured() {
+    command -v rclone >/dev/null 2>&1 && rclone listremotes 2>/dev/null | grep -q "^yandex:$"
+}
+
 # Копирует файл на Яндекс.Диск, если rclone доступен и remote настроен.
 # Намеренно не роняет весь скрипт при сбое (сеть, протухший пароль
 # приложения и т.п.) — локальный бэкап к этому моменту уже готов, это
 # только дополнительная подстраховка сверху.
 _copy_to_yandex() {
     local file="$1"
-    if ! command -v rclone >/dev/null 2>&1; then
-        return 0
-    fi
-    if ! rclone listremotes 2>/dev/null | grep -q "^yandex:$"; then
+    if ! _yandex_configured; then
         return 0
     fi
     # --bind 0.0.0.0 — форсирует IPv4: без этого соединение иногда уходило
@@ -82,8 +85,15 @@ if [ -d "./media" ]; then
     _copy_to_yandex "$BACKUP_DIR/media_${DATE}.tar.gz"
 fi
 
-# --- Удаляем бэкапы старше KEEP_DAYS дней ---
+# --- Удаляем бэкапы старше KEEP_DAYS дней (локально) ---
 find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime "+${KEEP_DAYS}" -delete
 find "$BACKUP_DIR" -name "media_*.tar.gz" -mtime "+${KEEP_DAYS}" -delete
+
+# --- То же самое на Яндекс.Диске — иначе там бэкапы копились бы вечно ---
+if _yandex_configured; then
+    if ! rclone delete "$YANDEX_REMOTE" --min-age "${KEEP_DAYS}d" --quiet --bind 0.0.0.0 --timeout 180s; then
+        echo "[$(date)] ⚠️ Не удалось очистить старые бэкапы на Яндекс.Диске"
+    fi
+fi
 
 echo "[$(date)] Бэкап готов: db_${DATE}.sql.gz, ${MEDIA_NOTE}"
