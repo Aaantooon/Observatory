@@ -27,11 +27,36 @@
     .cards-head p { color: #8a9aaa; font-size: 0.9rem; line-height: 1.6; margin: 0 0 6px; max-width: 62ch; }
     .cards-head .src { color: #5c6b7a; font-size: 0.78rem; letter-spacing: 1px; }
 
+    /* ===== ВИТКИ: кольцо = лекция ===== */
+    .vitki { margin: 18px 0 0; }
+    .vitki svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+    .vitki .ring-hit { cursor: pointer; }
+    .vitki .ring-hit:focus-visible { outline: none; }
+    .vitki .ring-hit:focus-visible circle { stroke: #e2c044; stroke-width: 2.5; }
+
+    .lens { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0 0; }
+    .lens .lbl {
+        font-size: 0.65rem; letter-spacing: 1.5px; text-transform: uppercase;
+        color: #5c6b7a; margin-right: 4px;
+    }
+    .lens a {
+        font-size: 0.78rem; text-decoration: none; padding: 7px 12px; border-radius: 8px;
+        border: 1px solid rgba(226,192,68,0.12); color: #8a9aaa; transition: all .2s;
+    }
+    .lens a:hover { color: #e2c044; border-color: rgba(226,192,68,0.3); }
+    .lens a[aria-current="true"] { background: rgba(226,192,68,0.85); border-color: transparent; color: #12181d; }
+    .lens-note { color: #5c6b7a; font-size: 0.8rem; line-height: 1.55; margin: 10px 0 0; max-width: 66ch; }
+
     .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
     .legend span {
         font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase;
         border: 1px solid currentColor; border-radius: 50px; padding: 4px 10px; opacity: 0.85;
     }
+
+    .lechead { margin: 24px 0 4px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .lechead h2 { margin: 0; font-size: 1.2rem; color: #d6dde4; font-weight: 500; }
+    .lechead .c { font-size: 0.8rem; color: #5c6b7a; }
+    .lechead .c b { color: #e2c044; font-weight: 600; }
 
     .card-list { display: flex; flex-direction: column; gap: 16px; }
     .kcard {
@@ -41,6 +66,7 @@
         border-radius: 14px; padding: 18px 18px 16px;
         scroll-margin-top: 16px;
     }
+    .kcard.dim { opacity: 0.45; }
     .kcard-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .kcard-num { font-family: 'Caveat', cursive; font-size: 1.5rem; color: #5c6b7a; line-height: 1; }
     .kcard-head h2 { margin: 0; font-size: 1.1rem; color: #d6dde4; font-weight: 500; flex: 1; min-width: 180px; }
@@ -49,6 +75,7 @@
         border: 1px solid currentColor; border-radius: 50px; padding: 3px 9px; color: var(--tc);
     }
     .kcard .chip.core { color: #e2c044; background: rgba(226,192,68,0.08); border-color: transparent; }
+    .kcard .chip.root { color: #e0785a; background: rgba(224,120,90,0.08); border-color: transparent; }
 
     .schema {
         margin: 15px 0 13px; padding: 8px;
@@ -65,6 +92,7 @@
     }
     .kcard .quote i { color: #c9d2da; }
     .kcard .quote .src { color: #5c6b7a; font-size: 0.78rem; white-space: nowrap; }
+    .kcard .quote .note { white-space: normal; }
 
     .rel { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 13px; }
     .rel a {
@@ -74,6 +102,7 @@
     }
     .rel a:hover { color: #e2c044; border-color: rgba(226,192,68,0.15); }
     .rel a b { color: #c9d2da; font-weight: 500; }
+    .rel a .out { color: #5c6b7a; }
 
     .bot-link {
         display: inline-block; margin-top: 13px; font-size: 0.82rem; color: #e0785a;
@@ -91,96 +120,363 @@
     .mastery .cnt { font-size: 0.78rem; color: #8a9aaa; }
     .mastery .cnt b { color: #e2c044; font-size: 0.95rem; }
 
-    .empty-note { color: #8a9aaa; font-size: 0.9rem; }
+    .empty-note { color: #8a9aaa; font-size: 0.9rem; line-height: 1.6; }
+    .back { display: inline-block; margin: 0 0 4px; font-size: 0.8rem; color: #8a9aaa; text-decoration: none; }
+    .back:hover { color: #e2c044; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="cards-page">
+<div class="cards-page" id="cards-page"
+     data-rings='{{ rings_json }}' data-pairs='{{ pairs_json }}'
+     data-open="{{ opened|default_if_none:'' }}" data-root="{{ root }}">
 
     <div class="cards-head">
         <h1>🔦 Карточки курса</h1>
-        <p>Формулы, которые автор рисовал на доске, вместе с их схемами, дословными цитатами и связями между собой. Каждая карточка — один смысл; связи показывают, через что проходит объяснение.</p>
-        {% if meta.route %}<p class="src">Маршрут: {{ meta.route }} · {{ meta.lecture }}</p>{% endif %}
+        <p>Каждая лекция свёрнута в кольцо, размер кольца — сколько в теме формул. Линия между кольцами тем толще, чем чаще автор, объясняя одну тему, возвращается к формуле из другой. Тап по кольцу разворачивает виток.</p>
+        <p class="src">{{ total }} карточек · {{ cross_total }} переходов между темами{% if meta.route %} · маршрут: {{ meta.route }}{% endif %}</p>
     </div>
+
+    <div class="vitki">
+        <svg id="vitki-cv" viewBox="0 0 1000 780" role="img"
+             aria-label="Круг из пятнадцати витков курса"></svg>
+        <noscript>
+            <p class="empty-note">Кольца рисуются в браузере. Темы доступны ссылками ниже.</p>
+        </noscript>
+    </div>
+
+    {% if roots %}
+    <div class="lens">
+        <span class="lbl">Линза корня</span>
+        <a href="?{% if opened %}l={{ opened }}{% endif %}" aria-current="{% if not root %}true{% else %}false{% endif %}">без линзы</a>
+        {% for key, r in roots.items %}{% if r.label %}
+        <a href="?root={{ key }}{% if opened %}&amp;l={{ opened }}{% endif %}"
+           aria-current="{% if root == key %}true{% else %}false{% endif %}">{{ r.label }} · {{ r.count }}</a>
+        {% endif %}{% endfor %}
+    </div>
+    {% if roots.note %}<p class="lens-note">{{ roots.note }}</p>{% endif %}
+    {% endif %}
 
     <div class="legend">
         {% for key, t in types.items %}<span style="color: {{ t.color }}">{{ t.label }}</span>{% endfor %}
     </div>
 
-    <div class="card-list">
-        {% for card in cards %}
-        <article class="kcard" id="card-{{ card.id }}" style="--tc: {{ card.type_color }}">
-            <div class="kcard-head">
-                <span class="kcard-num">{{ card.id }}</span>
-                <h2>{{ card.title }}</h2>
-                <span class="chip">{{ card.type_label }}</span>
-                {% if card.core %}<span class="chip core">ядро</span>{% endif %}
-            </div>
+    <div id="lecpanel">
+    {% if opened_ring %}
+        <a class="back" href="?{% if root %}root={{ root }}{% endif %}">← ко всем виткам</a>
+        <div class="lechead">
+            <h2>{{ opened_ring.n }} · {{ opened_ring.title }}</h2>
+            <span class="c">{{ opened_ring.count }} карточек{% if root %} · корень объясняет <b>{{ opened_ring.lit }}</b>{% endif %}</span>
+        </div>
 
-            {% if card.schema %}<div class="schema">{{ card.schema|safe }}</div>{% endif %}
+        <div class="card-list">
+            {% for card in cards %}
+            <article class="kcard{% if root and not card.lit %} dim{% endif %}" id="card-{{ card.id }}" style="--tc: {{ card.type_color }}">
+                <div class="kcard-head">
+                    <span class="kcard-num">{{ card.id }}</span>
+                    <h2>{{ card.title }}</h2>
+                    <span class="chip">{{ card.type_label }}</span>
+                    {% if card.core %}<span class="chip core">ядро</span>{% endif %}
+                    {% if card.lit %}<span class="chip root">растёт из корня</span>{% endif %}
+                </div>
 
-            <p class="body">{{ card.text }}</p>
+                {% if card.sub %}<p class="body" style="color:#5c6b7a;font-size:0.82rem;margin:4px 0 0">{{ card.sub }}</p>{% endif %}
 
-            {% if card.quote %}
-            <p class="quote">«<i>{{ card.quote }}</i>» <span class="src">{{ card.line }}</span>{% if card.also %} · <span class="src">{{ card.also }}</span>{% endif %}</p>
-            {% endif %}
+                {% if card.schema %}<div class="schema">{{ card.schema|safe }}</div>{% endif %}
 
-            {% if card.bot %}<a class="bot-link" href="{% url 'course_index' %}">🛑 {{ card.bot }}</a>{% endif %}
+                <p class="body">{{ card.text }}</p>
 
-            <div class="rel">
-                {% for r in card.related %}<a href="#card-{{ r.id }}">{{ r.kind }} <b>{{ r.title }}</b></a>{% endfor %}
-            </div>
+                {% if card.quote %}
+                <p class="quote">«<i>{{ card.quote }}</i>» <span class="src">{{ card.line }}</span>{% if card.also %} · <span class="src note">{{ card.also }}</span>{% endif %}</p>
+                {% endif %}
 
-            <div class="mastery" data-card="{{ card.id }}">
-                <span class="lbl">Освоение — три пути автора</span>
-                <button type="button" data-lvl="0">услышал</button>
-                <button type="button" data-lvl="1">заметил в жизни</button>
-                <button type="button" data-lvl="2">применил</button>
-                <span class="cnt"></span>
-            </div>
-        </article>
-        {% empty %}
-        <p class="empty-note">Карточки пока не добавлены.</p>
-        {% endfor %}
+                {% if card.bot %}<a class="bot-link" href="{% url 'course_index' %}">🛑 {{ card.bot }}</a>{% endif %}
+
+                <div class="rel">
+                    {% for r in card.related %}
+                    <a href="{% if r.lecture == opened %}#card-{{ r.id }}{% else %}?l={{ r.lecture }}{% if root %}&amp;root={{ root }}{% endif %}#card-{{ r.id }}{% endif %}">{{ r.kind }} <b>{{ r.title }}</b>{% if r.lecture != opened %} <span class="out">· тема {{ r.lecture }}</span>{% endif %}</a>
+                    {% endfor %}
+                </div>
+
+                <div class="mastery" data-card="{{ card.id }}">
+                    <span class="lbl">Освоение — три пути автора</span>
+                    <button type="button" data-lvl="0">услышал</button>
+                    <button type="button" data-lvl="1">заметил в жизни</button>
+                    <button type="button" data-lvl="2">применил</button>
+                    <span class="cnt"></span>
+                </div>
+            </article>
+            {% empty %}
+            <p class="empty-note">В этой теме пока нет карточек.</p>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-note">Выбери виток — раскроется тема и её карточки:</p>
+        <div class="lens" style="margin-top:10px">
+            {% for r in rings %}
+            <a href="?l={{ r.n }}{% if root %}&amp;root={{ root }}{% endif %}">{{ r.n }} · {{ r.title }} · {{ r.count }}{% if root %} <span style="color:#e2c044">/{{ r.lit }}</span>{% endif %}</a>
+            {% endfor %}
+        </div>
+    {% endif %}
     </div>
 </div>
 
 <script>
 (function () {
+    var page = document.getElementById('cards-page');
+    if (!page) { return; }
+
+    var TYPE_COLOR = {
+        formula: '#e2c044', concept: '#5aa9e6', image: '#6fbf73',
+        story: '#b98ac9', practice: '#e0785a'
+    };
+    var rings, pairs;
+    try {
+        rings = JSON.parse(page.dataset.rings || '[]');
+        pairs = JSON.parse(page.dataset.pairs || '[]');
+    } catch (e) { return; }
+    if (!rings.length) { return; }
+
+    var NS = 'http://www.w3.org/2000/svg';
+    var cv = document.getElementById('vitki-cv');
+    var opened = page.dataset.open ? parseInt(page.dataset.open, 10) : null;
+    var root = page.dataset.root || '';
+
+    function el(name, attrs) {
+        var e = document.createElementNS(NS, name);
+        for (var k in attrs) { e.setAttribute(k, attrs[k]); }
+        return e;
+    }
+    function cut(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+    function url(lec) {
+        var q = [];
+        if (lec) { q.push('l=' + lec); }
+        if (root) { q.push('root=' + root); }
+        return q.length ? '?' + q.join('&') : location.pathname;
+    }
+    var maxW = pairs.reduce(function (m, p) { return Math.max(m, p.w); }, 1);
+
+    // Обзор: пятнадцать колец по кругу, между ними — переходы между темами.
+    function drawOverview() {
+        var CX = 600, CY = 380, RX = 330, RY = 268;
+        var pos = {};
+        rings.forEach(function (r, i) {
+            var a = -Math.PI / 2 + i / rings.length * Math.PI * 2;
+            pos[r.n] = {
+                a: a,
+                x: CX + Math.cos(a) * RX,
+                y: CY + Math.sin(a) * RY,
+                r: 13 + r.count * 0.72
+            };
+        });
+        var gE = el('g'), gN = el('g');
+        pairs.forEach(function (p) {
+            var a = pos[p.a], b = pos[p.b];
+            if (!a || !b) { return; }
+            gE.appendChild(el('line', {
+                x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+                stroke: '#5aa9e6', 'stroke-width': 0.6 + p.w / maxW * 5,
+                opacity: 0.14 + p.w / maxW * 0.4
+            }));
+        });
+        rings.forEach(function (r) {
+            var p = pos[r.n], hit = root ? (r.lit || 0) : null;
+            var on = !root || hit > 0;
+            var g = el('a', { href: url(r.n), class: 'ring-hit', 'aria-label': r.n + '. ' + r.title });
+            g.appendChild(el('circle', {
+                cx: p.x, cy: p.y, r: p.r,
+                fill: on ? 'rgba(226,192,68,0.10)' : 'rgba(255,255,255,0.02)',
+                stroke: on ? '#e2c044' : '#4a5764', 'stroke-width': 1.3
+            }));
+            var t1 = el('text', {
+                x: p.x, y: p.y + 7, 'text-anchor': 'middle',
+                'font-family': "'Caveat', cursive", 'font-size': 24,
+                fill: on ? '#e2c044' : '#5c6b7a', 'pointer-events': 'none'
+            });
+            t1.textContent = root ? hit + '/' + r.count : r.count;
+            g.appendChild(t1);
+            var lx = CX + Math.cos(p.a) * (RX + p.r + 26);
+            var ly = CY + Math.sin(p.a) * (RY + p.r + 26);
+            var t2 = el('text', {
+                x: lx, y: ly + 5, 'font-size': 14, fill: '#8a9aaa', 'pointer-events': 'none',
+                'text-anchor': Math.cos(p.a) > 0.25 ? 'start' : (Math.cos(p.a) < -0.25 ? 'end' : 'middle')
+            });
+            t2.textContent = cut(r.n + ' · ' + r.title, 24);
+            g.appendChild(t2);
+            gN.appendChild(g);
+        });
+        cv.setAttribute('viewBox', '0 0 1200 780');
+        cv.appendChild(gE);
+        cv.appendChild(gN);
+    }
+
+    // Виток раскрыт: тема в центре, её карточки вокруг, остальные темы —
+    // по внешней дуге, чтобы из зума был виден весь круг (панорама).
+    function drawOpen() {
+        var me = null, others = [];
+        rings.forEach(function (r) { if (r.n === opened) { me = r; } else { others.push(r); } });
+        if (!me) { drawOverview(); return; }
+
+        var CX = 500, CY = 380;
+        var gE = el('g'), gN = el('g');
+
+        // внешняя дуга — остальные витки
+        var posO = {};
+        others.forEach(function (r, i) {
+            var a = -Math.PI / 2 + (i + 0.5) / others.length * Math.PI * 2;
+            posO[r.n] = { x: CX + Math.cos(a) * 440, y: CY + Math.sin(a) * 330 };
+        });
+        pairs.forEach(function (p) {
+            if (p.a !== opened && p.b !== opened) { return; }
+            var o = posO[p.a === opened ? p.b : p.a];
+            if (!o) { return; }
+            gE.appendChild(el('line', {
+                x1: CX, y1: CY, x2: o.x, y2: o.y,
+                stroke: '#5aa9e6', 'stroke-width': 0.6 + p.w / maxW * 5,
+                opacity: 0.16 + p.w / maxW * 0.45
+            }));
+        });
+        others.forEach(function (r) {
+            var p = posO[r.n], rr = 10 + r.count * 0.34;
+            var g = el('a', { href: url(r.n), class: 'ring-hit', 'aria-label': r.n + '. ' + r.title });
+            g.appendChild(el('circle', {
+                cx: p.x, cy: p.y, r: rr, fill: 'rgba(255,255,255,0.02)',
+                stroke: '#4a5764', 'stroke-width': 1.1
+            }));
+            var t = el('text', {
+                x: p.x, y: p.y + 5, 'text-anchor': 'middle',
+                'font-family': "'Caveat', cursive", 'font-size': 17,
+                fill: '#5c6b7a', 'pointer-events': 'none'
+            });
+            t.textContent = r.n;
+            g.appendChild(t);
+            gN.appendChild(g);
+        });
+
+        // центр — открытая тема, вокруг её карточки
+        var cards = [].slice.call(document.querySelectorAll('#lecpanel .kcard'));
+        var R = 86;
+        cards.forEach(function (node, j) {
+            var a = -Math.PI / 2 + j / Math.max(cards.length, 1) * Math.PI * 2;
+            var x = CX + Math.cos(a) * 235, y = CY + Math.sin(a) * 180;
+            var dim = node.classList.contains('dim');
+            gE.appendChild(el('line', {
+                x1: CX + Math.cos(a) * R, y1: CY + Math.sin(a) * (R * 0.9), x2: x, y2: y,
+                stroke: '#4a5764', 'stroke-width': 1, opacity: dim ? 0.15 : 0.55
+            }));
+            var color = node.style.getPropertyValue('--tc').trim() || '#8a9aaa';
+            var g = el('a', {
+                href: '#' + node.id, class: 'ring-hit',
+                'aria-label': node.querySelector('h2').textContent
+            });
+            g.appendChild(el('circle', { cx: x, cy: y, r: 15, fill: 'transparent' }));
+            g.appendChild(el('circle', {
+                cx: x, cy: y, r: node.querySelector('.chip.core') ? 8 : 6,
+                fill: color, opacity: dim ? 0.2 : 1
+            }));
+            gN.appendChild(g);
+        });
+
+        var g0 = el('a', { href: url(null), class: 'ring-hit', 'aria-label': 'ко всем виткам' });
+        g0.appendChild(el('circle', {
+            cx: CX, cy: CY, r: R, fill: 'rgba(226,192,68,0.10)',
+            stroke: '#e2c044', 'stroke-width': 2
+        }));
+        var n1 = el('text', {
+            x: CX, y: CY + 16, 'text-anchor': 'middle',
+            'font-family': "'Caveat', cursive", 'font-size': 44,
+            fill: '#e2c044', 'pointer-events': 'none'
+        });
+        n1.textContent = root ? (me.lit || 0) + '/' + me.count : me.count;
+        g0.appendChild(n1);
+        var n2 = el('text', {
+            x: CX, y: CY + 215, 'text-anchor': 'middle', 'font-size': 18,
+            fill: '#8a9aaa', 'pointer-events': 'none'
+        });
+        n2.textContent = me.n + ' · ' + me.title;
+        g0.appendChild(n2);
+        gN.appendChild(g0);
+
+        cv.setAttribute('viewBox', '0 0 1000 780');
+        cv.appendChild(gE);
+        cv.appendChild(gN);
+    }
+
+    function draw() {
+        cv.textContent = '';
+        if (opened) { drawOpen(); } else { drawOverview(); }
+    }
+
     // Уровень освоения хранится только в браузере: это личная пометка,
     // серверу она пока не нужна (и не требует ни модели, ни миграции).
-    var store = {};
-    try { store = JSON.parse(localStorage.getItem('cards-mastery') || '{}'); } catch (e) { store = {}; }
-    function save() { try { localStorage.setItem('cards-mastery', JSON.stringify(store)); } catch (e) {} }
+    function bindMastery(scope) {
+        var store = {};
+        try { store = JSON.parse(localStorage.getItem('cards-mastery') || '{}'); } catch (e) { store = {}; }
+        function save() { try { localStorage.setItem('cards-mastery', JSON.stringify(store)); } catch (e) {} }
 
-    document.querySelectorAll('.mastery').forEach(function (box) {
-        var id = box.dataset.card;
-        var state = store[id] || { lvl: -1, applied: 0 };
-        var buttons = box.querySelectorAll('button');
-        var counter = box.querySelector('.cnt');
+        scope.querySelectorAll('.mastery').forEach(function (box) {
+            var id = box.dataset.card;
+            var state = store[id] || { lvl: -1, applied: 0 };
+            var buttons = box.querySelectorAll('button');
+            var counter = box.querySelector('.cnt');
 
-        function paint() {
+            function paint() {
+                buttons.forEach(function (b) {
+                    b.setAttribute('aria-pressed', state.lvl >= parseInt(b.dataset.lvl, 10));
+                });
+                counter.innerHTML = state.applied ? 'применил <b>' + state.applied + '</b> раз' : '';
+            }
+
             buttons.forEach(function (b) {
-                b.setAttribute('aria-pressed', state.lvl >= parseInt(b.dataset.lvl, 10));
+                b.addEventListener('click', function () {
+                    var lvl = parseInt(b.dataset.lvl, 10);
+                    if (lvl === 2 && state.lvl === 2) {
+                        state.applied = (state.applied || 0) + 1;
+                    } else {
+                        state.lvl = (state.lvl === lvl) ? lvl - 1 : lvl;
+                        if (lvl === 2 && state.lvl === 2 && !state.applied) { state.applied = 1; }
+                    }
+                    store[id] = state; save(); paint();
+                });
             });
-            counter.innerHTML = state.applied ? 'применил <b>' + state.applied + '</b> раз' : '';
-        }
-
-        buttons.forEach(function (b) {
-            b.addEventListener('click', function () {
-                var lvl = parseInt(b.dataset.lvl, 10);
-                if (lvl === 2 && state.lvl === 2) {
-                    state.applied = (state.applied || 0) + 1;
-                } else {
-                    state.lvl = (state.lvl === lvl) ? lvl - 1 : lvl;
-                    if (lvl === 2 && state.lvl === 2 && !state.applied) { state.applied = 1; }
-                }
-                store[id] = state; save(); paint();
-            });
+            paint();
         });
-        paint();
+    }
+
+    // Тап по кольцу подменяет только панель темы: карточек в теме
+    // до сорока, перезагружать ради них всю страницу незачем.
+    var panel = document.getElementById('lecpanel');
+    function swap(href, push) {
+        fetch(href, { headers: { 'X-Requested-With': 'fetch' } })
+            .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var fresh = doc.getElementById('lecpanel');
+                var head = doc.getElementById('cards-page');
+                if (!fresh || !head) { location.href = href; return; }
+                panel.innerHTML = fresh.innerHTML;
+                opened = head.dataset.open ? parseInt(head.dataset.open, 10) : null;
+                page.dataset.open = head.dataset.open || '';
+                bindMastery(panel);
+                draw();
+                if (push) { history.pushState({ href: href }, '', href); }
+                cv.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            })
+            .catch(function () { location.href = href; });
+    }
+
+    cv.addEventListener('click', function (e) {
+        var a = e.target.closest ? e.target.closest('a') : null;
+        if (!a) { return; }
+        var href = a.getAttribute('href') || a.getAttribute('xlink:href') || '';
+        if (href.charAt(0) === '#') { return; }   // якорь на карточку — пусть работает сам
+        e.preventDefault();
+        swap(href, true);
     });
+    window.addEventListener('popstate', function () { swap(location.href, false); });
+
+    bindMastery(panel);
+    draw();
 })();
 </script>
 {% endblock %}

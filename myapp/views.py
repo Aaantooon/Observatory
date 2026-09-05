@@ -690,107 +690,6 @@ def mindmap_save_position(request):
         return JsonResponse({'error': 'Не удалось сохранить позицию'}, status=400)
 
 
-# ===== МЕНТАЛЬНАЯ КАРТА: ВИТКИ =====
-
-@login_required
-def mindmap_rings(request):
-    """Данные для карты-витков.
-
-    Один модуль курса = одно кольцо («виток»). Внутри кольца — его смыслы:
-    ключевые понятия (key_concepts), ассоциации (associations) и сама
-    практика (ссылка на страницу модуля).
-
-    Связи между кольцами считаются двумя способами:
-      * последовательность курса (модуль N → N+1) — «дальше по курсу»;
-      * общие понятия — если одно и то же слово встречается в двух модулях,
-        значит автор к нему возвращается. Именно это делает карту картой,
-        а не списком: повторяющаяся формула связывает разные темы.
-    """
-    progress, _ = UserCourseProgress.objects.get_or_create(
-        user=request.user,
-        defaults={'current_module': Module.objects.filter(is_published=True).order_by('number').first()}
-    )
-    modules = list(Module.objects.filter(is_published=True).order_by('number'))
-    completed_ids = set(progress.completed_modules.values_list('id', flat=True))
-    current_id = progress.current_module_id
-
-    rings = []
-    # нормализованное слово -> номера колец, где оно встречается
-    word_index = {}
-
-    def add_word(word, ring_i):
-        key = word.strip().lower()
-        if len(key) < 3:
-            return
-        word_index.setdefault(key, set()).add(ring_i)
-
-    for ring_i, module in enumerate(modules):
-        items = []
-        for j, concept in enumerate(module.key_concepts or []):
-            if not isinstance(concept, str) or not concept.strip():
-                continue
-            items.append({'id': f'c{module.id}_{j}', 'title': concept.strip(), 'type': 'concept'})
-            add_word(concept, ring_i)
-        for j, assoc in enumerate(module.associations or []):
-            if not isinstance(assoc, str) or not assoc.strip():
-                continue
-            items.append({'id': f'a{module.id}_{j}', 'title': assoc.strip(), 'type': 'assoc'})
-            add_word(assoc, ring_i)
-        items.append({
-            'id': f'p{module.id}',
-            'title': 'Пройти модуль',
-            'type': 'practice',
-            'url': f'/course/module/{module.number}/',
-        })
-
-        if module.id in completed_ids:
-            status = 'completed'
-        elif current_id and module.id == current_id:
-            status = 'current'
-        else:
-            status = 'open'
-
-        rings.append({
-            'i': ring_i,
-            'id': module.id,
-            'number': module.number,
-            'title': module.title,
-            'subtitle': module.subtitle,
-            'duration': module.duration,
-            'url': f'/course/module/{module.number}/',
-            'status': status,
-            'items': items,
-        })
-
-    links = {}
-    for i in range(len(rings) - 1):
-        links[(i, i + 1)] = {'seq': 1, 'shared': []}
-    for word, ring_set in word_index.items():
-        if len(ring_set) < 2:
-            continue
-        ordered = sorted(ring_set)
-        for x in range(len(ordered)):
-            for y in range(x + 1, len(ordered)):
-                key = (ordered[x], ordered[y])
-                links.setdefault(key, {'seq': 0, 'shared': []})['shared'].append(word)
-
-    out_links = [
-        {
-            'a': a, 'b': b,
-            'seq': data['seq'],
-            'shared': sorted(data['shared'])[:6],
-            'weight': data['seq'] + len(data['shared']),
-        }
-        for (a, b), data in sorted(links.items())
-    ]
-
-    return JsonResponse({
-        'rings': rings,
-        'links': out_links,
-        'progress_percent': progress.get_progress_percent(),
-    })
-
-
 # ===== КАРТОЧКИ КУРСА =====
 
 CARDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cards.json')
@@ -819,16 +718,89 @@ def _load_cards():
         return {'cards': [], 'links': [], 'meta': {}}
 
 
+LECTURE_FALLBACK = 'Тема {n}'
+
+
+def _lecture_rings(cards, links, meta):
+    """Готовит данные для «витков»: кольцо = лекция.
+
+    Внутри лекции связи ничего не говорят о структуре курса целиком —
+    интересны переходы МЕЖДУ темами: сколько раз автор, объясняя одну
+    тему, возвращается к формуле из другой. Толщина линии между кольцами
+    и есть это число.
+    """
+    titles = meta.get('lectures', {})
+    counts, cross = {}, {}
+
+    for card in cards:
+        n = card.get('lecture')
+        if n is None:
+            continue
+        counts[n] = counts.get(n, 0) + 1
+
+    lec_of = {c['id']: c.get('lecture') for c in cards}
+    for link in links:
+        a, b = lec_of.get(link['a']), lec_of.get(link['b'])
+        if a is None or b is None or a == b:
+            continue
+        key = (min(a, b), max(a, b))
+        cross[key] = cross.get(key, 0) + 1
+
+    rings = [
+        {
+            'n': n,
+            'title': titles.get(str(n)) or LECTURE_FALLBACK.format(n=n),
+            'count': counts[n],
+        }
+        for n in sorted(counts)
+    ]
+    pairs = [{'a': a, 'b': b, 'w': w} for (a, b), w in sorted(cross.items())]
+    return rings, pairs
+
+
 def cards_view(request):
-    """Страница «Карточки курса»: формулы автора с их схемами и связями."""
+    """Страница «Карточки курса»: витки-лекции, а внутри — формулы автора.
+
+    Кольца и линза рисуются по всему курсу сразу, а разворачивается за раз
+    одна лекция: 469 карточек со схемами — это больше мегабайта разметки,
+    и телефон такую страницу открывает заметно медленнее. Номер открытой
+    темы приходит в ?l=, корень линзы — в ?root=, поэтому и ссылка на
+    конкретный виток остаётся рабочей, и всё работает без JS.
+    """
     data = _load_cards()
     cards = data.get('cards', [])
     links = data.get('links', [])
+    meta = data.get('meta', {})
     by_id = {c['id']: c for c in cards}
 
-    for card in cards:
+    rings, pairs = _lecture_rings(cards, links, meta)
+    known = {r['n'] for r in rings}
+
+    try:
+        opened = int(request.GET.get('l', ''))
+    except ValueError:
+        opened = None
+    if opened not in known:
+        opened = None
+
+    root = request.GET.get('root') or ''
+    if root not in meta.get('roots', {}):
+        root = ''
+
+    # Сколько карточек каждой темы объясняет выбранный корень — это и есть
+    # ответ линзы: видно сразу, где корень работает, а где нет.
+    if root:
+        for ring in rings:
+            ring['lit'] = sum(
+                1 for c in cards
+                if c.get('lecture') == ring['n'] and root in (c.get('roots') or [])
+            )
+
+    shown = [c for c in cards if c.get('lecture') == opened] if opened else []
+    for card in shown:
         card['type_label'] = CARD_TYPES.get(card.get('type'), {}).get('label', card.get('type', ''))
         card['type_color'] = CARD_TYPES.get(card.get('type'), {}).get('color', '#8a9aaa')
+        card['lit'] = bool(root) and root in (card.get('roots') or [])
         related = []
         for link in links:
             if link['a'] == card['id']:
@@ -838,11 +810,27 @@ def cards_view(request):
             else:
                 continue
             if other in by_id:
-                related.append({'id': other, 'kind': kind, 'title': by_id[other]['title']})
+                related.append({
+                    'id': other,
+                    'kind': kind,
+                    'title': by_id[other]['title'],
+                    'lecture': by_id[other].get('lecture'),
+                })
         card['related'] = related
 
+    opened_ring = next((r for r in rings if r['n'] == opened), None)
+
     return render(request, 'myapp/cards.html', {
-        'cards': cards,
-        'meta': data.get('meta', {}),
+        'cards': shown,
+        'rings': rings,
+        'rings_json': json.dumps(rings, ensure_ascii=False),
+        'pairs_json': json.dumps(pairs, ensure_ascii=False),
+        'opened': opened,
+        'opened_ring': opened_ring,
+        'root': root,
+        'roots': meta.get('roots', {}),
+        'total': len(cards),
+        'cross_total': sum(p['w'] for p in pairs),
+        'meta': meta,
         'types': CARD_TYPES,
     })
